@@ -3,7 +3,6 @@ import {
   CONTRACT_TYPES,
   GENDERS,
   MARITAL_STATUSES,
-  POSITIONS,
   SITES,
 } from "@/lib/employees";
 
@@ -13,7 +12,7 @@ export const employeeInputSchema = z
     full_name: z.string().trim().min(1).max(150),
     site: z.enum(SITES),
     hire_date: z.iso.date(),
-    position: z.enum(POSITIONS),
+    position: z.string().trim().min(1).max(150),
     contract_type: z.enum(CONTRACT_TYPES),
     salary: z.number().finite().min(0).max(100_000_000),
     bank_account: z.string().trim().max(40).nullable(),

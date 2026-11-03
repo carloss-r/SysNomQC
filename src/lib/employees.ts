@@ -1,5 +1,6 @@
 export const SITES = ["Campeche", "Lagunas", "Cruz Azul"] as const;
 
+// Solo son sugerencias para autocompletar; el campo acepta cualquier texto.
 export const POSITIONS = [
   "Operaciones - Operador Especializado",
   "Mantenimiento - Técnico Mecánico",
@@ -83,7 +84,7 @@ export const EMPTY_EMPLOYEE_FORM: EmployeeFormValues = {
   full_name: "",
   site: SITES[0],
   hire_date: "",
-  position: POSITIONS[0],
+  position: "",
   contract_type: CONTRACT_TYPES[0],
   salary: "",
   bank_account: "",
@@ -112,7 +113,7 @@ export function formToEmployeeInput(
     full_name: form.full_name.trim(),
     site: form.site,
     hire_date: form.hire_date,
-    position: form.position,
+    position: form.position.trim(),
     contract_type: form.contract_type,
     salary: Number(form.salary) || 0,
     bank_account: optionalValue(form.bank_account),

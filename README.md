@@ -1,6 +1,6 @@
 # SysNomQC - Gestión de personal
 
-Aplicación con Next.js y React para administrar el directorio de empleados usando Supabase Auth, Postgres y Storage.
+Aplicación con Next.js y React para administrar el directorio de empleados usando Supabase Auth y Postgres para los datos y Firebase Storage para las fotografías.
 
 ## Preparación de Supabase
 
@@ -17,6 +17,13 @@ Aplicación con Next.js y React para administrar el directorio de empleados usan
 5. Comprueba que las políticas RLS de la migración estén habilitadas. Solo las cuentas registradas en `authorized_users` pueden consultar, crear, editar o eliminar expedientes.
 
 La migración crea una tabla `employees` independiente de las tablas `empleados` del archivo SQL anterior. No carga los registros ficticios incluidos en el HTML.
+
+## Preparación de Firebase Storage (fotos)
+
+1. En Firebase Console (proyecto `sysnomqc-31c0a`) abre **Build > Storage** y crea el bucket si aún no existe.
+2. En **Build > Authentication > Sign-in method** habilita el proveedor **Anónimo**. La app lo usa solo para que las reglas de Storage exijan una sesión; el acceso real al directorio sigue protegido por Supabase.
+3. En **Storage > Reglas** pega el contenido de `firebase/storage.rules` y publica.
+4. Las fotos nuevas se guardan en `employee-photos/` y en la base de datos se guarda esa ruta. Las fotos antiguas guardadas en Supabase se siguen mostrando.
 
 ## Ejecutar localmente
 
