@@ -4,10 +4,12 @@ import {
   BriefcaseBusiness,
   Building2,
   Check,
+  CircleAlert,
+  CircleCheck,
   CircleUserRound,
   FileText,
   Filter,
-  ImagePlus,
+  Info,
   KeyRound,
   LogOut,
   Mail,
@@ -17,6 +19,7 @@ import {
   Search,
   ShieldCheck,
   Trash2,
+  TriangleAlert,
   UserRound,
   UsersRound,
   X,
@@ -24,14 +27,16 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import type { FormEvent, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { ApiError, describeError, requestApi } from "@/lib/api-client";
 import {
   CONTRACT_TYPES,
   EMPTY_EMPLOYEE_FORM,
   Employee,
   EmployeeFormValues,
   EmployeeInput,
+  EmployeeSummary,
   GENDERS,
   MARITAL_STATUSES,
   POSITIONS,
@@ -40,43 +45,27 @@ import {
   formToEmployeeInput,
   formatCurrency,
   formatDate,
+  sortEmployees,
+  toEmployeeSummary,
 } from "@/lib/employees";
-import {
-  deleteFirebasePhoto,
-  getFirebasePhotoUrl,
-  isFirebasePhotoPath,
-  signOutFirebase,
-  uploadPhotoToFirebase,
-} from "@/lib/firebase";
+import { reportClientIncident } from "@/lib/report-incident";
 import { supabase } from "@/lib/supabase";
 
-// Bucket anterior de Supabase: solo se usa para fotos antiguas que aún no se han migrado.
-const LEGACY_PHOTO_BUCKET = "employee-photos";
+// FOTOS DESHABILITADAS: la carga/lectura de fotos con Firebase Storage está comentada en
+// src/lib/firebase.ts y no se usa en esta pantalla. Los expedientes conservan su photo_path.
+
 const PAGE_SIZE = 500;
 
-type Notice = { tone: "success" | "error" | "warning"; message: string };
+type NoticeTone = "success" | "error" | "warning" | "info";
+type Notice = { id: number; tone: NoticeTone; title: string; message?: string };
 
-async function requestApi<T>(
-  session: Session,
-  path: string,
-  options: RequestInit = {},
-): Promise<T> {
-  const headers = new Headers(options.headers);
-  headers.set("Authorization", `Bearer ${session.access_token}`);
-  if (options.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  const response = await fetch(path, { ...options, headers });
-  if (response.status === 204) return undefined as T;
-
-  const result = (await response.json()) as { error?: string } & T;
-  if (!response.ok) {
-    throw new Error(result.error || "La solicitud no pudo completarse.");
-  }
-
-  return result;
-}
+// Los errores duran más en pantalla para que dé tiempo de leerlos.
+const NOTICE_DURATION: Record<NoticeTone, number> = {
+  success: 4500,
+  info: 4500,
+  warning: 7000,
+  error: 10000,
+};
 
 function initials(name: string) {
   return name
@@ -111,12 +100,12 @@ function Field({
 export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const [employees, setEmployees] = useState<EmployeeSummary[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [authError, setAuthError] = useState("");
   const [pageError, setPageError] = useState("");
-  const [notice, setNotice] = useState<Notice | null>(null);
+  const [notices, setNotices] = useState<Notice[]>([]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
@@ -129,10 +118,22 @@ export default function Home() {
   const [form, setForm] = useState<EmployeeFormValues>(EMPTY_EMPLOYEE_FORM);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [removePhoto, setRemovePhoto] = useState(false);
-  const [photoPreview, setPhotoPreview] = useState("");
-  const photoPreviewUrl = useRef<string | null>(null);
+  const sessionRef = useRef<Session | null>(null);
+  const noticeCounter = useRef(0);
+
+  const dismissNotice = useCallback((id: number) => {
+    setNotices((current) => current.filter((notice) => notice.id !== id));
+  }, []);
+
+  const notify = useCallback(
+    (tone: NoticeTone, title: string, message?: string) => {
+      noticeCounter.current += 1;
+      const id = noticeCounter.current;
+      setNotices((current) => [...current.slice(-3), { id, tone, title, message }]);
+      window.setTimeout(() => dismissNotice(id), NOTICE_DURATION[tone]);
+    },
+    [dismissNotice],
+  );
 
   useEffect(() => {
     let active = true;
@@ -142,7 +143,6 @@ export default function Home() {
         setCheckingSession(false);
         if (!nextSession) {
           setEmployees([]);
-          setPhotoUrls({});
           setPageError("");
         }
       }
@@ -157,12 +157,12 @@ export default function Home() {
         setCheckingSession(false);
         if (!sessionData.session) {
           setEmployees([]);
-          setPhotoUrls({});
           setPageError("");
         }
       })
       .catch((error: unknown) => {
         console.error("No se pudo recuperar la sesión:", error);
+        reportClientIncident("auth.sesión", error);
         if (!active) return;
         setAuthError("No se pudo conectar con Supabase. Verifica la configuración.");
         setCheckingSession(false);
@@ -174,16 +174,25 @@ export default function Home() {
     };
   }, []);
 
-  const refreshEmployees = useCallback(async (activeSession: Session) => {
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
+  // Se lee siempre la sesión más reciente desde la referencia: así renovar el token o volver
+  // a la pestaña no dispara una descarga nueva de todo el directorio (menos lecturas y costo).
+  const refreshEmployees = useCallback(async () => {
+    const activeSession = sessionRef.current;
+    if (!activeSession) return;
+
     setLoadingEmployees(true);
     setPageError("");
     try {
-      const allEmployees: Employee[] = [];
+      const allEmployees: EmployeeSummary[] = [];
       let offset = 0;
-      let page: Employee[];
+      let page: EmployeeSummary[];
 
       do {
-        page = await requestApi<Employee[]>(
+        page = await requestApi<EmployeeSummary[]>(
           activeSession,
           `/api/employees?offset=${offset}&limit=${PAGE_SIZE}`,
         );
@@ -191,61 +200,28 @@ export default function Home() {
         offset += page.length;
       } while (page.length === PAGE_SIZE);
 
-      const signedPhotos = await Promise.all(
-        allEmployees
-          .filter((employee) => employee.photo_path)
-          .map(async (employee) => {
-            const path = employee.photo_path!;
-            try {
-              if (isFirebasePhotoPath(path)) {
-                return [employee.id, await getFirebasePhotoUrl(path)] as const;
-              }
-              const { data, error } = await supabase.storage
-                .from(LEGACY_PHOTO_BUCKET)
-                .createSignedUrl(path, 3600);
-              if (error) throw error;
-              return [employee.id, data.signedUrl] as const;
-            } catch (error) {
-              console.error(`No se pudo cargar la foto del empleado ${employee.employee_code}:`, error);
-              return null;
-            }
-          }),
-      );
-
       setEmployees(allEmployees);
-      setPhotoUrls(
-        Object.fromEntries(
-          signedPhotos.filter((entry): entry is readonly [string, string] => entry !== null),
-        ),
-      );
     } catch (error) {
       console.error("No se pudo cargar el directorio:", error);
-      setPageError(
-        error instanceof Error ? error.message : "No se pudo cargar el directorio de empleados.",
-      );
+      const message = describeError(error, "No se pudo cargar el directorio de empleados.");
+      setPageError(message);
+      notify("error", "No se pudo cargar el directorio", message);
+      if (!(error instanceof ApiError)) reportClientIncident("directorio · carga", error);
     } finally {
       setLoadingEmployees(false);
     }
-  }, []);
+  }, [notify]);
 
+  const userId = session?.user.id ?? null;
   useEffect(() => {
-    if (!session) return;
-    const timer = window.setTimeout(() => void refreshEmployees(session), 0);
+    if (!userId) return;
+    const timer = window.setTimeout(() => void refreshEmployees(), 0);
     return () => window.clearTimeout(timer);
-  }, [session, refreshEmployees]);
+  }, [userId, refreshEmployees]);
 
-  useEffect(() => {
-    if (!notice) return;
-    const timeout = window.setTimeout(() => setNotice(null), 4500);
-    return () => window.clearTimeout(timeout);
-  }, [notice]);
-
-  useEffect(() => () => {
-    if (photoPreviewUrl.current) URL.revokeObjectURL(photoPreviewUrl.current);
-  }, []);
-
+  const deferredSearch = useDeferredValue(search);
   const filteredEmployees = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase("es-MX");
+    const query = deferredSearch.trim().toLocaleLowerCase("es-MX");
     return employees.filter((employee) => {
       const matchesSite = filterSite === "Todas" || employee.site === filterSite;
       const searchable = [
@@ -258,21 +234,12 @@ export default function Home() {
         .toLocaleLowerCase("es-MX");
       return matchesSite && (!query || searchable.includes(query));
     });
-  }, [employees, filterSite, search]);
+  }, [employees, filterSite, deferredSearch]);
 
   const positionSuggestions = useMemo(
     () => Array.from(new Set([...POSITIONS, ...employees.map((employee) => employee.position)])).sort((a, b) => a.localeCompare(b, "es-MX")),
     [employees],
   );
-
-  const showNotice = (tone: Notice["tone"], message: string) => setNotice({ tone, message });
-
-  function setSelectedPhoto(file: File | null) {
-    if (photoPreviewUrl.current) URL.revokeObjectURL(photoPreviewUrl.current);
-    photoPreviewUrl.current = file ? URL.createObjectURL(file) : null;
-    setPhotoFile(file);
-    setPhotoPreview(photoPreviewUrl.current ?? "");
-  }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -283,18 +250,30 @@ export default function Home() {
       const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) {
         console.error("No se pudo iniciar sesión:", error);
-        setAuthError("No se pudo iniciar sesión. Revisa tu correo y contraseña.");
+        const unreachable = error.name === "AuthRetryableFetchError" || (error.status ?? 0) >= 500;
+        const message = unreachable
+          ? "No se pudo conectar para iniciar sesión. Inténtalo de nuevo."
+          : "No se pudo iniciar sesión. Revisa tu correo y contraseña.";
+        setAuthError(message);
+        notify("error", unreachable ? "Sin conexión" : "No se pudo iniciar sesión", message);
+        if (unreachable) reportClientIncident("auth.login", error);
       } else if (data.session) {
         try {
-          await requestApi<Employee[]>(data.session, `/api/employees?limit=1`);
+          await requestApi<EmployeeSummary[]>(data.session, `/api/employees?limit=1`);
+          notify("success", "Sesión iniciada", "Bienvenido al sistema de gestión de personal.");
         } catch (accessError) {
           await supabase.auth.signOut();
-          setAuthError(accessError instanceof Error ? accessError.message : "Tu cuenta no está autorizada.");
+          const message = describeError(accessError, "Tu cuenta no está autorizada.");
+          setAuthError(message);
+          notify("error", "Cuenta sin acceso", message);
         }
       }
     } catch (error) {
       console.error("No se pudo completar el inicio de sesión:", error);
-      setAuthError("No se pudo conectar para iniciar sesión. Inténtalo de nuevo.");
+      const message = "No se pudo conectar para iniciar sesión. Inténtalo de nuevo.";
+      setAuthError(message);
+      notify("error", "Sin conexión", message);
+      reportClientIncident("auth.login", error);
     } finally {
       setLoggingIn(false);
     }
@@ -306,14 +285,14 @@ export default function Home() {
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error("No se pudo cerrar sesión:", error);
-        showNotice("error", "No se pudo cerrar la sesión. Inténtalo de nuevo.");
+        notify("error", "No se pudo cerrar la sesión", "Inténtalo de nuevo.");
+      } else {
+        notify("info", "Sesión cerrada", "Hasta pronto.");
       }
-      await signOutFirebase().catch((firebaseError: unknown) => {
-        console.error("No se pudo cerrar la sesión de Firebase:", firebaseError);
-      });
     } catch (error) {
       console.error("No se pudo completar el cierre de sesión:", error);
-      showNotice("error", "No se pudo cerrar la sesión. Inténtalo de nuevo.");
+      notify("error", "No se pudo cerrar la sesión", "Inténtalo de nuevo.");
+      reportClientIncident("auth.logout", error);
     } finally {
       setSigningOut(false);
     }
@@ -326,8 +305,6 @@ export default function Home() {
     }, 100) + 1;
     setEditing(null);
     setForm({ ...EMPTY_EMPLOYEE_FORM, employee_code: `QG-${nextNumber}` });
-    setSelectedPhoto(null);
-    setRemovePhoto(false);
     setFormError("");
     setIsFormOpen(true);
   }
@@ -335,8 +312,6 @@ export default function Home() {
   function openEditForm(employee: Employee) {
     setEditing(employee);
     setForm(employeeToForm(employee));
-    setSelectedPhoto(null);
-    setRemovePhoto(false);
     setFormError("");
     setSelectedEmployee(null);
     setIsFormOpen(true);
@@ -346,8 +321,6 @@ export default function Home() {
     if (formBusy && !force) return;
     setIsFormOpen(false);
     setEditing(null);
-    setSelectedPhoto(null);
-    setRemovePhoto(false);
     setFormError("");
   }
 
@@ -358,38 +331,30 @@ export default function Home() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  async function uploadPhoto() {
-    if (!photoFile) return editing?.photo_path ?? null;
-
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!allowedTypes.includes(photoFile.type)) {
-      throw new Error("La foto debe estar en formato JPG, PNG o WebP.");
-    }
-    if (photoFile.size > 3 * 1024 * 1024) {
-      throw new Error("La foto no debe pesar más de 3 MB.");
-    }
-
+  // La lista solo trae columnas básicas; el expediente completo se pide al abrirlo.
+  async function loadEmployeeDetail(summary: EmployeeSummary): Promise<Employee | null> {
+    if (!session) return null;
+    setDetailLoadingId(summary.id);
     try {
-      return await uploadPhotoToFirebase(photoFile);
+      return await requestApi<Employee>(session, `/api/employees/${summary.id}`);
     } catch (error) {
-      console.error("No se pudo guardar la foto del empleado en Firebase:", error);
-      throw new Error("No se pudo cargar la foto. Verifica la configuración de Firebase Storage.");
+      console.error("No se pudo cargar el expediente:", error);
+      notify("error", "No se pudo abrir el expediente", describeError(error, "Inténtalo de nuevo."));
+      if (!(error instanceof ApiError)) reportClientIncident("expediente · carga", error);
+      return null;
+    } finally {
+      setDetailLoadingId(null);
     }
   }
 
-  async function discardUploadedPhoto(path: string | null) {
-    if (!path) return;
-    try {
-      if (isFirebasePhotoPath(path)) {
-        await deleteFirebasePhoto(path);
-      } else {
-        const { error } = await supabase.storage.from(LEGACY_PHOTO_BUCKET).remove([path]);
-        if (error) throw error;
-      }
-    } catch (error) {
-      console.error("No se pudo retirar una foto que quedó sin asociar:", error);
-      throw new Error("La operación falló y no se pudo limpiar el archivo de foto.");
-    }
+  async function openProfile(summary: EmployeeSummary) {
+    const employee = await loadEmployeeDetail(summary);
+    if (employee) setSelectedEmployee(employee);
+  }
+
+  async function openEditFromRow(summary: EmployeeSummary) {
+    const employee = await loadEmployeeDetail(summary);
+    if (employee) openEditForm(employee);
   }
 
   async function handleSaveEmployee(event: FormEvent<HTMLFormElement>) {
@@ -397,52 +362,43 @@ export default function Home() {
     if (!session) return;
     setFormBusy(true);
     setFormError("");
-    let uploadedPath: string | null = null;
+    const isEdit = editing !== null;
 
     try {
-      const previousPhoto = editing?.photo_path ?? null;
-      const newPhoto = await uploadPhoto();
-      uploadedPath = photoFile ? newPhoto : null;
-      const photoPath = removePhoto ? null : newPhoto;
-      const payload: EmployeeInput = formToEmployeeInput(form, photoPath);
+      // FOTOS DESHABILITADAS: se conserva sin cambios el photo_path que ya tuviera el expediente.
+      const payload: EmployeeInput = formToEmployeeInput(form, editing?.photo_path ?? null);
+      const saved = isEdit
+        ? await requestApi<Employee>(session, `/api/employees/${editing.id}`, {
+            method: "PATCH",
+            body: JSON.stringify(payload),
+          })
+        : await requestApi<Employee>(session, "/api/employees", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
 
-      if (editing) {
-        await requestApi<Employee>(session, `/api/employees/${editing.id}`, {
-          method: "PATCH",
-          body: JSON.stringify(payload),
-        });
-      } else {
-        await requestApi<Employee>(session, "/api/employees", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-      }
-
-      let cleanupWarning = "";
-      if (previousPhoto && previousPhoto !== photoPath) {
-        try {
-          await discardUploadedPhoto(previousPhoto);
-        } catch {
-          cleanupWarning = " La foto anterior permanece en el almacenamiento.";
-        }
-      }
+      // Se actualiza la lista en memoria con la respuesta: no hace falta volver a descargarla.
+      const summary = toEmployeeSummary(saved);
+      setEmployees((current) =>
+        sortEmployees(
+          isEdit
+            ? current.map((item) => (item.id === summary.id ? summary : item))
+            : [...current, summary],
+        ),
+      );
 
       closeForm(true);
-      if (cleanupWarning) showNotice("warning", `Empleado guardado.${cleanupWarning}`);
-      else showNotice("success", editing ? "Empleado actualizado correctamente." : "Empleado registrado correctamente.");
-      await refreshEmployees(session);
+      notify(
+        "success",
+        isEdit ? "Empleado actualizado" : "Empleado registrado",
+        `${saved.full_name} (${saved.employee_code}) se guardó correctamente.`,
+      );
     } catch (error) {
-      if (uploadedPath) {
-        try {
-          await discardUploadedPhoto(uploadedPath);
-        } catch (cleanupError) {
-          console.error("No se pudo limpiar la foto tras un error al guardar:", cleanupError);
-        }
-      }
       console.error("No se pudo guardar el empleado:", error);
-      const message = error instanceof Error ? error.message : "No se pudo guardar el empleado.";
+      const message = describeError(error, "No se pudo guardar el empleado.");
       setFormError(message);
-      showNotice("error", message);
+      notify("error", "No se pudo guardar el empleado", message);
+      if (!(error instanceof ApiError)) reportClientIncident("empleado · guardar", error);
     } finally {
       setFormBusy(false);
     }
@@ -456,22 +412,16 @@ export default function Home() {
     try {
       await requestApi<void>(session, `/api/employees/${employee.id}`, { method: "DELETE" });
       setSelectedEmployee(null);
-      if (employee.photo_path) {
-        try {
-          await discardUploadedPhoto(employee.photo_path);
-        } catch {
-          showNotice("warning", "Empleado eliminado; no se pudo retirar su foto del almacenamiento.");
-          await refreshEmployees(session);
-          return;
-        }
-      }
-      showNotice("success", "Empleado eliminado correctamente.");
-      await refreshEmployees(session);
+      setEmployees((current) => current.filter((item) => item.id !== employee.id));
+      notify("success", "Empleado eliminado", `Se eliminó el expediente de ${employee.full_name}.`);
     } catch (error) {
       console.error("No se pudo eliminar el empleado:", error);
-      showNotice("error", error instanceof Error ? error.message : "No se pudo eliminar el empleado.");
+      notify("error", "No se pudo eliminar el empleado", describeError(error, "Inténtalo de nuevo."));
+      if (!(error instanceof ApiError)) reportClientIncident("empleado · eliminar", error);
     }
   }
+
+  const noticeStack = <NoticeStack notices={notices} onDismiss={dismissNotice} />;
 
   if (checkingSession) {
     return (
@@ -525,6 +475,7 @@ export default function Home() {
           <div className="login-security"><ShieldCheck size={16} /> Acceso privado para personal autorizado</div>
         </section>
         <footer className="login-footer">© 2026 Cooperativa Quinta Generación S.C. de R.L. de C.V.</footer>
+        {noticeStack}
       </main>
     );
   }
@@ -623,8 +574,8 @@ export default function Home() {
                   <tr key={employee.id}>
                     <td className="employee-code">{employee.employee_code}</td>
                     <td>
-                      <button className="employee-name-button" onClick={() => setSelectedEmployee(employee)}>
-                        <Avatar employee={employee} photoUrl={photoUrls[employee.id]} />
+                      <button className="employee-name-button" onClick={() => void openProfile(employee)} disabled={detailLoadingId === employee.id}>
+                        <Avatar name={employee.full_name} />
                         <span>
                           <strong>{employee.full_name}</strong>
                           <small>{employee.email || "Sin correo registrado"}</small>
@@ -636,8 +587,8 @@ export default function Home() {
                     <td className="contract-cell">{employee.contract_type}</td>
                     <td><StatusBadge active={employee.active} /></td>
                     <td className="row-actions">
-                      <button className="text-button" onClick={() => setSelectedEmployee(employee)}>Ver expediente</button>
-                      <button className="icon-button row-edit" onClick={() => openEditForm(employee)} aria-label={`Editar ${employee.full_name}`} title="Editar"><Pencil size={16} /></button>
+                      <button className="text-button" onClick={() => void openProfile(employee)} disabled={detailLoadingId === employee.id}>{detailLoadingId === employee.id ? "Abriendo…" : "Ver expediente"}</button>
+                      <button className="icon-button row-edit" onClick={() => void openEditFromRow(employee)} disabled={detailLoadingId === employee.id} aria-label={`Editar ${employee.full_name}`} title="Editar"><Pencil size={16} /></button>
                     </td>
                   </tr>
                 ))}
@@ -747,6 +698,7 @@ export default function Home() {
                 </div>
               </FormSection>
 
+              {/* FOTOS DESHABILITADAS (ver src/lib/firebase.ts). Para reactivar, restaura la lógica de fotos y descomenta:
               <FormSection title="Fotografía" icon={<ImagePlus size={16} />}>
                 <div className="photo-control">
                   {(photoPreview || (!removePhoto && editing?.photo_path && photoUrls[editing.id])) ? (
@@ -789,6 +741,7 @@ export default function Home() {
                   </div>
                 </div>
               </FormSection>
+              */}
 
               {formError && <p className="inline-error form-error" role="alert">{formError}</p>}
               <div className="modal-actions">
@@ -808,7 +761,7 @@ export default function Home() {
           <section className="modal profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-title">
             <div className="profile-header">
               <button className="icon-button profile-close" onClick={() => setSelectedEmployee(null)} aria-label="Cerrar"><X size={20} /></button>
-              <Avatar employee={selectedEmployee} photoUrl={photoUrls[selectedEmployee.id]} large />
+              <Avatar name={selectedEmployee.full_name} large />
               <div className="profile-identity">
                 <div className="profile-title-row">
                   <h2 id="profile-title">{selectedEmployee.full_name}</h2>
@@ -852,7 +805,7 @@ export default function Home() {
         </div>
       )}
 
-      {notice && <div className={`toast toast-${notice.tone}`} role="status">{notice.message}</div>}
+      {noticeStack}
     </div>
   );
 }
@@ -870,9 +823,8 @@ function StatusBadge({ active }: { active: boolean }) {
   return <span className={`status-badge ${active ? "status-active" : "status-inactive"}`}><span />{active ? "Activo" : "Inactivo"}</span>;
 }
 
-function Avatar({ employee, photoUrl, large = false }: { employee: Employee; photoUrl?: string; large?: boolean }) {
-  const dimension = large ? 68 : 34;
-  return <span className={`avatar${large ? " avatar-large" : ""}`}>{photoUrl ? <Image src={photoUrl} alt="" width={dimension} height={dimension} unoptimized /> : initials(employee.full_name)}</span>;
+function Avatar({ name, large = false }: { name: string; large?: boolean }) {
+  return <span className={`avatar${large ? " avatar-large" : ""}`}>{initials(name)}</span>;
 }
 
 function FormSection({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
@@ -885,4 +837,32 @@ function ProfileSection({ title, icon, children }: { title: string; icon: ReactN
 
 function ProfileValue({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
   return <div className={`profile-value${wide ? " profile-value-wide" : ""}`}><span>{label}</span><strong>{children}</strong></div>;
+}
+
+const NOTICE_ICONS = {
+  success: CircleCheck,
+  error: CircleAlert,
+  warning: TriangleAlert,
+  info: Info,
+} as const;
+
+function NoticeStack({ notices, onDismiss }: { notices: Notice[]; onDismiss: (id: number) => void }) {
+  if (notices.length === 0) return null;
+  return (
+    <div className="toast-stack" aria-live="polite">
+      {notices.map((notice) => {
+        const Icon = NOTICE_ICONS[notice.tone];
+        return (
+          <div key={notice.id} className={`toast toast-${notice.tone}`} role={notice.tone === "error" ? "alert" : "status"}>
+            <Icon size={20} className="toast-icon" />
+            <div className="toast-body">
+              <strong>{notice.title}</strong>
+              {notice.message && <p>{notice.message}</p>}
+            </div>
+            <button type="button" className="toast-close" onClick={() => onDismiss(notice.id)} aria-label="Cerrar aviso"><X size={15} /></button>
+          </div>
+        );
+      })}
+    </div>
+  );
 }

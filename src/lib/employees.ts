@@ -54,6 +54,30 @@ export type Employee = {
   updated_at: string;
 };
 
+// La tabla principal solo necesita estas columnas: la lista viaja ligera y el expediente
+// completo (salario, CURP, NSS, etc.) se pide únicamente al abrir un empleado.
+export const EMPLOYEE_LIST_COLUMNS =
+  "id,employee_code,full_name,site,position,contract_type,active,email";
+
+export type EmployeeSummary = Pick<
+  Employee,
+  "id" | "employee_code" | "full_name" | "site" | "position" | "contract_type" | "active" | "email"
+>;
+
+export const toEmployeeSummary = (employee: Employee): EmployeeSummary => ({
+  id: employee.id,
+  employee_code: employee.employee_code,
+  full_name: employee.full_name,
+  site: employee.site,
+  position: employee.position,
+  contract_type: employee.contract_type,
+  active: employee.active,
+  email: employee.email,
+});
+
+export const sortEmployees = (list: EmployeeSummary[]) =>
+  [...list].sort((a, b) => a.full_name.localeCompare(b.full_name, "es-MX"));
+
 export type EmployeeInput = Omit<Employee, "id" | "created_at" | "updated_at">;
 
 export type EmployeeFormValues = {

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAuthenticatedSupabaseClient } from "@/lib/database";
+import { reportServerIncident } from "@/lib/incidents";
 
 type AuthenticatedClientResult =
   | { client: SupabaseClient }
@@ -32,6 +33,7 @@ export async function getAuthenticatedClient(
 
     if (authorizationError) {
       console.error("No se pudo validar el acceso del usuario:", authorizationError);
+      reportServerIncident("api · validar acceso", authorizationError);
       return {
         response: NextResponse.json(
           { error: "No se pudo verificar que tu cuenta esté autorizada." },
@@ -52,6 +54,7 @@ export async function getAuthenticatedClient(
     return { client };
   } catch (error) {
     console.error("No se pudo inicializar la conexión autenticada de Supabase:", error);
+    reportServerIncident("api · conexión Supabase", error);
     return {
       response: NextResponse.json(
         { error: "No se pudo conectar con el servicio de datos." },
@@ -61,11 +64,14 @@ export async function getAuthenticatedClient(
   }
 }
 
+/** Error del cliente (400): no se reporta por correo porque no es una falla del sistema. */
+export class BadJsonError extends Error {}
+
 export async function readJson(request: NextRequest): Promise<unknown> {
   try {
     return await request.json();
   } catch {
-    throw new Error("El cuerpo de la solicitud no contiene JSON válido.");
+    throw new BadJsonError("El cuerpo de la solicitud no contiene JSON válido.");
   }
 }
 
@@ -78,6 +84,8 @@ export function databaseErrorResponse(error: { code?: string; message: string })
       { status: 409 },
     );
   }
+
+  reportServerIncident("api · base de datos", error);
 
   return NextResponse.json(
     { error: "No se pudo completar la operación. Verifica los datos e inténtalo de nuevo." },
