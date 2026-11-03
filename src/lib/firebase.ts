@@ -30,8 +30,14 @@ async function ensureFirebaseSession() {
 
 export async function uploadPhotoToFirebase(file: File): Promise<string> {
   await ensureFirebaseSession();
-  const extension = file.type === "image/jpeg" ? "jpg" : file.type.split("/")[1];
-  const path = `${FIREBASE_PHOTO_FOLDER}/${crypto.randomUUID()}.${extension}`;
+  const extension = file.type === "image/jpeg" ? "jpg" : file.type.split("/")[1] || "png";
+  
+  // Generador de ID único robusto compatible con contextos no seguros (IPs locales)
+  const uniqueId = typeof crypto?.randomUUID === "function" 
+    ? crypto.randomUUID() 
+    : Math.random().toString(36).substring(2) + Date.now().toString(36);
+
+  const path = `${FIREBASE_PHOTO_FOLDER}/${uniqueId}.${extension}`;
   await uploadBytes(ref(getStorage(firebaseApp()), path), file, { contentType: file.type });
   return path;
 }
