@@ -41,9 +41,17 @@ import {
   formatCurrency,
   formatDate,
 } from "@/lib/employees";
+import {
+  deleteFirebasePhoto,
+  getFirebasePhotoUrl,
+  isFirebasePhotoPath,
+  signOutFirebase,
+  uploadPhotoToFirebase,
+} from "@/lib/firebase";
 import { supabase } from "@/lib/supabase";
 
-const PHOTO_BUCKET = "employee-photos";
+// Bucket anterior de Supabase: solo se usa para fotos antiguas que aún no se han migrado.
+const LEGACY_PHOTO_BUCKET = "employee-photos";
 const PAGE_SIZE = 500;
 
 type Notice = { tone: "success" | "error" | "warning"; message: string };
@@ -187,14 +195,20 @@ export default function Home() {
         allEmployees
           .filter((employee) => employee.photo_path)
           .map(async (employee) => {
-            const { data, error } = await supabase.storage
-              .from(PHOTO_BUCKET)
-              .createSignedUrl(employee.photo_path!, 3600);
-            if (error) {
+            const path = employee.photo_path!;
+            try {
+              if (isFirebasePhotoPath(path)) {
+                return [employee.id, await getFirebasePhotoUrl(path)] as const;
+              }
+              const { data, error } = await supabase.storage
+                .from(LEGACY_PHOTO_BUCKET)
+                .createSignedUrl(path, 3600);
+              if (error) throw error;
+              return [employee.id, data.signedUrl] as const;
+            } catch (error) {
               console.error(`No se pudo cargar la foto del empleado ${employee.employee_code}:`, error);
               return null;
             }
-            return [employee.id, data.signedUrl] as const;
           }),
       );
 
@@ -246,6 +260,11 @@ export default function Home() {
     });
   }, [employees, filterSite, search]);
 
+  const positionSuggestions = useMemo(
+    () => Array.from(new Set([...POSITIONS, ...employees.map((employee) => employee.position)])).sort((a, b) => a.localeCompare(b, "es-MX")),
+    [employees],
+  );
+
   const showNotice = (tone: Notice["tone"], message: string) => setNotice({ tone, message });
 
   function setSelectedPhoto(file: File | null) {
@@ -289,6 +308,9 @@ export default function Home() {
         console.error("No se pudo cerrar sesión:", error);
         showNotice("error", "No se pudo cerrar la sesión. Inténtalo de nuevo.");
       }
+      await signOutFirebase().catch((firebaseError: unknown) => {
+        console.error("No se pudo cerrar la sesión de Firebase:", firebaseError);
+      });
     } catch (error) {
       console.error("No se pudo completar el cierre de sesión:", error);
       showNotice("error", "No se pudo cerrar la sesión. Inténtalo de nuevo.");
@@ -336,7 +358,7 @@ export default function Home() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  async function uploadPhoto(activeSession: Session) {
+  async function uploadPhoto() {
     if (!photoFile) return editing?.photo_path ?? null;
 
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
@@ -347,23 +369,24 @@ export default function Home() {
       throw new Error("La foto no debe pesar más de 3 MB.");
     }
 
-    const extension = photoFile.type === "image/jpeg" ? "jpg" : photoFile.type.split("/")[1];
-    const path = `${activeSession.user.id}/${crypto.randomUUID()}.${extension}`;
-    const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, photoFile, {
-      contentType: photoFile.type,
-      upsert: false,
-    });
-    if (error) {
-      console.error("No se pudo guardar la foto del empleado:", error);
-      throw new Error("No se pudo cargar la foto. Verifica la configuración del almacenamiento.");
+    try {
+      return await uploadPhotoToFirebase(photoFile);
+    } catch (error) {
+      console.error("No se pudo guardar la foto del empleado en Firebase:", error);
+      throw new Error("No se pudo cargar la foto. Verifica la configuración de Firebase Storage.");
     }
-    return path;
   }
 
   async function discardUploadedPhoto(path: string | null) {
     if (!path) return;
-    const { error } = await supabase.storage.from(PHOTO_BUCKET).remove([path]);
-    if (error) {
+    try {
+      if (isFirebasePhotoPath(path)) {
+        await deleteFirebasePhoto(path);
+      } else {
+        const { error } = await supabase.storage.from(LEGACY_PHOTO_BUCKET).remove([path]);
+        if (error) throw error;
+      }
+    } catch (error) {
       console.error("No se pudo retirar una foto que quedó sin asociar:", error);
       throw new Error("La operación falló y no se pudo limpiar el archivo de foto.");
     }
@@ -378,7 +401,7 @@ export default function Home() {
 
     try {
       const previousPhoto = editing?.photo_path ?? null;
-      const newPhoto = await uploadPhoto(session);
+      const newPhoto = await uploadPhoto();
       uploadedPath = photoFile ? newPhoto : null;
       const photoPath = removePhoto ? null : newPhoto;
       const payload: EmployeeInput = formToEmployeeInput(form, photoPath);
@@ -589,7 +612,7 @@ export default function Home() {
                   <th>ID empleado</th>
                   <th>Nombre completo</th>
                   <th>Sede</th>
-                  <th>Área / puesto</th>
+                  <th>Área / departamento</th>
                   <th>Tipo de contrato</th>
                   <th>Estatus</th>
                   <th><span className="sr-only">Acciones</span></th>
@@ -663,8 +686,19 @@ export default function Home() {
                     <select value={form.site} onChange={(event) => updateForm("site", event.target.value)} required>{SITES.map((site) => <option key={site}>{site}</option>)}</select>
                   </Field>
                   <Field label="Fecha de contratación" required><input type="date" value={form.hire_date} onChange={(event) => updateForm("hire_date", event.target.value)} required /></Field>
-                  <Field label="Área / puesto" required>
-                    <select value={form.position} onChange={(event) => updateForm("position", event.target.value)} required>{POSITIONS.map((position) => <option key={position}>{position}</option>)}</select>
+                  <Field label="Área / departamento / puesto" required>
+                    <input
+                      list="position-suggestions"
+                      value={form.position}
+                      onChange={(event) => updateForm("position", event.target.value)}
+                      maxLength={150}
+                      placeholder="Ej. Operaciones - Operador Especializado"
+                      autoComplete="off"
+                      required
+                    />
+                    <datalist id="position-suggestions">
+                      {positionSuggestions.map((position) => <option key={position} value={position} />)}
+                    </datalist>
                   </Field>
                   <Field label="Tipo de contrato" required>
                     <select value={form.contract_type} onChange={(event) => updateForm("contract_type", event.target.value)} required>{CONTRACT_TYPES.map((contract) => <option key={contract}>{contract}</option>)}</select>
