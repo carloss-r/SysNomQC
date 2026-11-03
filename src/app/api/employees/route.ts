@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { databaseErrorResponse, getAuthenticatedClient, readJson } from "./_server";
+import { reportServerIncident } from "@/lib/incidents";
+import { EMPLOYEE_LIST_COLUMNS } from "@/lib/employees";
+import { BadJsonError, databaseErrorResponse, getAuthenticatedClient, readJson } from "./_server";
 import { employeeInputSchema } from "./validation";
 
 export async function GET(request: NextRequest) {
@@ -14,7 +16,7 @@ export async function GET(request: NextRequest) {
   try {
     const { data, error } = await auth.client
       .from("employees")
-      .select("*")
+      .select(EMPLOYEE_LIST_COLUMNS)
       .order("full_name")
       .range(offset, offset + limit - 1);
 
@@ -22,6 +24,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data);
   } catch (error) {
     console.error("Error inesperado al consultar empleados:", error);
+    reportServerIncident("api · listar empleados", error);
     return NextResponse.json({ error: "No se pudo cargar el directorio." }, { status: 500 });
   }
 }
@@ -49,7 +52,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     console.error("Error inesperado al crear empleado:", error);
-    const message = error instanceof Error ? error.message : "No se pudo crear el empleado.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    if (error instanceof BadJsonError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    reportServerIncident("api · crear empleado", error);
+    return NextResponse.json({ error: "No se pudo crear el empleado." }, { status: 500 });
   }
 }

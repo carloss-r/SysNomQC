@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ClientErrorMonitor } from "./client-error-monitor";
 
 export const metadata: Metadata = {
   title: "Gestión de Personal | Cooperativa Quinta Generación",
@@ -9,7 +10,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body>
+        <ClientErrorMonitor />
+        {children}
+      </body>
     </html>
   );
 }

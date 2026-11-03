@@ -209,10 +209,18 @@ h1, h2, h3, p { margin-top: 0; }
 .profile-actions { padding: 13px 20px; }
 .actions-spacer { flex: 1; }
 
-.toast { position: fixed; z-index: 80; right: 22px; bottom: 22px; max-width: min(430px, calc(100vw - 32px)); padding: 13px 17px; border: 1px solid; border-radius: 9px; box-shadow: var(--shadow); font-size: 12px; font-weight: 600; animation: toast-enter .2s ease-out; }
-.toast-success { border-color: #b6d8be; color: #185b31; background: #f0f8f1; }
-.toast-error { border-color: #efcbc8; color: #943d36; background: #fff3f2; }
-.toast-warning { border-color: #ebd9aa; color: #725817; background: #fff9e9; }
+.toast-stack { position: fixed; z-index: 80; right: 22px; bottom: 22px; display: flex; width: min(410px, calc(100vw - 32px)); flex-direction: column; gap: 10px; pointer-events: none; }
+.toast { display: flex; align-items: flex-start; gap: 11px; padding: 13px 12px 13px 14px; border: 1px solid; border-left-width: 5px; border-radius: 10px; box-shadow: var(--shadow); pointer-events: auto; animation: toast-enter .2s ease-out; }
+.toast-icon { flex: 0 0 auto; margin-top: 1px; }
+.toast-body { min-width: 0; flex: 1; }
+.toast-body strong { display: block; font-size: 13px; font-weight: 800; }
+.toast-body p { margin: 3px 0 0; font-size: 12px; font-weight: 500; line-height: 1.45; overflow-wrap: anywhere; }
+.toast-close { display: grid; width: 24px; height: 24px; flex: 0 0 auto; place-items: center; border: 0; border-radius: 6px; color: inherit; background: transparent; opacity: .65; cursor: pointer; }
+.toast-close:hover { opacity: 1; background: rgb(0 0 0 / 7%); }
+.toast-success { border-color: #b6d8be; border-left-color: #2e8b4f; color: #185b31; background: #f0f8f1; }
+.toast-error { border-color: #efcbc8; border-left-color: #c9453b; color: #943d36; background: #fff3f2; }
+.toast-warning { border-color: #ebd9aa; border-left-color: #d1a52a; color: #725817; background: #fff9e9; }
+.toast-info { border-color: #c4d7ec; border-left-color: #3b78b8; color: #24527e; background: #f0f6fc; }
 @keyframes toast-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .spinner { width: 15px; height: 15px; border: 2px solid #dce6de; border-top-color: var(--green-800); border-radius: 50%; animation: spin .7s linear infinite; }
 .spinner-light { border-color: rgb(255 255 255 / 45%); border-top-color: #fff; }
@@ -287,7 +295,7 @@ h1, h2, h3, p { margin-top: 0; }
   .profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .profile-actions { flex-wrap: wrap; padding: 11px; }
   .profile-actions .button { min-height: 37px; padding: 0 10px; font-size: 10px; }
-  .toast { right: 12px; bottom: 12px; }
+  .toast-stack { right: 12px; bottom: 12px; }
   .login-panel { padding: 27px 22px 22px; }
 }
 
