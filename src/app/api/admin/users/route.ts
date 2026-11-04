@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await auth.admin
     .from("authorized_users")
-    .select("user_id,email,full_name,active,role_id,created_at,role:app_roles(name)")
+    .select("user_id,email,full_name,active,role_id,created_at,role:roles(nombre)")
     .order("email");
   if (error) return adminDbError(error);
 
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     full_name: row.full_name,
     active: row.active,
     role_id: row.role_id,
-    role_name: (row.role as unknown as { name: string } | null)?.name ?? null,
+    role_name: (row.role as unknown as { nombre: string } | null)?.nombre ?? null,
     created_at: row.created_at,
   }));
   return NextResponse.json(users);

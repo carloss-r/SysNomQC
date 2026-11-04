@@ -21,8 +21,7 @@ export type Access = {
 };
 
 export type AdminRole = {
-  id: string;
-  slug: string | null;
+  id: number;
   name: string;
   description: string | null;
   permissions: Permission[];
@@ -35,7 +34,7 @@ export type AdminUser = {
   email: string;
   full_name: string | null;
   active: boolean;
-  role_id: string | null;
+  role_id: number | null;
   role_name: string | null;
   created_at: string | null;
 };

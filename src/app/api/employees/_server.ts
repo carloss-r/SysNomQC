@@ -8,7 +8,7 @@ type AuthenticatedClientResult =
   | { client: SupabaseClient; access: Access }
   | { response: NextResponse<{ error: string }> };
 
-type RoleRow = { slug: string | null; name: string; permissions: string[] | null };
+type RoleRow = { nombre: string; permisos: string[] | null; es_sistema: boolean | null };
 
 /** Valida la sesión y, si se indica, que el rol de la cuenta tenga ese permiso. */
 export async function getAuthenticatedClient(
@@ -31,7 +31,7 @@ export async function getAuthenticatedClient(
 
     const { data: authorizedUser, error: authorizationError } = await client
       .from("authorized_users")
-      .select("user_id,full_name,role:app_roles(slug,name,permissions)")
+      .select("user_id,full_name,role:roles(nombre,permisos,es_sistema)")
       .eq("user_id", userData.user.id)
       .eq("active", true)
       .maybeSingle();
@@ -57,15 +57,15 @@ export async function getAuthenticatedClient(
     }
 
     const role = authorizedUser.role as unknown as RoleRow | null;
-    const isSuperAdmin = role?.slug === "super_admin";
+    const isSuperAdmin = role?.es_sistema === true;
     const permissions = isSuperAdmin
       ? ALL_PERMISSIONS
-      : ALL_PERMISSIONS.filter((item) => role?.permissions?.includes(item));
+      : ALL_PERMISSIONS.filter((item) => role?.permisos?.includes(item));
     const access: Access = {
       user_id: userData.user.id,
       email: userData.user.email ?? "",
       full_name: (authorizedUser.full_name as string | null) ?? null,
-      role_name: role?.name ?? "Sin rol",
+      role_name: role?.nombre ?? "Sin rol",
       is_super_admin: isSuperAdmin,
       permissions,
     };

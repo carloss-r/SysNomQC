@@ -47,6 +47,14 @@ Para evitar spam y costos: el mismo error se envía una vez cada 10 minutos, hay
 - Cambiar de pestaña o renovarse el token de sesión no recarga el directorio.
 - Las fotos se piden solo al abrir un expediente o editarlo.
 
+## Local vs. nube
+
+No hay cadena de conexión a Postgres: la app habla con Supabase por URL y llaves, definidas solo en variables de entorno (leídas en `src/lib/supabase.ts`, `src/lib/database.ts` y `src/app/api/admin/_admin.ts`).
+
+- **Local:** `.env.local` (no se sube a Git) con la URL y llaves de tu Supabase local (`supabase start`, `supabase status`). `supabase db reset` aplica las migraciones de `supabase/migrations`.
+- **Producción:** las mismas tres variables (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) en el panel de Vercel con los valores del proyecto en la nube. Para llevar los cambios de BD a la nube, ejecuta las migraciones nuevas en su SQL Editor (o `supabase db push`).
+- Crea al menos un usuario en Authentication de cada entorno y autorízalo en `authorized_users` (ver arriba).
+
 ## Ejecutar localmente
 
 Requiere Node.js 20.9 o posterior.

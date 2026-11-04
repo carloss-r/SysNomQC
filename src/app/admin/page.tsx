@@ -89,8 +89,8 @@ export default function AdminPage() {
   function openUserModal(user: AdminUser | null) {
     setUserForm(
       user
-        ? { email: user.email, full_name: user.full_name ?? "", password: "", role_id: user.role_id ?? "", active: user.active }
-        : { ...EMPTY_USER, role_id: roles.find((role) => !role.is_system)?.id ?? roles[0]?.id ?? "" },
+        ? { email: user.email, full_name: user.full_name ?? "", password: "", role_id: user.role_id ? String(user.role_id) : "", active: user.active }
+        : { ...EMPTY_USER, role_id: String(roles.find((role) => !role.is_system)?.id ?? roles[0]?.id ?? "") },
     );
     setFormError("");
     setUserModal({ editing: user });
@@ -133,7 +133,7 @@ export default function AdminPage() {
               method: "PATCH",
               body: JSON.stringify({
                 full_name: userForm.full_name.trim(),
-                role_id: userForm.role_id,
+                role_id: Number(userForm.role_id),
                 active: userForm.active,
                 ...(userForm.password ? { password: userForm.password } : {}),
               }),
@@ -144,7 +144,7 @@ export default function AdminPage() {
                 email: userForm.email.trim(),
                 full_name: userForm.full_name.trim(),
                 password: userForm.password,
-                role_id: userForm.role_id,
+                role_id: Number(userForm.role_id),
                 active: userForm.active,
               }),
             }),
@@ -172,7 +172,7 @@ export default function AdminPage() {
     );
   }
 
-  async function remove(kind: "users" | "roles", id: string, label: string) {
+  async function remove(kind: "users" | "roles", id: string | number, label: string) {
     if (!session || !window.confirm(`¿Eliminar "${label}"? Esta acción no se puede deshacer.`)) return;
     try {
       await requestApi<void>(session, `/api/admin/${kind}/${id}`, { method: "DELETE" });

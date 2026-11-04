@@ -9,7 +9,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 const userPatchSchema = z
   .object({
     full_name: z.string().trim().min(1).max(150),
-    role_id: z.uuid(),
+    role_id: z.number().int().positive(),
     active: z.boolean(),
     password: z.string().min(8).max(72),
   })
@@ -17,16 +17,16 @@ const userPatchSchema = z
   .refine((value) => Object.keys(value).length > 0, "Debes enviar al menos un campo.")
   .strict();
 
-async function superAdminRoleId(admin: SupabaseClient) {
-  const { data } = await admin.from("app_roles").select("id").eq("slug", "super_admin").maybeSingle();
-  return (data?.id as string | undefined) ?? null;
+async function superAdminRoleIds(admin: SupabaseClient): Promise<number[]> {
+  const { data } = await admin.from("roles").select("id_rol").eq("es_sistema", true);
+  return (data ?? []).map((row) => row.id_rol as number);
 }
 
-async function otherActiveSuperAdmins(admin: SupabaseClient, roleId: string, excludeUserId: string) {
+async function otherActiveSuperAdmins(admin: SupabaseClient, roleIds: number[], excludeUserId: string) {
   const { count } = await admin
     .from("authorized_users")
     .select("user_id", { count: "exact", head: true })
-    .eq("role_id", roleId)
+    .in("role_id", roleIds)
     .eq("active", true)
     .neq("user_id", excludeUserId);
   return count ?? 0;
@@ -56,12 +56,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return badRequest("No puedes desactivar tu propia cuenta.");
     }
 
-    const superId = await superAdminRoleId(auth.admin);
-    const wasSuper = Boolean(superId) && target.role_id === superId && target.active;
-    const nextRole = fields.role_id ?? target.role_id;
+    const superIds = await superAdminRoleIds(auth.admin);
+    const wasSuper = superIds.includes(target.role_id as number) && target.active;
+    const nextRole = (fields.role_id ?? target.role_id) as number;
     const nextActive = fields.active ?? target.active;
-    if (wasSuper && superId && (nextRole !== superId || !nextActive)) {
-      if ((await otherActiveSuperAdmins(auth.admin, superId, id)) === 0) {
+    if (wasSuper && (!superIds.includes(nextRole) || !nextActive)) {
+      if ((await otherActiveSuperAdmins(auth.admin, superIds, id)) === 0) {
         return badRequest("Debe quedar al menos un super administrador activo.");
       }
     }
@@ -97,9 +97,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   if (readError) return adminDbError(readError);
   if (!target) return NextResponse.json({ error: "No se encontró el usuario." }, { status: 404 });
 
-  const superId = await superAdminRoleId(auth.admin);
-  if (superId && target.role_id === superId && target.active) {
-    if ((await otherActiveSuperAdmins(auth.admin, superId, id)) === 0) {
+  const superIds = await superAdminRoleIds(auth.admin);
+  if (superIds.includes(target.role_id as number) && target.active) {
+    if ((await otherActiveSuperAdmins(auth.admin, superIds, id)) === 0) {
       return badRequest("Debe quedar al menos un super administrador activo.");
     }
   }
