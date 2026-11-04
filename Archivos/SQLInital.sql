@@ -1,220 +1,179 @@
--- =============================================================================
--- BASE DE DATOS CORPORATIVA: COOPERATIVA QUINTA GENERACIÓN S.C. DE R.L. DE C.V.
--- MOTOR: PostgreSQL (Diseñado para Supabase)
--- =============================================================================
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
 
--- Habilitar extensión para identificadores únicos globales (UUIDs)
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- =============================================================================
--- MÓDULO 1: CATÁLOGOS DEL SISTEMA (COMBOS)
--- =============================================================================
-
-CREATE TABLE catalogos_generos (
-    id_genero SERIAL PRIMARY KEY,
-    nombre VARCHAR(50) NOT NULL UNIQUE
+CREATE TABLE public.catalogos_generos (
+  id_genero integer NOT NULL DEFAULT nextval('catalogos_generos_id_genero_seq'::regclass),
+  nombre character varying NOT NULL UNIQUE,
+  CONSTRAINT catalogos_generos_pkey PRIMARY KEY (id_genero)
 );
-
-CREATE TABLE catalogos_estados_civiles (
-    id_estado_civil SERIAL PRIMARY KEY,
-    nombre VARCHAR(50) NOT NULL UNIQUE
+CREATE TABLE public.catalogos_estados_civiles (
+  id_estado_civil integer NOT NULL DEFAULT nextval('catalogos_estados_civiles_id_estado_civil_seq'::regclass),
+  nombre character varying NOT NULL UNIQUE,
+  CONSTRAINT catalogos_estados_civiles_pkey PRIMARY KEY (id_estado_civil)
 );
-
-CREATE TABLE catalogos_tipos_credito (
-    id_tipo_credito SERIAL PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL UNIQUE, -- FONACOT, INFONAVIT, Préstamo Interno, etc.
-    institucion VARCHAR(100),
-    descripcion TEXT,
-    activo BOOLEAN DEFAULT TRUE
+CREATE TABLE public.catalogos_tipos_credito (
+  id_tipo_credito integer NOT NULL DEFAULT nextval('catalogos_tipos_credito_id_tipo_credito_seq'::regclass),
+  nombre character varying NOT NULL UNIQUE,
+  institucion character varying,
+  descripcion text,
+  activo boolean DEFAULT true,
+  CONSTRAINT catalogos_tipos_credito_pkey PRIMARY KEY (id_tipo_credito)
 );
-
-CREATE TABLE sedes (
-    id_sede SERIAL PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL UNIQUE, -- Campeche, Lagunas, Cruz Azul
-    estado VARCHAR(50) NOT NULL,
-    ciudad VARCHAR(50) NOT NULL,
-    activo BOOLEAN DEFAULT TRUE
+CREATE TABLE public.sedes (
+  id_sede integer NOT NULL DEFAULT nextval('sedes_id_sede_seq'::regclass),
+  nombre character varying NOT NULL UNIQUE,
+  estado character varying NOT NULL,
+  ciudad character varying NOT NULL,
+  activo boolean DEFAULT true,
+  CONSTRAINT sedes_pkey PRIMARY KEY (id_sede)
 );
-
-CREATE TABLE areas (
-    id_area SERIAL PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL UNIQUE
+CREATE TABLE public.areas (
+  id_area integer NOT NULL DEFAULT nextval('areas_id_area_seq'::regclass),
+  nombre character varying NOT NULL UNIQUE,
+  CONSTRAINT areas_pkey PRIMARY KEY (id_area)
 );
-
-CREATE TABLE puestos (
-    id_puesto SERIAL PRIMARY KEY,
-    id_area INT NOT NULL REFERENCES areas(id_area) ON DELETE CASCADE,
-    nombre VARCHAR(100) NOT NULL,
-    descripcion TEXT
+CREATE TABLE public.puestos (
+  id_puesto integer NOT NULL DEFAULT nextval('puestos_id_puesto_seq'::regclass),
+  id_area integer NOT NULL,
+  nombre character varying NOT NULL,
+  descripcion text,
+  CONSTRAINT puestos_pkey PRIMARY KEY (id_puesto),
+  CONSTRAINT puestos_id_area_fkey FOREIGN KEY (id_area) REFERENCES public.areas(id_area)
 );
-
--- =============================================================================
--- MÓDULO 2: EXPEDIENTE DE EMPLEADOS Y FOTO DE PERFIL
--- =============================================================================
-
-CREATE TABLE empleados (
-    id_empleado SERIAL PRIMARY KEY,
-    id_sede INT NOT NULL REFERENCES sedes(id_sede),
-    id_puesto INT NOT NULL REFERENCES puestos(id_puesto),
-    
-    -- Combos normalizados
-    id_genero INT REFERENCES catalogos_generos(id_genero),
-    id_estado_civil INT REFERENCES catalogos_estados_civiles(id_estado_civil),
-
-    -- Datos Laborales
-    nombre_completo VARCHAR(150) NOT NULL,
-    fecha_contratacion DATE NOT NULL,
-    tipo_contrato VARCHAR(50) NOT NULL, -- Determinado, Indeterminado, etc.
-    salario_actual DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    num_cuenta_bancaria VARCHAR(20),
-    clabe_interbancaria VARCHAR(18),
-    activo BOOLEAN DEFAULT TRUE,
-    
-    -- Datos Personales y Fiscales
-    nss VARCHAR(11) UNIQUE,
-    curp VARCHAR(18) UNIQUE,
-    rfc VARCHAR(13) UNIQUE,
-    fecha_nacimiento DATE,
-    
-    -- Contacto y Ubicación
-    email VARCHAR(100),
-    telefono VARCHAR(15),
-    estado_residencia VARCHAR(50),
-    ciudad_residencia VARCHAR(50),
-    codigo_postal VARCHAR(10),
-    direccion_calle TEXT,
-    
-    -- Almacenamiento de Imagen (Apuntando a la URL pública de Firebase Storage)
-    foto_perfil_url TEXT DEFAULT NULL,
-    
-    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE public.empleados (
+  id_empleado integer NOT NULL DEFAULT nextval('empleados_id_empleado_seq'::regclass),
+  id_sede integer NOT NULL,
+  id_puesto integer NOT NULL,
+  id_genero integer,
+  id_estado_civil integer,
+  nombre_completo character varying NOT NULL,
+  fecha_contratacion date NOT NULL,
+  tipo_contrato character varying NOT NULL,
+  salario_actual numeric NOT NULL DEFAULT 0.00,
+  num_cuenta_bancaria character varying,
+  clabe_interbancaria character varying,
+  activo boolean DEFAULT true,
+  nss character varying UNIQUE,
+  curp character varying UNIQUE,
+  rfc character varying UNIQUE,
+  fecha_nacimiento date,
+  email character varying,
+  telefono character varying,
+  estado_residencia character varying,
+  ciudad_residencia character varying,
+  codigo_postal character varying,
+  direccion_calle text,
+  foto_perfil_url text,
+  creado_en timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  actualizado_en timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT empleados_pkey PRIMARY KEY (id_empleado),
+  CONSTRAINT empleados_id_sede_fkey FOREIGN KEY (id_sede) REFERENCES public.sedes(id_sede),
+  CONSTRAINT empleados_id_puesto_fkey FOREIGN KEY (id_puesto) REFERENCES public.puestos(id_puesto),
+  CONSTRAINT empleados_id_genero_fkey FOREIGN KEY (id_genero) REFERENCES public.catalogos_generos(id_genero),
+  CONSTRAINT empleados_id_estado_civil_fkey FOREIGN KEY (id_estado_civil) REFERENCES public.catalogos_estados_civiles(id_estado_civil)
 );
-
--- =============================================================================
--- MÓDULO 3: CRÉDITOS MÚLTIPLES POR EMPLEADO
--- =============================================================================
-
-CREATE TABLE empleados_creditos (
-    id_empleado_credito SERIAL PRIMARY KEY,
-    id_empleado INT NOT NULL REFERENCES empleados(id_empleado) ON DELETE CASCADE,
-    id_tipo_credito INT NOT NULL REFERENCES catalogos_tipos_credito(id_tipo_credito),
-    numero_credito VARCHAR(50) NOT NULL,
-    descuento_mensual DECIMAL(10, 2) DEFAULT 0.00,
-    fecha_inicio DATE,
-    fecha_termino DATE,
-    estatus VARCHAR(20) DEFAULT 'ACTIVO' CHECK (estatus IN ('ACTIVO', 'LIQUIDADO', 'SUSPENDIDO')),
-    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE public.empleados_creditos (
+  id_empleado_credito integer NOT NULL DEFAULT nextval('empleados_creditos_id_empleado_credito_seq'::regclass),
+  id_empleado integer NOT NULL,
+  id_tipo_credito integer NOT NULL,
+  numero_credito character varying NOT NULL,
+  descuento_mensual numeric DEFAULT 0.00,
+  fecha_inicio date,
+  fecha_termino date,
+  estatus character varying DEFAULT 'ACTIVO'::character varying CHECK (estatus::text = ANY (ARRAY['ACTIVO'::character varying, 'LIQUIDADO'::character varying, 'SUSPENDIDO'::character varying]::text[])),
+  creado_en timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT empleados_creditos_pkey PRIMARY KEY (id_empleado_credito),
+  CONSTRAINT empleados_creditos_id_empleado_fkey FOREIGN KEY (id_empleado) REFERENCES public.empleados(id_empleado),
+  CONSTRAINT empleados_creditos_id_tipo_credito_fkey FOREIGN KEY (id_tipo_credito) REFERENCES public.catalogos_tipos_credito(id_tipo_credito)
 );
-
--- =============================================================================
--- MÓDULO 4: USUARIOS Y ROLES DEL SISTEMA WEB
--- =============================================================================
-
-CREATE TABLE roles (
-    id_rol SERIAL PRIMARY KEY,
-    nombre VARCHAR(50) NOT NULL UNIQUE, -- SuperAdmin, AdminSede, RecursosHumanos, Almacenista
-    descripcion TEXT
+CREATE TABLE public.roles (
+  id_rol integer NOT NULL DEFAULT nextval('roles_id_rol_seq'::regclass),
+  nombre character varying NOT NULL UNIQUE,
+  descripcion text,
+  CONSTRAINT roles_pkey PRIMARY KEY (id_rol)
 );
-
-CREATE TABLE usuarios (
-    id_usuario UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    id_empleado INT UNIQUE REFERENCES empleados(id_empleado) ON DELETE SET NULL,
-    id_rol INT NOT NULL REFERENCES roles(id_rol),
-    id_sede_asignada INT REFERENCES sedes(id_sede), -- Restricción por sede
-    username VARCHAR(50) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    email_corporativo VARCHAR(100) NOT NULL UNIQUE,
-    ultimo_acceso TIMESTAMP,
-    activo BOOLEAN DEFAULT TRUE,
-    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE public.usuarios (
+  id_usuario uuid NOT NULL DEFAULT uuid_generate_v4(),
+  id_empleado integer UNIQUE,
+  id_rol integer NOT NULL,
+  id_sede_asignada integer,
+  username character varying NOT NULL UNIQUE,
+  password_hash character varying NOT NULL,
+  email_corporativo character varying NOT NULL UNIQUE,
+  ultimo_acceso timestamp without time zone,
+  activo boolean DEFAULT true,
+  creado_en timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT usuarios_pkey PRIMARY KEY (id_usuario),
+  CONSTRAINT usuarios_id_empleado_fkey FOREIGN KEY (id_empleado) REFERENCES public.empleados(id_empleado),
+  CONSTRAINT usuarios_id_rol_fkey FOREIGN KEY (id_rol) REFERENCES public.roles(id_rol),
+  CONSTRAINT usuarios_id_sede_asignada_fkey FOREIGN KEY (id_sede_asignada) REFERENCES public.sedes(id_sede)
 );
-
--- =============================================================================
--- MÓDULO 5: INVENTARIO DE EPP Y CONTROL DE ENTREGAS
--- =============================================================================
-
-CREATE TABLE categorias_epp (
-    id_categoria SERIAL PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL
+CREATE TABLE public.categorias_epp (
+  id_categoria integer NOT NULL DEFAULT nextval('categorias_epp_id_categoria_seq'::regclass),
+  nombre character varying NOT NULL,
+  CONSTRAINT categorias_epp_pkey PRIMARY KEY (id_categoria)
 );
-
-CREATE TABLE inventario_epp (
-    id_articulo SERIAL PRIMARY KEY,
-    id_categoria INT REFERENCES categorias_epp(id_categoria),
-    codigo_sku VARCHAR(50) UNIQUE,
-    nombre_articulo VARCHAR(150) NOT NULL,
-    talla_medida VARCHAR(20),
-    existencia_total INT NOT NULL DEFAULT 0,
-    stock_minimo INT DEFAULT 10,
-    unidad_medida VARCHAR(20) DEFAULT 'PIEZAS'
+CREATE TABLE public.inventario_epp (
+  id_articulo integer NOT NULL DEFAULT nextval('inventario_epp_id_articulo_seq'::regclass),
+  id_categoria integer,
+  codigo_sku character varying UNIQUE,
+  nombre_articulo character varying NOT NULL,
+  talla_medida character varying,
+  existencia_total integer NOT NULL DEFAULT 0,
+  stock_minimo integer DEFAULT 10,
+  unidad_medida character varying DEFAULT 'PIEZAS'::character varying,
+  CONSTRAINT inventario_epp_pkey PRIMARY KEY (id_articulo),
+  CONSTRAINT inventario_epp_id_categoria_fkey FOREIGN KEY (id_categoria) REFERENCES public.categorias_epp(id_categoria)
 );
-
-CREATE TABLE asignaciones_epp (
-    id_entrega SERIAL PRIMARY KEY,
-    id_empleado INT NOT NULL REFERENCES empleados(id_empleado),
-    id_articulo INT NOT NULL REFERENCES inventario_epp(id_articulo),
-    id_sede INT NOT NULL REFERENCES sedes(id_sede),
-    id_usuario_entrega INT REFERENCES empleados(id_empleado),
-    cantidad INT NOT NULL DEFAULT 1,
-    fecha_entrega DATE NOT NULL,
-    ciclo_periodo VARCHAR(30), -- CICLO 2026, 1° ENTREGA, etc.
-    observaciones TEXT
+CREATE TABLE public.asignaciones_epp (
+  id_entrega integer NOT NULL DEFAULT nextval('asignaciones_epp_id_entrega_seq'::regclass),
+  id_empleado integer NOT NULL,
+  id_articulo integer NOT NULL,
+  id_sede integer NOT NULL,
+  id_usuario_entrega integer,
+  cantidad integer NOT NULL DEFAULT 1,
+  fecha_entrega date NOT NULL,
+  ciclo_periodo character varying,
+  observaciones text,
+  CONSTRAINT asignaciones_epp_pkey PRIMARY KEY (id_entrega),
+  CONSTRAINT asignaciones_epp_id_empleado_fkey FOREIGN KEY (id_empleado) REFERENCES public.empleados(id_empleado),
+  CONSTRAINT asignaciones_epp_id_articulo_fkey FOREIGN KEY (id_articulo) REFERENCES public.inventario_epp(id_articulo),
+  CONSTRAINT asignaciones_epp_id_sede_fkey FOREIGN KEY (id_sede) REFERENCES public.sedes(id_sede),
+  CONSTRAINT asignaciones_epp_id_usuario_entrega_fkey FOREIGN KEY (id_usuario_entrega) REFERENCES public.empleados(id_empleado)
 );
-
--- =============================================================================
--- ÍNDICES DE RENDIMIENTO Y VISTAS OPTIMIZADAS
--- =============================================================================
-
-CREATE INDEX idx_empleados_sede ON empleados(id_sede);
-CREATE INDEX idx_empleados_activo ON empleados(activo);
-CREATE INDEX idx_empleados_nombre ON empleados(nombre_completo);
-
-CREATE VIEW vw_empleados_resumen AS
-SELECT 
-    e.id_empleado,
-    e.nombre_completo,
-    s.nombre AS sede,
-    a.nombre AS area,
-    p.nombre AS puesto,
-    g.nombre AS genero,
-    ec.nombre AS estado_civil,
-    e.fecha_contratacion,
-    e.tipo_contrato,
-    e.salario_actual,
-    e.foto_perfil_url,
-    e.activo
-FROM empleados e
-INNER JOIN sedes s ON e.id_sede = s.id_sede
-INNER JOIN puestos p ON e.id_puesto = p.id_puesto
-INNER JOIN areas a ON p.id_area = a.id_area
-LEFT JOIN catalogos_generos g ON e.id_genero = g.id_genero
-LEFT JOIN catalogos_estados_civiles ec ON e.id_estado_civil = ec.id_estado_civil;
-
--- =============================================================================
--- DATOS INICIALES (SEED DATA) PARA COMBOS Y SEDES
--- =============================================================================
-
-INSERT INTO catalogos_generos (nombre) VALUES 
-('Masculino'), ('Femenino'), ('No Binario'), ('Prefiero no especificar');
-
-INSERT INTO catalogos_estados_civiles (nombre) VALUES 
-('Soltero/a'), ('Casado/a'), ('Unión Libre'), ('Divorciado/a'), ('Viudo/a');
-
-INSERT INTO catalogos_tipos_credito (nombre, institucion, descripcion) VALUES
-('FONACOT', 'Instituto FONACOT', 'Crédito de nómina para bienes y servicios'),
-('INFONAVIT (Vivienda)', 'INFONAVIT', 'Crédito hipotecario habitacional'),
-('FOVISSSTE', 'FOVISSSTE', 'Crédito para trabajadores del estado'),
-('Préstamo Interno Cooperativa', 'Cooperativa QG', 'Préstamo directo institucional'),
-('Caja de Ahorro Coopera', 'Caja de Ahorro QG', 'Crédito de fondo de ahorro interno');
-
-INSERT INTO sedes (nombre, estado, ciudad) VALUES
-('Campeche', 'Campeche', 'San Francisco de Campeche'),
-('Lagunas', 'Oaxaca', 'Lagunas'),
-('Cruz Azul', 'Hidalgo', 'Ciudad Cooperativa Cruz Azul');
-
-INSERT INTO roles (nombre, descripcion) VALUES
-('SuperAdmin', 'Control total y global de todas las sedes'),
-('AdminSede', 'Administración específica para su sede asignada'),
-('RecursosHumanos', 'Altas, bajas y gestión de expedientes'),
-('AlmacenistaEPP', 'Control de stock y entregas de equipo de protección');
+CREATE TABLE public.authorized_users (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  email text NOT NULL UNIQUE,
+  created_at timestamp with time zone DEFAULT now(),
+  active boolean NOT NULL DEFAULT true,
+  CONSTRAINT authorized_users_pkey PRIMARY KEY (id),
+  CONSTRAINT authorized_users_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.employees (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  employee_code text NOT NULL UNIQUE,
+  full_name text NOT NULL,
+  site text NOT NULL CHECK (site = ANY (ARRAY['Campeche'::text, 'Lagunas'::text, 'Cruz Azul'::text])),
+  hire_date date NOT NULL,
+  position text NOT NULL,
+  contract_type text NOT NULL,
+  salary numeric NOT NULL DEFAULT 0 CHECK (salary >= 0::numeric),
+  bank_account text,
+  active boolean NOT NULL DEFAULT true,
+  gender text,
+  nss text UNIQUE,
+  curp text UNIQUE,
+  rfc text UNIQUE,
+  marital_status text,
+  birth_date date,
+  credits ARRAY NOT NULL DEFAULT '{}'::text[],
+  email text,
+  phone text,
+  residence_state text,
+  address text,
+  photo_path text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT employees_pkey PRIMARY KEY (id)
+);
