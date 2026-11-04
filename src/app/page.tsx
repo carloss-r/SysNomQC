@@ -7,8 +7,10 @@ import {
   CircleAlert,
   CircleCheck,
   CircleUserRound,
+  Download,
   FileText,
   Filter,
+  ImagePlus,
   Info,
   KeyRound,
   LogOut,
@@ -26,35 +28,41 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import type { FormEvent, ReactNode } from "react";
+import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { ApiError, describeError, requestApi } from "@/lib/api-client";
 import {
+  Catalogs,
   CONTRACT_TYPES,
   EMPTY_EMPLOYEE_FORM,
   Employee,
   EmployeeFormValues,
   EmployeeInput,
   EmployeeSummary,
-  GENDERS,
-  MARITAL_STATUSES,
-  POSITIONS,
-  SITES,
+  describeCredit,
   employeeToForm,
   formToEmployeeInput,
   formatCurrency,
   formatDate,
+  positionLabel,
   sortEmployees,
   toEmployeeSummary,
 } from "@/lib/employees";
+import {
+  ACCEPTED_PHOTO_TYPES,
+  MAX_ORIGINAL_PHOTO_BYTES,
+  compressPhoto,
+  deleteEmployeePhoto,
+  formatBytes,
+  getEmployeePhotoUrl,
+  uploadEmployeePhoto,
+} from "@/lib/photos";
 import { reportClientIncident } from "@/lib/report-incident";
 import { supabase } from "@/lib/supabase";
 
-// FOTOS DESHABILITADAS: la carga/lectura de fotos con Firebase Storage está comentada en
-// src/lib/firebase.ts y no se usa en esta pantalla. Los expedientes conservan su photo_path.
-
 const PAGE_SIZE = 500;
+const STAT_TONES = ["blue", "gold", "purple"] as const;
 
 type NoticeTone = "success" | "error" | "warning" | "info";
 type Notice = { id: number; tone: NoticeTone; title: string; message?: string };
@@ -66,6 +74,8 @@ const NOTICE_DURATION: Record<NoticeTone, number> = {
   warning: 7000,
   error: 10000,
 };
+
+class PhotoUploadError extends Error {}
 
 function initials(name: string) {
   return name
@@ -118,6 +128,11 @@ export default function Home() {
   const [form, setForm] = useState<EmployeeFormValues>(EMPTY_EMPLOYEE_FORM);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [catalogs, setCatalogs] = useState<Catalogs | null>(null);
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const [newPhoto, setNewPhoto] = useState<{ blob: Blob; previewUrl: string; originalSize: number } | null>(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
+  const [photoProcessing, setPhotoProcessing] = useState(false);
   const sessionRef = useRef<Session | null>(null);
   const noticeCounter = useRef(0);
 
@@ -143,6 +158,7 @@ export default function Home() {
         setCheckingSession(false);
         if (!nextSession) {
           setEmployees([]);
+          setCatalogs(null);
           setPageError("");
         }
       }
@@ -157,6 +173,7 @@ export default function Home() {
         setCheckingSession(false);
         if (!sessionData.session) {
           setEmployees([]);
+          setCatalogs(null);
           setPageError("");
         }
       })
@@ -212,12 +229,47 @@ export default function Home() {
     }
   }, [notify]);
 
+  // Sedes, áreas, puestos, géneros, estados civiles y tipos de crédito salen de los catálogos.
+  const loadCatalogs = useCallback(async (): Promise<Catalogs | null> => {
+    const activeSession = sessionRef.current;
+    if (!activeSession) return null;
+
+    try {
+      const result = await requestApi<Catalogs>(activeSession, "/api/catalogs");
+      setCatalogs(result);
+      return result;
+    } catch (error) {
+      console.error("No se pudieron cargar los catálogos:", error);
+      notify("error", "No se pudieron cargar los catálogos", describeError(error, "Inténtalo de nuevo."));
+      if (!(error instanceof ApiError)) reportClientIncident("catálogos · carga", error);
+      return null;
+    }
+  }, [notify]);
+
   const userId = session?.user.id ?? null;
   useEffect(() => {
     if (!userId) return;
-    const timer = window.setTimeout(() => void refreshEmployees(), 0);
+    const timer = window.setTimeout(() => {
+      void refreshEmployees();
+      void loadCatalogs();
+    }, 0);
     return () => window.clearTimeout(timer);
-  }, [userId, refreshEmployees]);
+  }, [userId, refreshEmployees, loadCatalogs]);
+
+  // La foto vive en un bucket privado: se pide un enlace temporal una sola vez por archivo.
+  const profilePhotoPath = selectedEmployee?.photo_path ?? null;
+  const editingPhotoPath = editing?.photo_path ?? null;
+  const requestedPhotos = useRef(new Set<string>());
+  useEffect(() => {
+    for (const path of [profilePhotoPath, editingPhotoPath]) {
+      if (!path || requestedPhotos.current.has(path)) continue;
+      requestedPhotos.current.add(path);
+      void getEmployeePhotoUrl(path).then((url) => {
+        if (url) setPhotoUrls((current) => ({ ...current, [path]: url }));
+        else requestedPhotos.current.delete(path);
+      });
+    }
+  }, [profilePhotoPath, editingPhotoPath]);
 
   const deferredSearch = useDeferredValue(search);
   const filteredEmployees = useMemo(() => {
@@ -227,6 +279,7 @@ export default function Home() {
       const searchable = [
         employee.employee_code,
         employee.full_name,
+        employee.area,
         employee.position,
         employee.email ?? "",
       ]
@@ -236,9 +289,17 @@ export default function Home() {
     });
   }, [employees, filterSite, deferredSearch]);
 
-  const positionSuggestions = useMemo(
-    () => Array.from(new Set([...POSITIONS, ...employees.map((employee) => employee.position)])).sort((a, b) => a.localeCompare(b, "es-MX")),
-    [employees],
+  const siteNames = useMemo(
+    () =>
+      catalogs
+        ? catalogs.sites.map((site) => site.name)
+        : Array.from(new Set(employees.map((employee) => employee.site))).sort((a, b) => a.localeCompare(b, "es-MX")),
+    [catalogs, employees],
+  );
+
+  const formPositions = useMemo(
+    () => catalogs?.positions.filter((position) => String(position.area_id) === form.area_id) ?? [],
+    [catalogs, form.area_id],
   );
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
@@ -298,18 +359,29 @@ export default function Home() {
     }
   }
 
-  function openCreateForm() {
+  async function openCreateForm() {
+    const available = catalogs ?? (await loadCatalogs());
+    if (!available) return;
+
     const nextNumber = employees.reduce((highest, employee) => {
       const number = Number(employee.employee_code.match(/(\d+)$/)?.[1] ?? 0);
       return Math.max(highest, number);
     }, 100) + 1;
     setEditing(null);
-    setForm({ ...EMPTY_EMPLOYEE_FORM, employee_code: `QG-${nextNumber}` });
+    resetPhotoState();
+    setForm({
+      ...EMPTY_EMPLOYEE_FORM,
+      employee_code: `QG-${nextNumber}`,
+      site_id: String(available.sites[0]?.id ?? ""),
+    });
     setFormError("");
     setIsFormOpen(true);
   }
 
-  function openEditForm(employee: Employee) {
+  async function openEditForm(employee: Employee) {
+    if (!catalogs && !(await loadCatalogs())) return;
+
+    resetPhotoState();
     setEditing(employee);
     setForm(employeeToForm(employee));
     setFormError("");
@@ -317,11 +389,81 @@ export default function Home() {
     setIsFormOpen(true);
   }
 
+  function resetPhotoState() {
+    if (newPhoto) URL.revokeObjectURL(newPhoto.previewUrl);
+    setNewPhoto(null);
+    setRemovePhoto(false);
+    setPhotoProcessing(false);
+  }
+
   function closeForm(force = false) {
     if (formBusy && !force) return;
+    resetPhotoState();
     setIsFormOpen(false);
     setEditing(null);
     setFormError("");
+  }
+
+  // La foto se comprime en el navegador (máx. 800 px, JPEG) antes de subirla a Supabase.
+  async function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.target;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+
+    if (!ACCEPTED_PHOTO_TYPES.includes(file.type)) {
+      setFormError("La foto debe ser JPG, PNG o WebP.");
+      return;
+    }
+    if (file.size > MAX_ORIGINAL_PHOTO_BYTES) {
+      setFormError(`La foto original no debe pesar más de ${formatBytes(MAX_ORIGINAL_PHOTO_BYTES)}.`);
+      return;
+    }
+
+    setPhotoProcessing(true);
+    setFormError("");
+    try {
+      const blob = await compressPhoto(file);
+      if (newPhoto) URL.revokeObjectURL(newPhoto.previewUrl);
+      setNewPhoto({ blob, previewUrl: URL.createObjectURL(blob), originalSize: file.size });
+      setRemovePhoto(false);
+    } catch (error) {
+      console.error("No se pudo comprimir la foto:", error);
+      setFormError(error instanceof Error ? error.message : "No se pudo procesar la foto.");
+    } finally {
+      setPhotoProcessing(false);
+    }
+  }
+
+  function toggleCredit(creditTypeId: number, enabled: boolean) {
+    setForm((current) => ({
+      ...current,
+      credits: enabled
+        ? [...current.credits, { credit_type_id: creditTypeId, credit_number: "", monthly_discount: "" }]
+        : current.credits.filter((credit) => credit.credit_type_id !== creditTypeId),
+    }));
+  }
+
+  function updateCredit(creditTypeId: number, key: "credit_number" | "monthly_discount", value: string) {
+    setForm((current) => ({
+      ...current,
+      credits: current.credits.map((credit) =>
+        credit.credit_type_id === creditTypeId ? { ...credit, [key]: value } : credit,
+      ),
+    }));
+  }
+
+  // "Descargar expediente": abre el diálogo de impresión con la hoja del expediente
+  // (membrete con el logo); desde ahí se imprime o se guarda como PDF.
+  function downloadExpediente(employee: Employee) {
+    const previousTitle = document.title;
+    document.title = `Expediente ${employee.employee_code} - ${employee.full_name}`;
+    const restoreTitle = () => {
+      document.title = previousTitle;
+      window.removeEventListener("afterprint", restoreTitle);
+    };
+    window.addEventListener("afterprint", restoreTitle);
+    window.print();
   }
 
   function updateForm<K extends keyof EmployeeFormValues>(
@@ -354,7 +496,7 @@ export default function Home() {
 
   async function openEditFromRow(summary: EmployeeSummary) {
     const employee = await loadEmployeeDetail(summary);
-    if (employee) openEditForm(employee);
+    if (employee) await openEditForm(employee);
   }
 
   async function handleSaveEmployee(event: FormEvent<HTMLFormElement>) {
@@ -363,10 +505,24 @@ export default function Home() {
     setFormBusy(true);
     setFormError("");
     const isEdit = editing !== null;
+    let uploadedPath: string | null = null;
 
     try {
-      // FOTOS DESHABILITADAS: se conserva sin cambios el photo_path que ya tuviera el expediente.
-      const payload: EmployeeInput = formToEmployeeInput(form, editing?.photo_path ?? null);
+      const previousPath = editing?.photo_path ?? null;
+      let photoPath = removePhoto ? null : previousPath;
+
+      if (newPhoto) {
+        try {
+          uploadedPath = await uploadEmployeePhoto(newPhoto.blob);
+        } catch (uploadError) {
+          console.error("No se pudo subir la foto:", uploadError);
+          reportClientIncident("foto · subir", uploadError);
+          throw new PhotoUploadError("No se pudo subir la foto. Revisa tu conexión e inténtalo de nuevo.");
+        }
+        photoPath = uploadedPath;
+      }
+
+      const payload: EmployeeInput = formToEmployeeInput(form, photoPath);
       const saved = isEdit
         ? await requestApi<Employee>(session, `/api/employees/${editing.id}`, {
             method: "PATCH",
@@ -387,6 +543,9 @@ export default function Home() {
         ),
       );
 
+      // La foto anterior ya no se usa: se elimina del bucket.
+      if (previousPath && previousPath !== photoPath) void deleteEmployeePhoto(previousPath);
+
       closeForm(true);
       notify(
         "success",
@@ -395,10 +554,17 @@ export default function Home() {
       );
     } catch (error) {
       console.error("No se pudo guardar el empleado:", error);
-      const message = describeError(error, "No se pudo guardar el empleado.");
+      // Si ya se subió una foto nueva pero el guardado falló, no se deja huérfana en el bucket.
+      if (uploadedPath) void deleteEmployeePhoto(uploadedPath);
+      const message =
+        error instanceof PhotoUploadError
+          ? error.message
+          : describeError(error, "No se pudo guardar el empleado.");
       setFormError(message);
       notify("error", "No se pudo guardar el empleado", message);
-      if (!(error instanceof ApiError)) reportClientIncident("empleado · guardar", error);
+      if (!(error instanceof ApiError) && !(error instanceof PhotoUploadError)) {
+        reportClientIncident("empleado · guardar", error);
+      }
     } finally {
       setFormBusy(false);
     }
@@ -411,6 +577,7 @@ export default function Home() {
 
     try {
       await requestApi<void>(session, `/api/employees/${employee.id}`, { method: "DELETE" });
+      if (employee.photo_path) void deleteEmployeePhoto(employee.photo_path);
       setSelectedEmployee(null);
       setEmployees((current) => current.filter((item) => item.id !== employee.id));
       notify("success", "Empleado eliminado", `Se eliminó el expediente de ${employee.full_name}.`);
@@ -422,6 +589,9 @@ export default function Home() {
   }
 
   const noticeStack = <NoticeStack notices={notices} onDismiss={dismissNotice} />;
+  const formPhotoUrl =
+    newPhoto?.previewUrl ?? (!removePhoto && editing?.photo_path ? photoUrls[editing.photo_path] : undefined);
+  const selectedPhotoUrl = selectedEmployee?.photo_path ? photoUrls[selectedEmployee.photo_path] : undefined;
 
   if (checkingSession) {
     return (
@@ -519,9 +689,15 @@ export default function Home() {
 
           <div className="stats-grid">
             <StatCard label="Total empleados" count={employees.length} tone="green" icon={<UsersRound size={18} />} />
-            <StatCard label="Campeche" count={employees.filter((item) => item.site === "Campeche").length} tone="blue" icon={<Building2 size={18} />} />
-            <StatCard label="Lagunas" count={employees.filter((item) => item.site === "Lagunas").length} tone="gold" icon={<Building2 size={18} />} />
-            <StatCard label="Cruz Azul" count={employees.filter((item) => item.site === "Cruz Azul").length} tone="purple" icon={<Building2 size={18} />} />
+            {siteNames.map((site, index) => (
+              <StatCard
+                key={site}
+                label={site}
+                count={employees.filter((item) => item.site === site).length}
+                tone={STAT_TONES[index % STAT_TONES.length]}
+                icon={<Building2 size={18} />}
+              />
+            ))}
           </div>
         </section>
 
@@ -529,7 +705,7 @@ export default function Home() {
           <div className="directory-toolbar">
             <div className="filter-label"><Filter size={16} /><span>Filtrar por sede</span></div>
             <div className="site-tabs" role="tablist" aria-label="Filtrar por sede">
-              {["Todas", ...SITES].map((site) => (
+              {["Todas", ...siteNames].map((site) => (
                 <button
                   type="button"
                   role="tab"
@@ -583,7 +759,7 @@ export default function Home() {
                       </button>
                     </td>
                     <td><SiteBadge site={employee.site} /></td>
-                    <td className="position-cell">{employee.position}</td>
+                    <td className="position-cell">{positionLabel(employee)}</td>
                     <td className="contract-cell">{employee.contract_type}</td>
                     <td><StatusBadge active={employee.active} /></td>
                     <td className="row-actions">
@@ -613,7 +789,7 @@ export default function Home() {
 
       <footer className="app-footer">
         <span>© 2026 Cooperativa Quinta Generación S.C. de R.L. de C.V.</span>
-        <span>Sedes: Campeche · Lagunas · Cruz Azul</span>
+        {siteNames.length > 0 && <span>Sedes: {siteNames.join(" · ")}</span>}
       </footer>
 
       {isFormOpen && (
@@ -634,28 +810,34 @@ export default function Home() {
                   <Field label="ID empleado" required><input value={form.employee_code} onChange={(event) => updateForm("employee_code", event.target.value)} maxLength={30} required /></Field>
                   <Field label="Nombre completo" required><input value={form.full_name} onChange={(event) => updateForm("full_name", event.target.value)} maxLength={150} required /></Field>
                   <Field label="Sede asignada" required>
-                    <select value={form.site} onChange={(event) => updateForm("site", event.target.value)} required>{SITES.map((site) => <option key={site}>{site}</option>)}</select>
+                    <select value={form.site_id} onChange={(event) => updateForm("site_id", event.target.value)} required>
+                      <option value="" disabled>Selecciona una sede</option>
+                      {catalogs?.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}
+                    </select>
                   </Field>
                   <Field label="Fecha de contratación" required><input type="date" value={form.hire_date} onChange={(event) => updateForm("hire_date", event.target.value)} required /></Field>
-                  <Field label="Área / departamento / puesto" required>
-                    <input
-                      list="position-suggestions"
-                      value={form.position}
-                      onChange={(event) => updateForm("position", event.target.value)}
-                      maxLength={150}
-                      placeholder="Ej. Operaciones - Operador Especializado"
-                      autoComplete="off"
+                  <Field label="Área / departamento" required>
+                    <select
+                      value={form.area_id}
+                      onChange={(event) => setForm((current) => ({ ...current, area_id: event.target.value, position_id: "" }))}
                       required
-                    />
-                    <datalist id="position-suggestions">
-                      {positionSuggestions.map((position) => <option key={position} value={position} />)}
-                    </datalist>
+                    >
+                      <option value="" disabled>Selecciona un área</option>
+                      {catalogs?.areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Puesto" required>
+                    <select value={form.position_id} onChange={(event) => updateForm("position_id", event.target.value)} disabled={!form.area_id} required>
+                      <option value="" disabled>{form.area_id ? "Selecciona un puesto" : "Elige primero el área"}</option>
+                      {formPositions.map((position) => <option key={position.id} value={position.id}>{position.name}</option>)}
+                    </select>
                   </Field>
                   <Field label="Tipo de contrato" required>
                     <select value={form.contract_type} onChange={(event) => updateForm("contract_type", event.target.value)} required>{CONTRACT_TYPES.map((contract) => <option key={contract}>{contract}</option>)}</select>
                   </Field>
                   <Field label="Salario actual (MXN)"><input type="number" min="0" step="0.01" value={form.salary} onChange={(event) => updateForm("salary", event.target.value)} placeholder="0.00" /></Field>
-                  <Field label="Cuenta bancaria / CLABE"><input value={form.bank_account} onChange={(event) => updateForm("bank_account", event.target.value)} maxLength={20} placeholder="Opcional" /></Field>
+                  <Field label="Cuenta bancaria"><input value={form.bank_account} onChange={(event) => updateForm("bank_account", event.target.value.replace(/\D/g, ""))} maxLength={20} inputMode="numeric" placeholder="Opcional" /></Field>
+                  <Field label="CLABE interbancaria"><input value={form.clabe} onChange={(event) => updateForm("clabe", event.target.value.replace(/\D/g, ""))} maxLength={18} inputMode="numeric" pattern="\d{18}" title="La CLABE tiene 18 dígitos" placeholder="18 dígitos (opcional)" /></Field>
                   <Field label="Estatus">
                     <select value={form.active ? "active" : "inactive"} onChange={(event) => updateForm("active", event.target.value === "active")}>
                       <option value="active">Activo</option><option value="inactive">Inactivo</option>
@@ -666,26 +848,32 @@ export default function Home() {
 
               <FormSection title="Información personal" icon={<CircleUserRound size={16} />}>
                 <div className="form-grid">
-                  <Field label="Género"><select value={form.gender} onChange={(event) => updateForm("gender", event.target.value)}><option value="">No especificado</option>{GENDERS.map((gender) => <option key={gender}>{gender}</option>)}</select></Field>
+                  <Field label="Género"><select value={form.gender_id} onChange={(event) => updateForm("gender_id", event.target.value)}><option value="">No especificado</option>{catalogs?.genders.map((gender) => <option key={gender.id} value={gender.id}>{gender.name}</option>)}</select></Field>
                   <Field label="NSS"><input value={form.nss} onChange={(event) => updateForm("nss", event.target.value.replace(/\D/g, ""))} maxLength={11} inputMode="numeric" placeholder="11 dígitos" /></Field>
                   <Field label="CURP"><input value={form.curp} onChange={(event) => updateForm("curp", event.target.value.toUpperCase())} maxLength={18} /></Field>
                   <Field label="RFC"><input value={form.rfc} onChange={(event) => updateForm("rfc", event.target.value.toUpperCase())} maxLength={13} /></Field>
-                  <Field label="Estado civil"><select value={form.marital_status} onChange={(event) => updateForm("marital_status", event.target.value)}><option value="">No especificado</option>{MARITAL_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></Field>
+                  <Field label="Estado civil"><select value={form.marital_status_id} onChange={(event) => updateForm("marital_status_id", event.target.value)}><option value="">No especificado</option>{catalogs?.marital_statuses.map((status) => <option key={status.id} value={status.id}>{status.name}</option>)}</select></Field>
                   <Field label="Fecha de nacimiento"><input type="date" value={form.birth_date} onChange={(event) => updateForm("birth_date", event.target.value)} /></Field>
-                  <Field label="Créditos activos">
-                    <div className="credit-options">
-                      {["Fonacot", "Infonavit"].map((credit) => (
-                        <label className="checkbox-option" key={credit}>
-                          <input
-                            type="checkbox"
-                            checked={form.credits.includes(credit)}
-                            onChange={(event) => updateForm("credits", event.target.checked ? [...form.credits, credit] : form.credits.filter((item) => item !== credit))}
-                          />
-                          {credit}
+                </div>
+                <div className="credit-editor">
+                  <span className="field-label">Créditos activos</span>
+                  {catalogs?.credit_types.map((creditType) => {
+                    const credit = form.credits.find((item) => item.credit_type_id === creditType.id);
+                    return (
+                      <div className="credit-row" key={creditType.id}>
+                        <label className="checkbox-option">
+                          <input type="checkbox" checked={Boolean(credit)} onChange={(event) => toggleCredit(creditType.id, event.target.checked)} />
+                          {creditType.name}
                         </label>
-                      ))}
-                    </div>
-                  </Field>
+                        {credit && (
+                          <>
+                            <input aria-label={`Número de crédito ${creditType.name}`} value={credit.credit_number} onChange={(event) => updateCredit(creditType.id, "credit_number", event.target.value)} maxLength={40} placeholder="Número de crédito (opcional)" />
+                            <input aria-label={`Descuento mensual ${creditType.name}`} type="number" min="0" step="0.01" value={credit.monthly_discount} onChange={(event) => updateCredit(creditType.id, "monthly_discount", event.target.value)} placeholder="Descuento mensual (MXN)" />
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </FormSection>
 
@@ -694,54 +882,48 @@ export default function Home() {
                   <Field label="Correo electrónico"><input type="email" value={form.email} onChange={(event) => updateForm("email", event.target.value)} maxLength={100} /></Field>
                   <Field label="Teléfono"><input type="tel" value={form.phone} onChange={(event) => updateForm("phone", event.target.value)} maxLength={20} /></Field>
                   <Field label="Estado de residencia"><input value={form.residence_state} onChange={(event) => updateForm("residence_state", event.target.value)} maxLength={80} /></Field>
-                  <Field label="Dirección"><input value={form.address} onChange={(event) => updateForm("address", event.target.value)} maxLength={500} placeholder="Calle, número, colonia y código postal" /></Field>
+                  <Field label="Ciudad de residencia"><input value={form.residence_city} onChange={(event) => updateForm("residence_city", event.target.value)} maxLength={80} /></Field>
+                  <Field label="Código postal"><input value={form.postal_code} onChange={(event) => updateForm("postal_code", event.target.value.replace(/\D/g, ""))} maxLength={5} inputMode="numeric" /></Field>
+                  <Field label="Calle y número"><input value={form.address} onChange={(event) => updateForm("address", event.target.value)} maxLength={500} placeholder="Calle, número y colonia" /></Field>
                 </div>
               </FormSection>
 
-              {/* FOTOS DESHABILITADAS (ver src/lib/firebase.ts). Para reactivar, restaura la lógica de fotos y descomenta:
               <FormSection title="Fotografía" icon={<ImagePlus size={16} />}>
                 <div className="photo-control">
-                  {(photoPreview || (!removePhoto && editing?.photo_path && photoUrls[editing.id])) ? (
-                    <Image
-                      className="photo-preview"
-                      src={photoPreview || photoUrls[editing!.id]}
-                      alt="Vista previa de fotografía"
-                      width={58}
-                      height={58}
-                      unoptimized
-                    />
+                  {formPhotoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img className="photo-preview" src={formPhotoUrl} alt="Vista previa de la fotografía" width={58} height={58} />
                   ) : <div className="photo-placeholder"><ImagePlus size={22} /></div>}
                   <div className="photo-input-area">
                     <label className="button button-outline file-button">
-                      <ImagePlus size={16} /> Elegir foto
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0] ?? null;
-                          setSelectedPhoto(file);
-                          if (file) setRemovePhoto(false);
-                        }}
-                      />
+                      <ImagePlus size={16} /> {photoProcessing ? "Comprimiendo…" : "Elegir foto"}
+                      <input type="file" accept={ACCEPTED_PHOTO_TYPES.join(",")} onChange={(event) => void handlePhotoChange(event)} disabled={photoProcessing || formBusy} />
                     </label>
-                    <span className="field-hint">Opcional · JPG, PNG o WebP · Máximo 3 MB</span>
-                    {editing?.photo_path && !photoFile && (
-                      <label className="checkbox-option remove-photo">
-                        <input
-                          type="checkbox"
-                          checked={removePhoto}
-                          onChange={(event) => {
-                            setRemovePhoto(event.target.checked);
-                            if (event.target.checked) setSelectedPhoto(null);
-                          }}
-                        />
-                        Quitar foto actual
-                      </label>
+                    <span className="field-hint">
+                      {newPhoto
+                        ? `Comprimida: ${formatBytes(newPhoto.blob.size)} (original ${formatBytes(newPhoto.originalSize)})`
+                        : "Opcional · JPG, PNG o WebP · Se comprime antes de subirse"}
+                    </span>
+                    {(newPhoto || (editing?.photo_path && !removePhoto)) && (
+                      <button
+                        type="button"
+                        className="text-button remove-photo"
+                        onClick={() => {
+                          if (newPhoto) {
+                            URL.revokeObjectURL(newPhoto.previewUrl);
+                            setNewPhoto(null);
+                          } else {
+                            setRemovePhoto(true);
+                          }
+                        }}
+                      >
+                        {newPhoto ? "Descartar foto nueva" : "Quitar foto actual"}
+                      </button>
                     )}
+                    {removePhoto && !newPhoto && <span className="field-hint remove-photo">La foto actual se eliminará al guardar.</span>}
                   </div>
                 </div>
               </FormSection>
-              */}
 
               {formError && <p className="inline-error form-error" role="alert">{formError}</p>}
               <div className="modal-actions">
@@ -761,22 +943,25 @@ export default function Home() {
           <section className="modal profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-title">
             <div className="profile-header">
               <button className="icon-button profile-close" onClick={() => setSelectedEmployee(null)} aria-label="Cerrar"><X size={20} /></button>
-              <Avatar name={selectedEmployee.full_name} large />
+              <Avatar name={selectedEmployee.full_name} photoUrl={selectedPhotoUrl} large />
               <div className="profile-identity">
                 <div className="profile-title-row">
                   <h2 id="profile-title">{selectedEmployee.full_name}</h2>
                   <StatusBadge active={selectedEmployee.active} />
                 </div>
-                <p>{selectedEmployee.position}</p>
+                <p>{positionLabel(selectedEmployee)}</p>
                 <div className="profile-tags"><span><FileText size={13} /> {selectedEmployee.employee_code}</span><span><MapPin size={13} /> {selectedEmployee.site}</span></div>
               </div>
             </div>
             <div className="profile-body">
               <ProfileSection title="Información laboral" icon={<BriefcaseBusiness size={16} />}>
+                <ProfileValue label="Área / departamento">{selectedEmployee.area}</ProfileValue>
+                <ProfileValue label="Puesto">{selectedEmployee.position}</ProfileValue>
                 <ProfileValue label="Fecha de contratación">{formatDate(selectedEmployee.hire_date)}</ProfileValue>
                 <ProfileValue label="Tipo de contrato">{selectedEmployee.contract_type}</ProfileValue>
                 <ProfileValue label="Salario actual">{formatCurrency(selectedEmployee.salary)}</ProfileValue>
                 <ProfileValue label="Cuenta bancaria">{selectedEmployee.bank_account || "No especificada"}</ProfileValue>
+                <ProfileValue label="CLABE interbancaria">{selectedEmployee.clabe || "No especificada"}</ProfileValue>
                 <ProfileValue label="Estatus">{selectedEmployee.active ? "Activo" : "Inactivo"}</ProfileValue>
               </ProfileSection>
               <ProfileSection title="Información personal" icon={<UserRound size={16} />}>
@@ -786,24 +971,29 @@ export default function Home() {
                 <ProfileValue label="NSS">{selectedEmployee.nss || "No especificado"}</ProfileValue>
                 <ProfileValue label="CURP">{selectedEmployee.curp || "No especificada"}</ProfileValue>
                 <ProfileValue label="RFC">{selectedEmployee.rfc || "No especificado"}</ProfileValue>
-                <ProfileValue label="Créditos activos">{selectedEmployee.credits.length ? selectedEmployee.credits.join(", ") : "Ninguno"}</ProfileValue>
+                <ProfileValue label="Créditos activos" wide>{selectedEmployee.credits.length ? selectedEmployee.credits.map(describeCredit).join(" | ") : "Ninguno"}</ProfileValue>
               </ProfileSection>
               <ProfileSection title="Contacto y domicilio" icon={<MapPin size={16} />}>
                 <ProfileValue label="Correo electrónico">{selectedEmployee.email || "No especificado"}</ProfileValue>
                 <ProfileValue label="Teléfono">{selectedEmployee.phone || "No especificado"}</ProfileValue>
                 <ProfileValue label="Estado de residencia">{selectedEmployee.residence_state || "No especificado"}</ProfileValue>
+                <ProfileValue label="Ciudad de residencia">{selectedEmployee.residence_city || "No especificada"}</ProfileValue>
+                <ProfileValue label="Código postal">{selectedEmployee.postal_code || "No especificado"}</ProfileValue>
                 <ProfileValue label="Dirección" wide>{selectedEmployee.address || "No especificada"}</ProfileValue>
               </ProfileSection>
             </div>
             <div className="modal-actions profile-actions">
               <button className="button button-danger-outline" onClick={() => void handleDeleteEmployee(selectedEmployee)}><Trash2 size={16} /> Eliminar</button>
               <span className="actions-spacer" />
+              <button className="button button-outline" onClick={() => downloadExpediente(selectedEmployee)}><Download size={16} /> Descargar expediente</button>
               <button className="button button-neutral" onClick={() => setSelectedEmployee(null)}>Cerrar</button>
-              <button className="button button-gold" onClick={() => openEditForm(selectedEmployee)}><Pencil size={16} /> Editar expediente</button>
+              <button className="button button-gold" onClick={() => void openEditForm(selectedEmployee)}><Pencil size={16} /> Editar expediente</button>
             </div>
           </section>
         </div>
       )}
+
+      {selectedEmployee && <ExpedienteSheet employee={selectedEmployee} photoUrl={selectedPhotoUrl} />}
 
       {noticeStack}
     </div>
@@ -823,8 +1013,122 @@ function StatusBadge({ active }: { active: boolean }) {
   return <span className={`status-badge ${active ? "status-active" : "status-inactive"}`}><span />{active ? "Activo" : "Inactivo"}</span>;
 }
 
-function Avatar({ name, large = false }: { name: string; large?: boolean }) {
-  return <span className={`avatar${large ? " avatar-large" : ""}`}>{initials(name)}</span>;
+function Avatar({ name, photoUrl, large = false }: { name: string; photoUrl?: string; large?: boolean }) {
+  return (
+    <span className={`avatar${large ? " avatar-large" : ""}`}>
+      {photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photoUrl} alt={`Fotografía de ${name}`} />
+      ) : (
+        initials(name)
+      )}
+    </span>
+  );
+}
+
+// Hoja imprimible del expediente. Está fuera de pantalla y solo se muestra al imprimir o
+// guardar como PDF; el membrete es únicamente el logotipo de la cooperativa.
+function ExpedienteSheet({ employee, photoUrl }: { employee: Employee; photoUrl?: string }) {
+  const rows = (items: [string, string][]) => (
+    <table className="sheet-table">
+      <tbody>
+        {items.map(([label, value]) => (
+          <tr key={label}>
+            <th>{label}</th>
+            <td>{value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
+  return (
+    <article className="print-sheet" aria-hidden="true">
+      <header className="sheet-letterhead">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo-cooperativa.jpg" alt="" />
+      </header>
+
+      <div className="sheet-title-row">
+        <div>
+          <h1>Expediente de personal</h1>
+          <h2>{employee.full_name}</h2>
+          <p>{employee.employee_code} · {employee.site} · {employee.active ? "Activo" : "Inactivo"}</p>
+        </div>
+        {photoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="sheet-photo" src={photoUrl} alt="" />
+        )}
+      </div>
+
+      <section>
+        <h3>Información laboral</h3>
+        {rows([
+          ["ID empleado", employee.employee_code],
+          ["Sede", employee.site],
+          ["Área / departamento", employee.area],
+          ["Puesto", employee.position],
+          ["Fecha de contratación", formatDate(employee.hire_date)],
+          ["Tipo de contrato", employee.contract_type],
+          ["Salario actual", formatCurrency(employee.salary)],
+          ["Cuenta bancaria", employee.bank_account || "No especificada"],
+          ["CLABE interbancaria", employee.clabe || "No especificada"],
+          ["Estatus", employee.active ? "Activo" : "Inactivo"],
+        ])}
+      </section>
+
+      <section>
+        <h3>Información personal</h3>
+        {rows([
+          ["Género", employee.gender || "No especificado"],
+          ["Fecha de nacimiento", formatDate(employee.birth_date)],
+          ["Estado civil", employee.marital_status || "No especificado"],
+          ["NSS", employee.nss || "No especificado"],
+          ["CURP", employee.curp || "No especificada"],
+          ["RFC", employee.rfc || "No especificado"],
+        ])}
+      </section>
+
+      <section>
+        <h3>Créditos</h3>
+        {employee.credits.length === 0 ? (
+          <p className="sheet-empty">Sin créditos registrados.</p>
+        ) : (
+          <table className="sheet-table sheet-credits">
+            <thead>
+              <tr><th>Tipo</th><th>Número</th><th>Descuento mensual</th><th>Estatus</th></tr>
+            </thead>
+            <tbody>
+              {employee.credits.map((credit) => (
+                <tr key={credit.credit_type_id}>
+                  <td>{credit.credit_type}</td>
+                  <td>{credit.credit_number === "S/N" ? "Sin número" : credit.credit_number}</td>
+                  <td>{formatCurrency(credit.monthly_discount)}</td>
+                  <td>{credit.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section>
+        <h3>Contacto y domicilio</h3>
+        {rows([
+          ["Correo electrónico", employee.email || "No especificado"],
+          ["Teléfono", employee.phone || "No especificado"],
+          ["Estado de residencia", employee.residence_state || "No especificado"],
+          ["Ciudad de residencia", employee.residence_city || "No especificada"],
+          ["Código postal", employee.postal_code || "No especificado"],
+          ["Dirección", employee.address || "No especificada"],
+        ])}
+      </section>
+
+      <footer className="sheet-footer">
+        Generado el {new Intl.DateTimeFormat("es-MX", { dateStyle: "long" }).format(new Date())}
+      </footer>
+    </article>
+  );
 }
 
 function FormSection({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {

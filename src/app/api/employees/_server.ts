@@ -85,6 +85,13 @@ export function databaseErrorResponse(error: { code?: string; message: string })
     );
   }
 
+  if (error.code === "23503") {
+    return NextResponse.json(
+      { error: "La sede, el puesto o el catálogo seleccionado ya no existe. Recarga la página." },
+      { status: 400 },
+    );
+  }
+
   reportServerIncident("api · base de datos", error);
 
   return NextResponse.json(
