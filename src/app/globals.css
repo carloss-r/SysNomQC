@@ -245,12 +245,6 @@ h1, h2, h3, p { margin-top: 0; }
 .screen-center { display: flex; min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #6e7c72; background: var(--canvas); font-size: 12px; }
 .loading-mark { display: grid; width: 46px; height: 46px; place-items: center; border: 2px solid #d5bd62; border-radius: 50%; color: #e5c95d; background: var(--green-800); font-family: Manrope, sans-serif; font-size: 13px; font-weight: 800; }
 
-.credit-editor { display: flex; flex-direction: column; gap: 9px; margin-top: 14px; }
-.credit-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 9px; }
-@media (max-width: 700px) { .credit-row { grid-template-columns: 1fr; } }
-.credit-row input[type="text"], .credit-row input:not([type]), .credit-row input[type="number"] { width: 100%; min-height: 37px; padding: 0 10px; border: 1px solid #dce4de; border-radius: 6px; outline: 0; color: #29372e; background: #fff; font-size: 11px; }
-.credit-row input:focus { border-color: #83aa8e; box-shadow: 0 0 0 3px rgb(18 128 59 / 9%); }
-
 /* Hoja imprimible del expediente: fuera de pantalla; solo se ve al imprimir / guardar como PDF. */
 .print-sheet { position: fixed; top: 0; left: -10000px; width: 794px; padding: 40px; background: #fff; color: #1c2921; font-family: Inter, Arial, sans-serif; }
 .sheet-letterhead { display: flex; align-items: center; padding-bottom: 12px; border-bottom: 3px solid var(--gold); }

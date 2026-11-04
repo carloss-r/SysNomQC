@@ -42,7 +42,6 @@ CREATE TABLE public.puestos (
 );
 CREATE TABLE public.empleados (
   id_empleado integer NOT NULL DEFAULT nextval('empleados_id_empleado_seq'::regclass),
-  codigo_empleado text NOT NULL UNIQUE,
   id_sede integer NOT NULL,
   id_puesto integer NOT NULL,
   id_genero integer,

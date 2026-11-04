@@ -1,13 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { reportServerIncident } from "@/lib/incidents";
+import { EMPLOYEE_LIST_COLUMNS } from "@/lib/employees";
 import { BadJsonError, databaseErrorResponse, getAuthenticatedClient, readJson } from "./_server";
-import {
-  EMPLOYEE_LIST_SELECT,
-  fetchEmployee,
-  syncCredits,
-  toEmployeeColumns,
-  toSummary,
-} from "./_mapper";
 import { employeeInputSchema } from "./validation";
 
 export async function GET(request: NextRequest) {
@@ -21,13 +15,13 @@ export async function GET(request: NextRequest) {
 
   try {
     const { data, error } = await auth.client
-      .from("empleados")
-      .select(EMPLOYEE_LIST_SELECT)
-      .order("nombre_completo")
+      .from("employees")
+      .select(EMPLOYEE_LIST_COLUMNS)
+      .order("full_name")
       .range(offset, offset + limit - 1);
 
     if (error) return databaseErrorResponse(error);
-    return NextResponse.json((data ?? []).map((row) => toSummary(row as unknown as Parameters<typeof toSummary>[0])));
+    return NextResponse.json(data);
   } catch (error) {
     console.error("Error inesperado al consultar empleados:", error);
     reportServerIncident("api · listar empleados", error);
@@ -48,26 +42,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { credits, ...fields } = input.data;
-    const { data: created, error } = await auth.client
-      .from("empleados")
-      .insert(toEmployeeColumns(fields))
-      .select("id_empleado")
+    const { data, error } = await auth.client
+      .from("employees")
+      .insert(input.data)
+      .select("*")
       .single();
 
     if (error) return databaseErrorResponse(error);
-    const employeeId = created.id_empleado as number;
-
-    const creditsError = await syncCredits(auth.client, employeeId, credits);
-    if (creditsError) {
-      // Sin transacciones en el cliente: se revierte el alta para no dejar un expediente a medias.
-      await auth.client.from("empleados").delete().eq("id_empleado", employeeId);
-      return databaseErrorResponse(creditsError);
-    }
-
-    const { employee, error: readError } = await fetchEmployee(auth.client, employeeId);
-    if (readError) return databaseErrorResponse(readError);
-    return NextResponse.json(employee, { status: 201 });
+    return NextResponse.json(data, { status: 201 });
   } catch (error) {
     console.error("Error inesperado al crear empleado:", error);
     if (error instanceof BadJsonError) {
