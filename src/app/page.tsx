@@ -19,6 +19,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Settings,
   ShieldCheck,
   Trash2,
   TriangleAlert,
@@ -31,6 +32,7 @@ import Link from "next/link";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import type { Access, Permission } from "@/lib/permissions";
 import { ApiError, describeError, requestApi } from "@/lib/api-client";
 import {
   CONTRACT_TYPES,
@@ -128,6 +130,7 @@ export default function Home() {
   const [form, setForm] = useState<EmployeeFormValues>(EMPTY_EMPLOYEE_FORM);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [access, setAccess] = useState<Access | null>(null);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [newPhoto, setNewPhoto] = useState<{ blob: Blob; previewUrl: string; originalSize: number } | null>(null);
   const [removePhoto, setRemovePhoto] = useState(false);
@@ -158,6 +161,7 @@ export default function Home() {
         setCheckingSession(false);
         if (!nextSession) {
           setEmployees([]);
+          setAccess(null);
           setPageError("");
         }
       }
@@ -230,7 +234,13 @@ export default function Home() {
   const userId = session?.user.id ?? null;
   useEffect(() => {
     if (!userId) return;
-    const timer = window.setTimeout(() => void refreshEmployees(), 0);
+    const timer = window.setTimeout(() => {
+      void refreshEmployees();
+      const activeSession = sessionRef.current;
+      if (activeSession) {
+        requestApi<Access>(activeSession, "/api/me").then(setAccess).catch(() => setAccess(null));
+      }
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [userId, refreshEmployees]);
 
@@ -288,7 +298,7 @@ export default function Home() {
         if (unreachable) reportClientIncident("auth.login", error);
       } else if (data.session) {
         try {
-          await requestApi<EmployeeSummary[]>(data.session, `/api/employees?limit=1`);
+          await requestApi<Access>(data.session, "/api/me");
           notify("success", "Sesión iniciada", "Bienvenido al sistema de gestión de personal.");
         } catch (accessError) {
           await supabase.auth.signOut();
@@ -527,6 +537,7 @@ export default function Home() {
     }
   }
 
+  const can = (permission: Permission) => access?.permissions.includes(permission) ?? false;
   const noticeStack = <NoticeStack notices={notices} onDismiss={dismissNotice} />;
   const formPhotoUrl =
     newPhoto?.previewUrl ?? (!removePhoto && editing?.photo_path ? photoUrls[editing.photo_path] : undefined);
@@ -601,6 +612,9 @@ export default function Home() {
             </span>
           </Link>
           <div className="topbar-actions">
+            {can("users.manage") && (
+              <Link className="button button-outline" href="/admin"><Settings size={16} /> Usuarios y roles</Link>
+            )}
             <span className="connection-status"><span /> Sistema de Control Operativo</span>
             <span className="signed-user" title={session.user.email ?? ""}>
               <CircleUserRound size={18} />
@@ -621,9 +635,11 @@ export default function Home() {
               <h1>Directorio General de Personal</h1>
               <p className="subheading">Consulta y administra los expedientes por sede operacional.</p>
             </div>
-            <button className="button button-gold" onClick={openCreateForm}>
-              <Plus size={18} /> Registrar empleado
-            </button>
+            {can("employees.create") && (
+              <button className="button button-gold" onClick={openCreateForm}>
+                <Plus size={18} /> Registrar empleado
+              </button>
+            )}
           </div>
 
           <div className="stats-grid">
@@ -697,7 +713,7 @@ export default function Home() {
                     <td><StatusBadge active={employee.active} /></td>
                     <td className="row-actions">
                       <button className="text-button" onClick={() => void openProfile(employee)} disabled={detailLoadingId === employee.id}>{detailLoadingId === employee.id ? "Abriendo…" : "Ver expediente"}</button>
-                      <button className="icon-button row-edit" onClick={() => void openEditFromRow(employee)} disabled={detailLoadingId === employee.id} aria-label={`Editar ${employee.full_name}`} title="Editar"><Pencil size={16} /></button>
+                      {can("employees.edit") && <button className="icon-button row-edit" onClick={() => void openEditFromRow(employee)} disabled={detailLoadingId === employee.id} aria-label={`Editar ${employee.full_name}`} title="Editar"><Pencil size={16} /></button>}
                     </td>
                   </tr>
                 ))}
@@ -709,7 +725,7 @@ export default function Home() {
                 <div className="empty-icon"><UserRound size={25} /></div>
                 <h2>{employees.length === 0 ? "Aún no hay empleados registrados" : "No se encontraron empleados"}</h2>
                 <p>{employees.length === 0 ? "Agrega el primer expediente para empezar a usar el directorio." : "Prueba con otro nombre, ID o sede."}</p>
-                {employees.length === 0 && <button className="button button-primary" onClick={openCreateForm}><Plus size={17} /> Registrar empleado</button>}
+                {employees.length === 0 && can("employees.create") && <button className="button button-primary" onClick={openCreateForm}><Plus size={17} /> Registrar empleado</button>}
               </div>
             )}
           </div>
@@ -897,11 +913,11 @@ export default function Home() {
               </ProfileSection>
             </div>
             <div className="modal-actions profile-actions">
-              <button className="button button-danger-outline" onClick={() => void handleDeleteEmployee(selectedEmployee)}><Trash2 size={16} /> Eliminar</button>
+              {can("employees.delete") && <button className="button button-danger-outline" onClick={() => void handleDeleteEmployee(selectedEmployee)}><Trash2 size={16} /> Eliminar</button>}
               <span className="actions-spacer" />
-              <button className="button button-outline" onClick={() => downloadExpediente(selectedEmployee)}><Download size={16} /> Descargar expediente</button>
+              {can("employees.download") && <button className="button button-outline" onClick={() => downloadExpediente(selectedEmployee)}><Download size={16} /> Descargar expediente</button>}
               <button className="button button-neutral" onClick={() => setSelectedEmployee(null)}>Cerrar</button>
-              <button className="button button-gold" onClick={() => openEditForm(selectedEmployee)}><Pencil size={16} /> Editar expediente</button>
+              {can("employees.edit") && <button className="button button-gold" onClick={() => openEditForm(selectedEmployee)}><Pencil size={16} /> Editar expediente</button>}
             </div>
           </section>
         </div>

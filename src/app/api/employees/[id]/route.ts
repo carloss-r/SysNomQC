@@ -8,7 +8,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 // Expediente completo de un empleado (se pide solo al abrirlo, no en la lista).
 export async function GET(request: NextRequest, context: RouteContext) {
-  const auth = await getAuthenticatedClient(request);
+  const auth = await getAuthenticatedClient(request, "employees.view");
   if ("response" in auth) return auth.response;
 
   const { id } = await context.params;
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  const auth = await getAuthenticatedClient(request);
+  const auth = await getAuthenticatedClient(request, "employees.edit");
   if ("response" in auth) return auth.response;
 
   const { id } = await context.params;
@@ -66,7 +66,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const auth = await getAuthenticatedClient(request);
+  const auth = await getAuthenticatedClient(request, "employees.delete");
   if ("response" in auth) return auth.response;
 
   const { id } = await context.params;

@@ -2,13 +2,18 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAuthenticatedSupabaseClient } from "@/lib/database";
 import { reportServerIncident } from "@/lib/incidents";
+import { ALL_PERMISSIONS, type Access, type Permission } from "@/lib/permissions";
 
 type AuthenticatedClientResult =
-  | { client: SupabaseClient }
+  | { client: SupabaseClient; access: Access }
   | { response: NextResponse<{ error: string }> };
 
+type RoleRow = { slug: string | null; name: string; permissions: string[] | null };
+
+/** Valida la sesión y, si se indica, que el rol de la cuenta tenga ese permiso. */
 export async function getAuthenticatedClient(
   request: NextRequest,
+  permission?: Permission,
 ): Promise<AuthenticatedClientResult> {
   const token = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
 
@@ -26,7 +31,7 @@ export async function getAuthenticatedClient(
 
     const { data: authorizedUser, error: authorizationError } = await client
       .from("authorized_users")
-      .select("user_id")
+      .select("user_id,full_name,role:app_roles(slug,name,permissions)")
       .eq("user_id", userData.user.id)
       .eq("active", true)
       .maybeSingle();
@@ -51,7 +56,30 @@ export async function getAuthenticatedClient(
       };
     }
 
-    return { client };
+    const role = authorizedUser.role as unknown as RoleRow | null;
+    const isSuperAdmin = role?.slug === "super_admin";
+    const permissions = isSuperAdmin
+      ? ALL_PERMISSIONS
+      : ALL_PERMISSIONS.filter((item) => role?.permissions?.includes(item));
+    const access: Access = {
+      user_id: userData.user.id,
+      email: userData.user.email ?? "",
+      full_name: (authorizedUser.full_name as string | null) ?? null,
+      role_name: role?.name ?? "Sin rol",
+      is_super_admin: isSuperAdmin,
+      permissions,
+    };
+
+    if (permission && !permissions.includes(permission)) {
+      return {
+        response: NextResponse.json(
+          { error: "Tu rol no tiene permiso para realizar esta acción." },
+          { status: 403 },
+        ),
+      };
+    }
+
+    return { client, access };
   } catch (error) {
     console.error("No se pudo inicializar la conexión autenticada de Supabase:", error);
     reportServerIncident("api · conexión Supabase", error);

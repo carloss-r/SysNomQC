@@ -1,0 +1,112 @@
+import { NextResponse, type NextRequest } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
+import { BadJsonError, readJson } from "../../../employees/_server";
+import { adminDbError, badRequest, requireAdmin } from "../../_admin";
+
+type RouteContext = { params: Promise<{ id: string }> };
+
+const userPatchSchema = z
+  .object({
+    full_name: z.string().trim().min(1).max(150),
+    role_id: z.uuid(),
+    active: z.boolean(),
+    password: z.string().min(8).max(72),
+  })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, "Debes enviar al menos un campo.")
+  .strict();
+
+async function superAdminRoleId(admin: SupabaseClient) {
+  const { data } = await admin.from("app_roles").select("id").eq("slug", "super_admin").maybeSingle();
+  return (data?.id as string | undefined) ?? null;
+}
+
+async function otherActiveSuperAdmins(admin: SupabaseClient, roleId: string, excludeUserId: string) {
+  const { count } = await admin
+    .from("authorized_users")
+    .select("user_id", { count: "exact", head: true })
+    .eq("role_id", roleId)
+    .eq("active", true)
+    .neq("user_id", excludeUserId);
+  return count ?? 0;
+}
+
+export async function PATCH(request: NextRequest, context: RouteContext) {
+  const auth = await requireAdmin(request);
+  if ("response" in auth) return auth.response;
+
+  const id = (await context.params).id;
+  if (!z.uuid().safeParse(id).success) return badRequest("El identificador del usuario no es válido.");
+
+  try {
+    const input = userPatchSchema.safeParse(await readJson(request));
+    if (!input.success) return badRequest("Revisa los campos enviados (contraseña mínimo 8 caracteres).");
+    const { password, ...fields } = input.data;
+
+    const { data: target, error: readError } = await auth.admin
+      .from("authorized_users")
+      .select("user_id,role_id,active")
+      .eq("user_id", id)
+      .maybeSingle();
+    if (readError) return adminDbError(readError);
+    if (!target) return NextResponse.json({ error: "No se encontró el usuario." }, { status: 404 });
+
+    if (id === auth.access.user_id && fields.active === false) {
+      return badRequest("No puedes desactivar tu propia cuenta.");
+    }
+
+    const superId = await superAdminRoleId(auth.admin);
+    const wasSuper = Boolean(superId) && target.role_id === superId && target.active;
+    const nextRole = fields.role_id ?? target.role_id;
+    const nextActive = fields.active ?? target.active;
+    if (wasSuper && superId && (nextRole !== superId || !nextActive)) {
+      if ((await otherActiveSuperAdmins(auth.admin, superId, id)) === 0) {
+        return badRequest("Debe quedar al menos un super administrador activo.");
+      }
+    }
+
+    if (Object.keys(fields).length > 0) {
+      const { error } = await auth.admin.from("authorized_users").update(fields).eq("user_id", id);
+      if (error) return adminDbError(error);
+    }
+    if (password) {
+      const { error } = await auth.admin.auth.admin.updateUserById(id, { password });
+      if (error) return adminDbError({ message: error.message });
+    }
+    return NextResponse.json({ user_id: id });
+  } catch (error) {
+    if (error instanceof BadJsonError) return badRequest(error.message);
+    return adminDbError({ message: String(error) });
+  }
+}
+
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  const auth = await requireAdmin(request);
+  if ("response" in auth) return auth.response;
+
+  const id = (await context.params).id;
+  if (!z.uuid().safeParse(id).success) return badRequest("El identificador del usuario no es válido.");
+  if (id === auth.access.user_id) return badRequest("No puedes eliminar tu propia cuenta.");
+
+  const { data: target, error: readError } = await auth.admin
+    .from("authorized_users")
+    .select("role_id,active")
+    .eq("user_id", id)
+    .maybeSingle();
+  if (readError) return adminDbError(readError);
+  if (!target) return NextResponse.json({ error: "No se encontró el usuario." }, { status: 404 });
+
+  const superId = await superAdminRoleId(auth.admin);
+  if (superId && target.role_id === superId && target.active) {
+    if ((await otherActiveSuperAdmins(auth.admin, superId, id)) === 0) {
+      return badRequest("Debe quedar al menos un super administrador activo.");
+    }
+  }
+
+  const { error } = await auth.admin.from("authorized_users").delete().eq("user_id", id);
+  if (error) return adminDbError(error);
+  const { error: authError } = await auth.admin.auth.admin.deleteUser(id);
+  if (authError) return adminDbError({ message: authError.message });
+  return new NextResponse(null, { status: 204 });
+}
