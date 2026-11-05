@@ -52,7 +52,7 @@ Para evitar spam y costos: el mismo error se envía una vez cada 10 minutos, hay
 
 ## Módulo de EPP
 
-Pantalla `/epp` (menú **Seguridad e higiene → EPP**). Ejecuta en Supabase `supabase/migrations/202611060001_epp.sql` (después de la de seguridad) y luego `202611060002_epp_historial.sql`, que importa las entregas de octubre y noviembre 2026 y los ciclos de camisolas y botas de los Excel (sin alterar existencias): crea el catálogo con existencias, el historial de movimientos y carga los artículos de los Excel de `Archivos/`.
+Pantalla `/epp` (menú **Seguridad e higiene → EPP**). Ejecuta en Supabase `supabase/migrations/202611060001_epp.sql` (después de la de seguridad) y luego `202611060002_epp_historial.sql`, que carga un historial de muestra (28 entregas de 4 trabajadores) tomado de los Excel, sin alterar existencias: crea el catálogo con existencias, el historial de movimientos y carga los artículos de los Excel de `Archivos/`.
 
 - **Entregar EPP**: busca al trabajador, agrega uno o varios artículos y confirma; descuenta existencia y guarda quién entregó y cuándo.
 - **Ingreso de material** y **Ajuste** (conteo físico, con motivo obligatorio); **Nuevo artículo** y edición del catálogo.
