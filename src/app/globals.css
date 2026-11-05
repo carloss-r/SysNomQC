@@ -245,6 +245,32 @@ h1, h2, h3, p { margin-top: 0; }
 .screen-center { display: flex; min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #6e7c72; background: var(--canvas); font-size: 12px; }
 .loading-mark { display: grid; width: 46px; height: 46px; place-items: center; border: 2px solid #d5bd62; border-radius: 50%; color: #e5c95d; background: var(--green-800); font-family: Manrope, sans-serif; font-size: 13px; font-weight: 800; }
 
+/* Hoja imprimible del expediente: fuera de pantalla; solo se ve al imprimir / guardar como PDF. */
+.print-sheet { position: fixed; top: 0; left: -10000px; width: 794px; padding: 40px; background: #fff; color: #1c2921; font-family: Inter, Arial, sans-serif; }
+.sheet-letterhead { display: flex; align-items: center; padding-bottom: 12px; border-bottom: 3px solid var(--gold); }
+.sheet-letterhead img { display: block; width: auto; height: 74px; }
+.sheet-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin: 18px 0 8px; }
+.sheet-title-row h1 { margin: 0 0 4px; color: #6a776f; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.sheet-title-row h2 { margin: 0 0 4px; font-size: 22px; line-height: 1.2; }
+.sheet-title-row p { margin: 0; color: #455149; font-size: 12px; }
+.sheet-photo { display: block; width: 100px; height: 124px; flex: 0 0 auto; border: 1px solid #cbd5cd; object-fit: cover; }
+.print-sheet section { margin-top: 16px; break-inside: avoid; }
+.print-sheet h3 { margin: 0 0 6px; padding-bottom: 4px; border-bottom: 1px solid #c9d3cb; color: #1f3a2a; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.sheet-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.sheet-table th, .sheet-table td { padding: 5px 8px; border-bottom: 1px solid #e3e8e4; text-align: left; vertical-align: top; }
+.sheet-table tbody th { width: 34%; color: #5b6a60; font-weight: 600; }
+.sheet-credits thead th { color: #5b6a60; font-size: 10px; text-transform: uppercase; }
+.sheet-empty { margin: 4px 0 0; color: #5b6a60; font-size: 11px; }
+.sheet-footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid #c9d3cb; color: #6a776f; font-size: 10px; text-align: right; }
+
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { background: #fff !important; }
+  .app-shell > *:not(.print-sheet) { display: none !important; }
+  .print-sheet { position: static; left: auto; width: auto; padding: 0; }
+  .print-sheet, .print-sheet * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+
 @media (max-width: 1060px) {
   .directory-toolbar { flex-wrap: wrap; gap: 10px; }
   .filter-label { display: none; }
@@ -309,3 +335,7 @@ h1, h2, h3, p { margin-top: 0; }
   .profile-actions .button { flex: 1; }
   .profile-actions .actions-spacer { display: none; }
 }
+
+.admin-permissions { flex-direction: column; align-items: flex-start; gap: 10px; margin-top: 16px; }
+.admin-success { display: flex; justify-content: space-between; align-items: center; border-color: #cfe5d4; color: #226b3a; background: #f1faf3; }
+.error-banner .text-button, .admin-success .text-button { margin-left: 12px; }

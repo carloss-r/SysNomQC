@@ -1,6 +1,6 @@
 # SysNomQC - Gestión de personal
 
-Aplicación con Next.js y React para administrar el directorio de empleados usando Supabase Auth y Postgres para los datos y Firebase Storage para las fotografías.
+Aplicación con Next.js y React para administrar el directorio de empleados usando Supabase Auth, Postgres y Supabase Storage (fotografías).
 
 ## Preparación de Supabase
 
@@ -18,12 +18,17 @@ Aplicación con Next.js y React para administrar el directorio de empleados usan
 
 La migración crea una tabla `employees` independiente de las tablas `empleados` del archivo SQL anterior. No carga los registros ficticios incluidos en el HTML.
 
-## Preparación de Firebase Storage (fotos)
+## Fotografías (Supabase Storage)
 
-1. En Firebase Console (proyecto `sysnomqc-31c0a`) abre **Build > Storage** y crea el bucket si aún no existe.
-2. En **Build > Authentication > Sign-in method** habilita el proveedor **Anónimo**. La app lo usa solo para que las reglas de Storage exijan una sesión; el acceso real al directorio sigue protegido por Supabase.
-3. En **Storage > Reglas** pega el contenido de `firebase/storage.rules` y publica.
-4. Las fotos nuevas se guardan en `employee-photos/` y en la base de datos se guarda esa ruta. Las fotos antiguas guardadas en Supabase se siguen mostrando.
+Las fotos se guardan en el bucket privado `employee-photos` (la migración lo crea si no existe; JPG, PNG o WebP, máximo 3 MB).
+
+- Al elegir una foto, el navegador la comprime (máximo 800 px por lado, JPEG) antes de subirla; normalmente pesa menos de 150 KB.
+- En `employees.photo_path` se guarda la ruta del archivo dentro del bucket; para mostrarla se pide un enlace firmado temporal.
+- Al reemplazar o quitar una foto, o al eliminar un empleado, se borra el archivo anterior.
+
+## Descargar expediente
+
+En el expediente de cada empleado, **Descargar expediente** abre la impresión con una hoja A4 con todos sus datos y su foto, con el logotipo como único membrete. Desde ahí se imprime o se guarda como PDF.
 
 ## Aviso de incidencias por correo
 
@@ -40,7 +45,15 @@ Para evitar spam y costos: el mismo error se envía una vez cada 10 minutos, hay
 - La tabla descarga solo 8 columnas por empleado; el expediente completo se pide al abrirlo.
 - Guardar o eliminar actualiza la lista en memoria, sin volver a descargarla.
 - Cambiar de pestaña o renovarse el token de sesión no recarga el directorio.
-- Las fotos están deshabilitadas por ahora (código comentado en `src/lib/firebase.ts`), así que no hay lecturas ni escrituras en Firebase Storage.
+- Las fotos se piden solo al abrir un expediente o editarlo.
+
+## Local vs. nube
+
+No hay cadena de conexión a Postgres: la app habla con Supabase por URL y llaves, definidas solo en variables de entorno (leídas en `src/lib/supabase.ts`, `src/lib/database.ts` y `src/app/api/admin/_admin.ts`).
+
+- **Local:** `.env.local` (no se sube a Git) con la URL y llaves de tu Supabase local (`supabase start`, `supabase status`). `supabase db reset` aplica las migraciones de `supabase/migrations`.
+- **Producción:** las mismas tres variables (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) en el panel de Vercel con los valores del proyecto en la nube. Para llevar los cambios de BD a la nube, ejecuta las migraciones nuevas en su SQL Editor (o `supabase db push`).
+- Crea al menos un usuario en Authentication de cada entorno y autorízalo en `authorized_users` (ver arriba).
 
 ## Ejecutar localmente
 

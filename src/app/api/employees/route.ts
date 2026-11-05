@@ -5,7 +5,7 @@ import { BadJsonError, databaseErrorResponse, getAuthenticatedClient, readJson }
 import { employeeInputSchema } from "./validation";
 
 export async function GET(request: NextRequest) {
-  const auth = await getAuthenticatedClient(request);
+  const auth = await getAuthenticatedClient(request, "employees.view");
   if ("response" in auth) return auth.response;
 
   const offsetValue = Number(request.nextUrl.searchParams.get("offset") ?? 0);
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await getAuthenticatedClient(request);
+  const auth = await getAuthenticatedClient(request, "employees.create");
   if ("response" in auth) return auth.response;
 
   try {

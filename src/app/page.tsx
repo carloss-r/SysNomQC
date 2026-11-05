@@ -7,8 +7,10 @@ import {
   CircleAlert,
   CircleCheck,
   CircleUserRound,
+  Download,
   FileText,
   Filter,
+  ImagePlus,
   Info,
   KeyRound,
   LogOut,
@@ -17,6 +19,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Settings,
   ShieldCheck,
   Trash2,
   TriangleAlert,
@@ -26,9 +29,10 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import type { FormEvent, ReactNode } from "react";
+import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import type { Access, Permission } from "@/lib/permissions";
 import { ApiError, describeError, requestApi } from "@/lib/api-client";
 import {
   CONTRACT_TYPES,
@@ -48,11 +52,19 @@ import {
   sortEmployees,
   toEmployeeSummary,
 } from "@/lib/employees";
+import {
+  ACCEPTED_PHOTO_TYPES,
+  MAX_ORIGINAL_PHOTO_BYTES,
+  compressPhoto,
+  deleteEmployeePhoto,
+  formatBytes,
+  getEmployeePhotoUrl,
+  uploadEmployeePhoto,
+} from "@/lib/photos";
 import { reportClientIncident } from "@/lib/report-incident";
 import { supabase } from "@/lib/supabase";
 
-// FOTOS DESHABILITADAS: la carga/lectura de fotos con Firebase Storage está comentada en
-// src/lib/firebase.ts y no se usa en esta pantalla. Los expedientes conservan su photo_path.
+class PhotoUploadError extends Error {}
 
 const PAGE_SIZE = 500;
 
@@ -118,6 +130,12 @@ export default function Home() {
   const [form, setForm] = useState<EmployeeFormValues>(EMPTY_EMPLOYEE_FORM);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [access, setAccess] = useState<Access | null>(null);
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const [newPhoto, setNewPhoto] = useState<{ blob: Blob; previewUrl: string; originalSize: number } | null>(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
+  const [photoProcessing, setPhotoProcessing] = useState(false);
+  const requestedPhotos = useRef(new Set<string>());
   const sessionRef = useRef<Session | null>(null);
   const noticeCounter = useRef(0);
 
@@ -143,6 +161,7 @@ export default function Home() {
         setCheckingSession(false);
         if (!nextSession) {
           setEmployees([]);
+          setAccess(null);
           setPageError("");
         }
       }
@@ -215,9 +234,29 @@ export default function Home() {
   const userId = session?.user.id ?? null;
   useEffect(() => {
     if (!userId) return;
-    const timer = window.setTimeout(() => void refreshEmployees(), 0);
+    const timer = window.setTimeout(() => {
+      void refreshEmployees();
+      const activeSession = sessionRef.current;
+      if (activeSession) {
+        requestApi<Access>(activeSession, "/api/me").then(setAccess).catch(() => setAccess(null));
+      }
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [userId, refreshEmployees]);
+
+  // La foto vive en el bucket privado employee-photos: se pide un enlace temporal por archivo.
+  const profilePhotoPath = selectedEmployee?.photo_path ?? null;
+  const editingPhotoPath = editing?.photo_path ?? null;
+  useEffect(() => {
+    for (const path of [profilePhotoPath, editingPhotoPath]) {
+      if (!path || requestedPhotos.current.has(path)) continue;
+      requestedPhotos.current.add(path);
+      void getEmployeePhotoUrl(path).then((url) => {
+        if (url) setPhotoUrls((current) => ({ ...current, [path]: url }));
+        else requestedPhotos.current.delete(path);
+      });
+    }
+  }, [profilePhotoPath, editingPhotoPath]);
 
   const deferredSearch = useDeferredValue(search);
   const filteredEmployees = useMemo(() => {
@@ -259,7 +298,7 @@ export default function Home() {
         if (unreachable) reportClientIncident("auth.login", error);
       } else if (data.session) {
         try {
-          await requestApi<EmployeeSummary[]>(data.session, `/api/employees?limit=1`);
+          await requestApi<Access>(data.session, "/api/me");
           notify("success", "Sesión iniciada", "Bienvenido al sistema de gestión de personal.");
         } catch (accessError) {
           await supabase.auth.signOut();
@@ -304,12 +343,14 @@ export default function Home() {
       return Math.max(highest, number);
     }, 100) + 1;
     setEditing(null);
+    resetPhotoState();
     setForm({ ...EMPTY_EMPLOYEE_FORM, employee_code: `QG-${nextNumber}` });
     setFormError("");
     setIsFormOpen(true);
   }
 
   function openEditForm(employee: Employee) {
+    resetPhotoState();
     setEditing(employee);
     setForm(employeeToForm(employee));
     setFormError("");
@@ -317,8 +358,60 @@ export default function Home() {
     setIsFormOpen(true);
   }
 
+  function resetPhotoState() {
+    if (newPhoto) URL.revokeObjectURL(newPhoto.previewUrl);
+    setNewPhoto(null);
+    setRemovePhoto(false);
+    setPhotoProcessing(false);
+  }
+
+  // La foto se comprime en el navegador (máx. 800 px, JPEG) antes de subirla a Supabase.
+  async function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.target;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+
+    if (!ACCEPTED_PHOTO_TYPES.includes(file.type)) {
+      setFormError("La foto debe ser JPG, PNG o WebP.");
+      return;
+    }
+    if (file.size > MAX_ORIGINAL_PHOTO_BYTES) {
+      setFormError(`La foto original no debe pesar más de ${formatBytes(MAX_ORIGINAL_PHOTO_BYTES)}.`);
+      return;
+    }
+
+    setPhotoProcessing(true);
+    setFormError("");
+    try {
+      const blob = await compressPhoto(file);
+      if (newPhoto) URL.revokeObjectURL(newPhoto.previewUrl);
+      setNewPhoto({ blob, previewUrl: URL.createObjectURL(blob), originalSize: file.size });
+      setRemovePhoto(false);
+    } catch (error) {
+      console.error("No se pudo comprimir la foto:", error);
+      setFormError(error instanceof Error ? error.message : "No se pudo procesar la foto.");
+    } finally {
+      setPhotoProcessing(false);
+    }
+  }
+
+  // "Descargar expediente": abre la impresión con la hoja del expediente (logo como membrete);
+  // desde ahí se imprime o se guarda como PDF.
+  function downloadExpediente(employee: Employee) {
+    const previousTitle = document.title;
+    document.title = `Expediente ${employee.employee_code} - ${employee.full_name}`;
+    const restoreTitle = () => {
+      document.title = previousTitle;
+      window.removeEventListener("afterprint", restoreTitle);
+    };
+    window.addEventListener("afterprint", restoreTitle);
+    window.print();
+  }
+
   function closeForm(force = false) {
     if (formBusy && !force) return;
+    resetPhotoState();
     setIsFormOpen(false);
     setEditing(null);
     setFormError("");
@@ -363,10 +456,24 @@ export default function Home() {
     setFormBusy(true);
     setFormError("");
     const isEdit = editing !== null;
+    let uploadedPath: string | null = null;
 
     try {
-      // FOTOS DESHABILITADAS: se conserva sin cambios el photo_path que ya tuviera el expediente.
-      const payload: EmployeeInput = formToEmployeeInput(form, editing?.photo_path ?? null);
+      const previousPath = editing?.photo_path ?? null;
+      let photoPath = removePhoto ? null : previousPath;
+
+      if (newPhoto) {
+        try {
+          uploadedPath = await uploadEmployeePhoto(newPhoto.blob);
+        } catch (uploadError) {
+          console.error("No se pudo subir la foto:", uploadError);
+          reportClientIncident("foto · subir", uploadError);
+          throw new PhotoUploadError("No se pudo subir la foto. Revisa tu conexión e inténtalo de nuevo.");
+        }
+        photoPath = uploadedPath;
+      }
+
+      const payload: EmployeeInput = formToEmployeeInput(form, photoPath);
       const saved = isEdit
         ? await requestApi<Employee>(session, `/api/employees/${editing.id}`, {
             method: "PATCH",
@@ -387,6 +494,8 @@ export default function Home() {
         ),
       );
 
+      if (previousPath && previousPath !== photoPath) void deleteEmployeePhoto(previousPath);
+
       closeForm(true);
       notify(
         "success",
@@ -395,10 +504,16 @@ export default function Home() {
       );
     } catch (error) {
       console.error("No se pudo guardar el empleado:", error);
-      const message = describeError(error, "No se pudo guardar el empleado.");
+      if (uploadedPath) void deleteEmployeePhoto(uploadedPath);
+      const message =
+        error instanceof PhotoUploadError
+          ? error.message
+          : describeError(error, "No se pudo guardar el empleado.");
       setFormError(message);
       notify("error", "No se pudo guardar el empleado", message);
-      if (!(error instanceof ApiError)) reportClientIncident("empleado · guardar", error);
+      if (!(error instanceof ApiError) && !(error instanceof PhotoUploadError)) {
+        reportClientIncident("empleado · guardar", error);
+      }
     } finally {
       setFormBusy(false);
     }
@@ -411,6 +526,7 @@ export default function Home() {
 
     try {
       await requestApi<void>(session, `/api/employees/${employee.id}`, { method: "DELETE" });
+      if (employee.photo_path) void deleteEmployeePhoto(employee.photo_path);
       setSelectedEmployee(null);
       setEmployees((current) => current.filter((item) => item.id !== employee.id));
       notify("success", "Empleado eliminado", `Se eliminó el expediente de ${employee.full_name}.`);
@@ -421,7 +537,11 @@ export default function Home() {
     }
   }
 
+  const can = (permission: Permission) => access?.permissions.includes(permission) ?? false;
   const noticeStack = <NoticeStack notices={notices} onDismiss={dismissNotice} />;
+  const formPhotoUrl =
+    newPhoto?.previewUrl ?? (!removePhoto && editing?.photo_path ? photoUrls[editing.photo_path] : undefined);
+  const selectedPhotoUrl = selectedEmployee?.photo_path ? photoUrls[selectedEmployee.photo_path] : undefined;
 
   if (checkingSession) {
     return (
@@ -492,6 +612,9 @@ export default function Home() {
             </span>
           </Link>
           <div className="topbar-actions">
+            {can("users.manage") && (
+              <Link className="button button-outline" href="/admin"><Settings size={16} /> Usuarios y roles</Link>
+            )}
             <span className="connection-status"><span /> Sistema de Control Operativo</span>
             <span className="signed-user" title={session.user.email ?? ""}>
               <CircleUserRound size={18} />
@@ -512,9 +635,11 @@ export default function Home() {
               <h1>Directorio General de Personal</h1>
               <p className="subheading">Consulta y administra los expedientes por sede operacional.</p>
             </div>
-            <button className="button button-gold" onClick={openCreateForm}>
-              <Plus size={18} /> Registrar empleado
-            </button>
+            {can("employees.create") && (
+              <button className="button button-gold" onClick={openCreateForm}>
+                <Plus size={18} /> Registrar empleado
+              </button>
+            )}
           </div>
 
           <div className="stats-grid">
@@ -588,7 +713,7 @@ export default function Home() {
                     <td><StatusBadge active={employee.active} /></td>
                     <td className="row-actions">
                       <button className="text-button" onClick={() => void openProfile(employee)} disabled={detailLoadingId === employee.id}>{detailLoadingId === employee.id ? "Abriendo…" : "Ver expediente"}</button>
-                      <button className="icon-button row-edit" onClick={() => void openEditFromRow(employee)} disabled={detailLoadingId === employee.id} aria-label={`Editar ${employee.full_name}`} title="Editar"><Pencil size={16} /></button>
+                      {can("employees.edit") && <button className="icon-button row-edit" onClick={() => void openEditFromRow(employee)} disabled={detailLoadingId === employee.id} aria-label={`Editar ${employee.full_name}`} title="Editar"><Pencil size={16} /></button>}
                     </td>
                   </tr>
                 ))}
@@ -600,7 +725,7 @@ export default function Home() {
                 <div className="empty-icon"><UserRound size={25} /></div>
                 <h2>{employees.length === 0 ? "Aún no hay empleados registrados" : "No se encontraron empleados"}</h2>
                 <p>{employees.length === 0 ? "Agrega el primer expediente para empezar a usar el directorio." : "Prueba con otro nombre, ID o sede."}</p>
-                {employees.length === 0 && <button className="button button-primary" onClick={openCreateForm}><Plus size={17} /> Registrar empleado</button>}
+                {employees.length === 0 && can("employees.create") && <button className="button button-primary" onClick={openCreateForm}><Plus size={17} /> Registrar empleado</button>}
               </div>
             )}
           </div>
@@ -698,50 +823,42 @@ export default function Home() {
                 </div>
               </FormSection>
 
-              {/* FOTOS DESHABILITADAS (ver src/lib/firebase.ts). Para reactivar, restaura la lógica de fotos y descomenta:
               <FormSection title="Fotografía" icon={<ImagePlus size={16} />}>
                 <div className="photo-control">
-                  {(photoPreview || (!removePhoto && editing?.photo_path && photoUrls[editing.id])) ? (
-                    <Image
-                      className="photo-preview"
-                      src={photoPreview || photoUrls[editing!.id]}
-                      alt="Vista previa de fotografía"
-                      width={58}
-                      height={58}
-                      unoptimized
-                    />
+                  {formPhotoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img className="photo-preview" src={formPhotoUrl} alt="Vista previa de la fotografía" width={58} height={58} />
                   ) : <div className="photo-placeholder"><ImagePlus size={22} /></div>}
                   <div className="photo-input-area">
                     <label className="button button-outline file-button">
-                      <ImagePlus size={16} /> Elegir foto
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0] ?? null;
-                          setSelectedPhoto(file);
-                          if (file) setRemovePhoto(false);
-                        }}
-                      />
+                      <ImagePlus size={16} /> {photoProcessing ? "Comprimiendo…" : "Elegir foto"}
+                      <input type="file" accept={ACCEPTED_PHOTO_TYPES.join(",")} onChange={(event) => void handlePhotoChange(event)} disabled={photoProcessing || formBusy} />
                     </label>
-                    <span className="field-hint">Opcional · JPG, PNG o WebP · Máximo 3 MB</span>
-                    {editing?.photo_path && !photoFile && (
-                      <label className="checkbox-option remove-photo">
-                        <input
-                          type="checkbox"
-                          checked={removePhoto}
-                          onChange={(event) => {
-                            setRemovePhoto(event.target.checked);
-                            if (event.target.checked) setSelectedPhoto(null);
-                          }}
-                        />
-                        Quitar foto actual
-                      </label>
+                    <span className="field-hint">
+                      {newPhoto
+                        ? `Comprimida: ${formatBytes(newPhoto.blob.size)} (original ${formatBytes(newPhoto.originalSize)})`
+                        : "Opcional · JPG, PNG o WebP · Se comprime antes de subirse"}
+                    </span>
+                    {(newPhoto || (editing?.photo_path && !removePhoto)) && (
+                      <button
+                        type="button"
+                        className="text-button remove-photo"
+                        onClick={() => {
+                          if (newPhoto) {
+                            URL.revokeObjectURL(newPhoto.previewUrl);
+                            setNewPhoto(null);
+                          } else {
+                            setRemovePhoto(true);
+                          }
+                        }}
+                      >
+                        {newPhoto ? "Descartar foto nueva" : "Quitar foto actual"}
+                      </button>
                     )}
+                    {removePhoto && !newPhoto && <span className="field-hint remove-photo">La foto actual se eliminará al guardar.</span>}
                   </div>
                 </div>
               </FormSection>
-              */}
 
               {formError && <p className="inline-error form-error" role="alert">{formError}</p>}
               <div className="modal-actions">
@@ -761,7 +878,7 @@ export default function Home() {
           <section className="modal profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-title">
             <div className="profile-header">
               <button className="icon-button profile-close" onClick={() => setSelectedEmployee(null)} aria-label="Cerrar"><X size={20} /></button>
-              <Avatar name={selectedEmployee.full_name} large />
+              <Avatar name={selectedEmployee.full_name} photoUrl={selectedPhotoUrl} large />
               <div className="profile-identity">
                 <div className="profile-title-row">
                   <h2 id="profile-title">{selectedEmployee.full_name}</h2>
@@ -796,14 +913,17 @@ export default function Home() {
               </ProfileSection>
             </div>
             <div className="modal-actions profile-actions">
-              <button className="button button-danger-outline" onClick={() => void handleDeleteEmployee(selectedEmployee)}><Trash2 size={16} /> Eliminar</button>
+              {can("employees.delete") && <button className="button button-danger-outline" onClick={() => void handleDeleteEmployee(selectedEmployee)}><Trash2 size={16} /> Eliminar</button>}
               <span className="actions-spacer" />
+              {can("employees.download") && <button className="button button-outline" onClick={() => downloadExpediente(selectedEmployee)}><Download size={16} /> Descargar expediente</button>}
               <button className="button button-neutral" onClick={() => setSelectedEmployee(null)}>Cerrar</button>
-              <button className="button button-gold" onClick={() => openEditForm(selectedEmployee)}><Pencil size={16} /> Editar expediente</button>
+              {can("employees.edit") && <button className="button button-gold" onClick={() => openEditForm(selectedEmployee)}><Pencil size={16} /> Editar expediente</button>}
             </div>
           </section>
         </div>
       )}
+
+      {selectedEmployee && <ExpedienteSheet employee={selectedEmployee} photoUrl={selectedPhotoUrl} />}
 
       {noticeStack}
     </div>
@@ -823,8 +943,93 @@ function StatusBadge({ active }: { active: boolean }) {
   return <span className={`status-badge ${active ? "status-active" : "status-inactive"}`}><span />{active ? "Activo" : "Inactivo"}</span>;
 }
 
-function Avatar({ name, large = false }: { name: string; large?: boolean }) {
-  return <span className={`avatar${large ? " avatar-large" : ""}`}>{initials(name)}</span>;
+function Avatar({ name, photoUrl, large = false }: { name: string; photoUrl?: string; large?: boolean }) {
+  return (
+    <span className={`avatar${large ? " avatar-large" : ""}`}>
+      {photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photoUrl} alt={`Fotografía de ${name}`} />
+      ) : (
+        initials(name)
+      )}
+    </span>
+  );
+}
+
+// Hoja imprimible del expediente: fuera de pantalla; solo se muestra al imprimir o guardar
+// como PDF. El membrete es únicamente el logotipo de la cooperativa.
+function ExpedienteSheet({ employee, photoUrl }: { employee: Employee; photoUrl?: string }) {
+  const rows = (items: [string, string][]) => (
+    <table className="sheet-table">
+      <tbody>
+        {items.map(([label, value]) => (
+          <tr key={label}><th>{label}</th><td>{value}</td></tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
+  return (
+    <article className="print-sheet" aria-hidden="true">
+      <header className="sheet-letterhead">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo-cooperativa.jpg" alt="" />
+      </header>
+
+      <div className="sheet-title-row">
+        <div>
+          <h1>Expediente de personal</h1>
+          <h2>{employee.full_name}</h2>
+          <p>{employee.employee_code} · {employee.site} · {employee.active ? "Activo" : "Inactivo"}</p>
+        </div>
+        {photoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="sheet-photo" src={photoUrl} alt="" />
+        )}
+      </div>
+
+      <section>
+        <h3>Información laboral</h3>
+        {rows([
+          ["ID empleado", employee.employee_code],
+          ["Sede", employee.site],
+          ["Área / puesto", employee.position],
+          ["Fecha de contratación", formatDate(employee.hire_date)],
+          ["Tipo de contrato", employee.contract_type],
+          ["Salario actual", formatCurrency(employee.salary)],
+          ["Cuenta bancaria", employee.bank_account || "No especificada"],
+          ["Estatus", employee.active ? "Activo" : "Inactivo"],
+        ])}
+      </section>
+
+      <section>
+        <h3>Información personal</h3>
+        {rows([
+          ["Género", employee.gender || "No especificado"],
+          ["Fecha de nacimiento", formatDate(employee.birth_date)],
+          ["Estado civil", employee.marital_status || "No especificado"],
+          ["NSS", employee.nss || "No especificado"],
+          ["CURP", employee.curp || "No especificada"],
+          ["RFC", employee.rfc || "No especificado"],
+          ["Créditos activos", employee.credits.length ? employee.credits.join(", ") : "Ninguno"],
+        ])}
+      </section>
+
+      <section>
+        <h3>Contacto y domicilio</h3>
+        {rows([
+          ["Correo electrónico", employee.email || "No especificado"],
+          ["Teléfono", employee.phone || "No especificado"],
+          ["Estado de residencia", employee.residence_state || "No especificado"],
+          ["Dirección", employee.address || "No especificada"],
+        ])}
+      </section>
+
+      <footer className="sheet-footer">
+        Generado el {new Intl.DateTimeFormat("es-MX", { dateStyle: "long" }).format(new Date())}
+      </footer>
+    </article>
+  );
 }
 
 function FormSection({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
