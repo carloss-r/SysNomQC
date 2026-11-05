@@ -4,8 +4,11 @@ import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
 import { ApiError, describeError, requestApi } from "@/lib/api-client";
-import type { AppNotification, NotificationsResponse } from "@/lib/notifications";
+import { EPP_CHANGED_EVENT, type AppNotification, type NotificationsResponse } from "@/lib/notifications";
 import { reportClientIncident } from "@/lib/report-incident";
+import { useNotify } from "@/shared/ui/notice-provider";
+
+const STOCK_TOAST_FLAG = "epp-alert-toast";
 
 /** Tiempo que una alerta descartada queda oculta; si el problema sigue, vuelve a mostrarse. */
 export const SNOOZE_MS = 24 * 60 * 60_000;
@@ -52,6 +55,7 @@ function readSnoozes(key: string): SnoozeMap {
 // Solo se monta con la sesión ya iniciada, por eso puede leer localStorage al crearse.
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
+  const notify = useNotify();
   const userId = session?.user.id ?? "";
   const storageKey = `sysnomqc.notifications.snoozed.${userId}`;
 
@@ -96,6 +100,24 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           Object.entries(previous).filter(([id, until]) => until > checkedAt && (!complete || present.has(id))),
         ),
       );
+
+      // Aviso emergente una sola vez por sesión del navegador; respeta lo que ya se descartó.
+      const saved = readSnoozes(storageKey);
+      const pending = result.items.filter((item) => (saved[item.id] ?? 0) <= checkedAt);
+      const out = pending.filter((item) => item.kind === "out_of_stock").length;
+      const low = pending.filter((item) => item.kind === "low_stock").length;
+      if (out + low > 0) {
+        let alreadyShown = false;
+        try {
+          alreadyShown = window.sessionStorage.getItem(STOCK_TOAST_FLAG) !== null;
+          window.sessionStorage.setItem(STOCK_TOAST_FLAG, "1");
+        } catch {
+          // Sin sessionStorage: se avisa igualmente.
+        }
+        if (!alreadyShown) {
+          notify("warning", "Alertas de inventario de EPP", `${out} agotado(s) y ${low} por reponer. Revisa la campana.`);
+        }
+      }
     } catch (requestError) {
       console.error("No se pudieron cargar las notificaciones:", requestError);
       setError(describeError(requestError, "No se pudieron cargar las notificaciones."));
@@ -103,7 +125,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [notify, storageKey]);
 
   useEffect(() => {
     const first = window.setTimeout(() => void refresh(), 0);
@@ -112,8 +134,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     const onFocus = () => {
       if (Date.now() - lastRefresh.current >= MIN_FOCUS_GAP_MS) void refresh();
     };
+    const onEppChanged = () => void refresh();
     window.addEventListener("focus", onFocus);
+    window.addEventListener(EPP_CHANGED_EVENT, onEppChanged);
     return () => {
+      window.removeEventListener(EPP_CHANGED_EVENT, onEppChanged);
       window.clearTimeout(first);
       window.clearInterval(interval);
       window.clearInterval(clock);

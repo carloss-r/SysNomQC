@@ -2,15 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { reportServerIncident } from "@/lib/incidents";
 import {
   employeeNotifications,
-  inventoryNotifications,
+  eppNotifications,
   sortNotifications,
   type AppNotification,
   type EmployeeCheckRow,
-  type InventoryRow,
+  type EppArticleRow,
   type NotificationSourceStatus,
   type NotificationsResponse,
 } from "@/lib/notifications";
-import { createServiceClient } from "@/lib/supabase-admin";
 import { getAuthenticatedClient } from "../employees/_server";
 
 const BATCH_SIZE = 1000;
@@ -66,20 +65,17 @@ export async function GET(request: NextRequest) {
   };
 
   const readInventory = async (): Promise<SourceResult> => {
-    if (!access.permissions.includes("inventory.view")) return { status: "no_permission", items: [] };
-    // inventario_epp no tiene políticas RLS para el navegador: se lee con la llave de servidor,
-    // ya validado el permiso, y solo salen las columnas de esta alerta.
-    const admin = createServiceClient();
-    if (!admin) return { status: "unavailable", items: [] };
+    if (!access.permissions.includes("epp.view")) return { status: "no_permission", items: [] };
     try {
-      const rows = await readAll<InventoryRow>((from, to) =>
-        admin
-          .from("inventario_epp")
-          .select("id_articulo,codigo_sku,nombre_articulo,talla_medida,existencia_total,stock_minimo,unidad_medida")
-          .order("id_articulo")
+      const rows = await readAll<EppArticleRow>((from, to) =>
+        client
+          .from("epp_articles")
+          .select("id,name,stock,min_stock,unit")
+          .eq("active", true)
+          .order("id")
           .range(from, to),
       );
-      return { status: "ok", items: inventoryNotifications(rows) };
+      return { status: "ok", items: eppNotifications(rows) };
     } catch (error) {
       return failedSource("inventario", error);
     }

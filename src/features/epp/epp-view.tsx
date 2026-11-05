@@ -9,7 +9,7 @@ import { RequirePermission } from "@/shared/layout/require-permission";
 import { StatCard } from "@/shared/ui/badges";
 import { PageHeader } from "@/shared/ui/page-header";
 import { ArticleModal } from "./article-modal";
-import { EPP_CHANGED_EVENT } from "./epp-alerts-bell";
+import { EPP_CHANGED_EVENT } from "@/lib/notifications";
 import { HistoryTab } from "./history-tab";
 import { InventoryTab, stockState } from "./inventory-tab";
 import { MonthlyTab } from "./monthly-tab";

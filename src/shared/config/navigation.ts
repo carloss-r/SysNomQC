@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { HardHat, ShieldCheck, UsersRound } from "lucide-react";
+import { Bell, HardHat, ShieldCheck, UsersRound } from "lucide-react";
 import type { Permission } from "@/lib/permissions";
 
 // Para agregar una pantalla nueva:
@@ -27,6 +27,10 @@ export const NAVIGATION: NavSection[] = [
   {
     title: "Seguridad e higiene",
     items: [{ href: "/epp", label: "EPP", icon: HardHat, permission: "epp.view" }],
+  },
+  {
+    title: "Avisos",
+    items: [{ href: "/notificaciones", label: "Notificaciones", icon: Bell }],
   },
   {
     title: "Administración",

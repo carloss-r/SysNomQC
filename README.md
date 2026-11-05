@@ -39,13 +39,14 @@ La pantalla `/notificaciones` y la campana de la barra superior muestran avisos 
 
 | Gravedad | Aviso | Condición |
 | --- | --- | --- |
-| Grave | Sin existencias | `inventario_epp.existencia_total` en cero |
-| Importante | Stock bajo | Existencia igual o menor que `stock_minimo` |
+| Grave | Sin existencias | Artículo activo de `epp_articles` con existencia en cero |
+| Importante | Stock bajo | Existencia igual o menor que `min_stock` |
 | Importante | Expediente incompleto | Empleado activo sin NSS, CURP, RFC, cuenta bancaria o salario |
+| Menor importancia | Compra anticipada | Existencia hasta 1.5 veces `min_stock` |
 | Menor importancia | Datos de contacto | Empleado activo sin correo o teléfono |
 
-- **Descartar** oculta un aviso 24 horas (`SNOOZE_MS`). Si el problema sigue, vuelve a mostrarse; si se agrava de stock bajo a sin existencias, avisa de inmediato. Lo descartado se guarda en el navegador de cada cuenta, no se comparte entre equipos.
-- Los avisos de expedientes requieren `employees.view`. Los de inventario requieren `inventory.view` y `SUPABASE_SERVICE_ROLE_KEY`; ejecuta `202611050002_permiso_inventario.sql` para dárselo a `AlmacenistaEPP`.
+- **Descartar** oculta un aviso 24 horas (`SNOOZE_MS`). Si el problema sigue, vuelve a mostrarse; si un artículo pasa a un nivel más grave, avisa de inmediato. Lo descartado se guarda en el navegador de cada cuenta, no se comparte entre equipos.
+- Los avisos de expedientes requieren `employees.view`. Los de inventario requieren `epp.view` y las migraciones de EPP.
 - Para agregar un aviso nuevo: añade su tipo y regla en `src/lib/notifications.ts` y léelo en `src/app/api/notifications/route.ts`.
 
 ## Aviso de incidencias por correo

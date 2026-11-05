@@ -2,7 +2,10 @@
 // los datos reales, así que una alerta desaparece sola cuando el problema se corrige.
 
 export type NotificationSeverity = "critical" | "important" | "minor";
-export type NotificationKind = "out_of_stock" | "low_stock" | "employee_data" | "employee_contact";
+export type NotificationKind = "out_of_stock" | "low_stock" | "reorder_soon" | "employee_data" | "employee_contact";
+
+/** Lo emite la pantalla de EPP al registrar un movimiento, para revisar los avisos sin esperar. */
+export const EPP_CHANGED_EVENT = "epp:changed";
 
 export type AppNotification = {
   /** Estable mientras dure el problema; incluye el tipo para que un agravamiento vuelva a avisar. */
@@ -32,6 +35,7 @@ export const SEVERITY_LABELS: Record<NotificationSeverity, string> = {
 export const KIND_LABELS: Record<NotificationKind, string> = {
   out_of_stock: "Sin existencias",
   low_stock: "Stock bajo",
+  reorder_soon: "Compra anticipada",
   employee_data: "Expediente incompleto",
   employee_contact: "Datos de contacto",
 };
@@ -44,39 +48,33 @@ export function sortNotifications(items: AppNotification[]): AppNotification[] {
   );
 }
 
-export type InventoryRow = {
-  id_articulo: number;
-  codigo_sku: string | null;
-  nombre_articulo: string;
-  talla_medida: string | null;
-  existencia_total: number;
-  stock_minimo: number | null;
-  unidad_medida: string | null;
+export type EppArticleRow = {
+  id: number;
+  name: string;
+  stock: number;
+  min_stock: number;
+  unit: string;
 };
 
-export function inventoryNotifications(rows: InventoryRow[]): AppNotification[] {
+export function eppNotifications(rows: EppArticleRow[]): AppNotification[] {
   return rows.flatMap((row): AppNotification[] => {
-    const name = [row.nombre_articulo, row.talla_medida].filter(Boolean).join(" · ");
-    const sku = row.codigo_sku ? ` (SKU ${row.codigo_sku})` : "";
-    const unit = (row.unidad_medida ?? "piezas").toLowerCase();
+    const base = { href: "/epp", detail: `Quedan ${row.stock} ${row.unit.toLowerCase()}; el mínimo es ${row.min_stock}.` };
 
-    if (row.existencia_total <= 0) {
+    if (row.stock <= 0) {
       return [{
-        id: `out_of_stock:${row.id_articulo}`,
+        ...base,
+        id: `out_of_stock:${row.id}`,
         kind: "out_of_stock",
         severity: "critical",
-        title: `Ya no hay ${name}`,
-        detail: `Existencia en cero${sku}.`,
+        title: `Ya no hay ${row.name}`,
+        detail: `Existencia en cero; el mínimo es ${row.min_stock}.`,
       }];
     }
-    if (row.stock_minimo !== null && row.existencia_total <= row.stock_minimo) {
-      return [{
-        id: `low_stock:${row.id_articulo}`,
-        kind: "low_stock",
-        severity: "important",
-        title: `Quedan pocas existencias de ${name}`,
-        detail: `Quedan ${row.existencia_total} ${unit}; el mínimo es ${row.stock_minimo}${sku}.`,
-      }];
+    if (row.stock <= row.min_stock) {
+      return [{ ...base, id: `low_stock:${row.id}`, kind: "low_stock", severity: "important", title: `Quedan pocas existencias de ${row.name}` }];
+    }
+    if (row.stock <= Math.ceil(row.min_stock * 1.5)) {
+      return [{ ...base, id: `reorder_soon:${row.id}`, kind: "reorder_soon", severity: "minor", title: `Anticipa la compra de ${row.name}` }];
     }
     return [];
   });
