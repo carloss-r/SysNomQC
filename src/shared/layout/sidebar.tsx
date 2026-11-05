@@ -1,12 +1,13 @@
 "use client";
 
-import Image from "next/image";
+import { X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/features/auth/auth-provider";
 import { NAVIGATION } from "@/shared/config/navigation";
 
-export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () => void }) {
+// Menú lateral desplegable: permanece cerrado y se abre con el botón de tres rayas.
+export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const { can } = useAuth();
 
@@ -16,14 +17,13 @@ export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () =>
   })).filter((section) => section.items.length > 0);
 
   return (
-    <aside className={`sidebar${open ? " open" : ""}`} aria-label="Menú principal">
-      <Link className="sidebar-brand" href="/" onClick={onNavigate} aria-label="Cooperativa Quinta Generación, inicio">
-        <Image src="/logo-cooperativa.jpg" alt="" width={46} height={46} priority />
-        <span className="brand-copy">
-          <strong>QUINTA GENERACIÓN</strong>
-          <small>CONTROL OPERATIVO</small>
-        </span>
-      </Link>
+    <aside id="main-menu" className={`sidebar${open ? " open" : ""}`} aria-label="Menú principal" aria-hidden={!open}>
+      <div className="sidebar-header">
+        <span>MENÚ</span>
+        <button type="button" className="icon-button sidebar-close" onClick={onClose} aria-label="Cerrar menú" tabIndex={open ? 0 : -1}>
+          <X size={20} />
+        </button>
+      </div>
 
       <nav className="sidebar-nav">
         {sections.map((section) => (
@@ -40,7 +40,8 @@ export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () =>
                   href={item.href}
                   className={`nav-link${active ? " active" : ""}`}
                   aria-current={active ? "page" : undefined}
-                  onClick={onNavigate}
+                  tabIndex={open ? 0 : -1}
+                  onClick={onClose}
                 >
                   <Icon size={18} />
                   <span>{item.label}</span>

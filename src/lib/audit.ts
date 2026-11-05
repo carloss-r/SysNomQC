@@ -1,7 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
 import type { NextRequest } from "next/server";
 import type { Access } from "@/lib/permissions";
 import { clientIp } from "@/lib/rate-limit";
+import { createServiceClient } from "@/lib/supabase-admin";
 
 /**
  * Bitácora de auditoría (tabla public.audit_log, solo accesible con la llave de servidor).
@@ -17,14 +17,12 @@ export async function recordAudit(
   meta?: Record<string, unknown>,
 ): Promise<void> {
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !serviceKey) {
-      console.warn(`[auditoría] sin SUPABASE_SERVICE_ROLE_KEY, no se guardó: ${action}`);
+    const admin = createServiceClient();
+    if (!admin) {
+      console.warn(`[auditoría] sin llave de servidor, no se guardó: ${action}`);
       return;
     }
 
-    const admin = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
     const { error } = await admin.from("audit_log").insert({
       user_id: access.user_id,
       email: access.email,

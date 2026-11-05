@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { reportServerIncident } from "@/lib/incidents";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { createServiceClient } from "@/lib/supabase-admin";
 import type { Access } from "@/lib/permissions";
 import { getAuthenticatedClient } from "../employees/_server";
 
@@ -21,20 +22,19 @@ export async function requireAdmin(request: NextRequest): Promise<AdminResult> {
     };
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
+  const admin = createServiceClient();
+  if (!admin) {
     return {
       response: NextResponse.json(
-        { error: "Falta configurar SUPABASE_SERVICE_ROLE_KEY en el servidor." },
+        {
+          error:
+            "El servidor no encuentra SUPABASE_SERVICE_ROLE_KEY. Agrégala en .env.local (y reinicia) o, en Vercel, en Environment Variables para el entorno de esta rama y vuelve a desplegar.",
+        },
         { status: 500 },
       ),
     };
   }
 
-  const admin = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
   return { access: auth.access, admin };
 }
 

@@ -105,6 +105,7 @@ No hay cadena de conexión a Postgres: la app habla con Supabase por URL y llave
 
 - **Local:** `.env.local` (no se sube a Git) con la URL y llaves de tu Supabase local (`supabase start`, `supabase status`). `supabase db reset` aplica las migraciones de `supabase/migrations`.
 - **Producción:** las mismas tres variables (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) en el panel de Vercel con los valores del proyecto en la nube. Para llevar los cambios de BD a la nube, ejecuta las migraciones nuevas en su SQL Editor (o `supabase db push`).
+- Las variables **no se leen desde el panel de Supabase**: deben estar en `.env.local` (y reiniciar `npm run dev`) o en Vercel → Settings → Environment Variables. En Vercel marca el entorno correcto (la rama `development` se despliega como **Preview**, `main` como **Production**) y vuelve a desplegar: los cambios de variables solo aplican a despliegues nuevos.
 - Crea al menos un usuario en Authentication de cada entorno y autorízalo en `authorized_users` (ver arriba).
 
 ## Ejecutar localmente
