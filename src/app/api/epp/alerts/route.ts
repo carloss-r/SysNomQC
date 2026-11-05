@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { reportServerIncident } from "@/lib/incidents";
 import { getAuthenticatedClient } from "../../employees/_server";
 
-const ORDER: Record<"out" | "low" | "soon", number> = { out: 0, low: 1, soon: 2 };
+type Level = "out" | "low" | "soon";
+const ORDER: Record<Level, number> = { out: 0, low: 1, soon: 2 };
 
 // Niveles: out = agotado, low = en o bajo el mínimo (reponer ya), soon = cerca del mínimo (anticipar compra).
 export async function GET(request: NextRequest) {
@@ -17,8 +18,8 @@ export async function GET(request: NextRequest) {
     if (error) throw error;
     const alerts = (data ?? [])
       .map((item) => {
-        const level = item.stock === 0 ? "out" : item.stock <= item.min_stock ? "low" : item.stock <= Math.ceil(item.min_stock * 1.5) ? "soon" : null;
-        return level ? { ...item, level } : null;
+        const level: Level | null = item.stock === 0 ? "out" : item.stock <= item.min_stock ? "low" : item.stock <= Math.ceil(item.min_stock * 1.5) ? "soon" : null;
+        return level ? { ...item, level: level as Level } : null;
       })
       .filter((item): item is NonNullable<typeof item> => item !== null)
       .sort((a, b) => ORDER[a.level] - ORDER[b.level] || a.stock - b.stock);
