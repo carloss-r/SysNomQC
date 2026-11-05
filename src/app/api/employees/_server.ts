@@ -56,12 +56,15 @@ export async function getAuthenticatedClient(
       return { response: NextResponse.json({ error: "La sesión no es válida o expiró." }, { status: 401 }) };
     }
 
-    const { data: authorizedUser, error: authorizationError } = await client
-      .from("authorized_users")
-      .select("user_id,full_name,role:roles(nombre,permisos,es_sistema)")
-      .eq("user_id", userData.user.id)
-      .eq("active", true)
-      .maybeSingle();
+    const lookup = (columns: string) =>
+      client.from("authorized_users").select(columns).eq("user_id", userData.user.id).eq("active", true).maybeSingle();
+    let { data: authorizedUser, error: authorizationError } = await lookup(
+      "user_id,full_name,site,role:roles(nombre,permisos,es_sistema)",
+    );
+    // Antes de ejecutar la migración de sedes la columna "site" no existe: se sigue entrando (todas las sedes).
+    if (authorizationError?.code === "42703") {
+      ({ data: authorizedUser, error: authorizationError } = await lookup("user_id,full_name,role:roles(nombre,permisos,es_sistema)"));
+    }
 
     if (authorizationError) {
       console.error("No se pudo validar el acceso del usuario:", authorizationError);
@@ -83,7 +86,8 @@ export async function getAuthenticatedClient(
       };
     }
 
-    const role = authorizedUser.role as unknown as RoleRow | null;
+    const row = authorizedUser as unknown as { full_name: string | null; site?: string | null; role: RoleRow | null };
+    const role = row.role;
     const isSuperAdmin = role?.es_sistema === true;
     const permissions = isSuperAdmin
       ? ALL_PERMISSIONS
@@ -91,10 +95,11 @@ export async function getAuthenticatedClient(
     const access: Access = {
       user_id: userData.user.id,
       email: userData.user.email ?? "",
-      full_name: (authorizedUser.full_name as string | null) ?? null,
+      full_name: row.full_name ?? null,
       role_name: role?.nombre ?? "Sin rol",
       is_super_admin: isSuperAdmin,
       permissions,
+      site: isSuperAdmin ? null : (row.site ?? null),
     };
 
     if (permission && !permissions.includes(permission)) {

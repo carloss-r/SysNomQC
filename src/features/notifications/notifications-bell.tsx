@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CircleAlert, Info, TriangleAlert, X, type LucideIcon } from "lucide-react";
+import { Bell, CircleAlert, Info, ShoppingCart, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { NotificationSeverity } from "@/lib/notifications";
@@ -52,6 +52,7 @@ export function NotificationsBell() {
   // El número solo cuenta lo grave e importante; lo de menor importancia no debe generar ruido.
   const urgent = active.filter((item) => item.severity !== "minor");
   const hasCritical = urgent.some((item) => item.severity === "critical");
+  const hasPurchase = urgent.some((item) => item.kind === "purchase_request");
   const label = urgent.length === 0 ? "Notificaciones" : `Notificaciones: ${urgent.length} por atender`;
 
   const filtered = filter === "all" ? active : active.filter((item) => item.severity === filter);
@@ -64,7 +65,7 @@ export function NotificationsBell() {
       <button type="button" className="icon-button topbar-icon" onClick={toggle} aria-label={label} aria-expanded={open} title={label}>
         <Bell size={18} />
         {urgent.length > 0 && (
-          <span className={`bell-count${hasCritical ? " bell-count-critical" : ""}`} aria-hidden="true">
+          <span className={`bell-count${hasPurchase ? " bell-count-purchase" : hasCritical ? " bell-count-critical" : ""}`} aria-hidden="true">
             {urgent.length > 99 ? "99+" : urgent.length}
           </span>
         )}
@@ -89,7 +90,8 @@ export function NotificationsBell() {
           {shown.length > 0 ? (
             <ul className="bell-list">
               {shown.map((item) => {
-                const Icon = ICONS[item.severity];
+                const purchase = item.kind === "purchase_request";
+                const Icon = purchase ? ShoppingCart : ICONS[item.severity];
                 const text = (
                   <>
                     <strong>{item.title}</strong>
@@ -97,7 +99,7 @@ export function NotificationsBell() {
                   </>
                 );
                 return (
-                  <li className={`bell-item bell-${item.severity}`} key={item.id}>
+                  <li className={`bell-item bell-${item.severity}${purchase ? " bell-purchase" : ""}`} key={item.id}>
                     <Icon size={16} />
                     {item.href
                       ? <Link className="bell-item-text" href={item.href} onClick={() => setOpen(false)}>{text}</Link>

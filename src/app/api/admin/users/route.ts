@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await auth.admin
     .from("authorized_users")
-    .select("user_id,email,full_name,active,role_id,created_at,role:roles(nombre)")
+    .select("user_id,email,full_name,active,role_id,site,created_at,role:roles(nombre)")
     .order("email");
   if (error) return adminDbError(error);
 
@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
     full_name: row.full_name,
     active: row.active,
     role_id: row.role_id,
+    site: (row.site as string | null) ?? null,
     role_name: (row.role as unknown as { nombre: string } | null)?.nombre ?? null,
     created_at: row.created_at,
   }));
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     if (!input.success) {
       return badRequest("Revisa nombre, correo, rol y contraseña (mínimo 12 caracteres).");
     }
-    const { email, full_name, password, role_id, active } = input.data;
+    const { email, full_name, password, role_id, active, site } = input.data;
 
     const { data: created, error: createError } = await auth.admin.auth.admin.createUser({
       email,
@@ -56,13 +57,13 @@ export async function POST(request: NextRequest) {
 
     const { error } = await auth.admin
       .from("authorized_users")
-      .insert({ user_id: created.user.id, email, full_name, role_id, active });
+      .insert({ user_id: created.user.id, email, full_name, role_id, active, site: site ?? null });
     if (error) {
       // Sin transacciones: se elimina la cuenta de Auth para no dejarla sin rol.
       await auth.admin.auth.admin.deleteUser(created.user.id);
       return adminDbError(error);
     }
-    await recordAudit(request, auth.access, "user.create", created.user.id, { email, role_id });
+    await recordAudit(request, auth.access, "user.create", created.user.id, { email, role_id, site: site ?? null });
     return NextResponse.json({ user_id: created.user.id }, { status: 201 });
   } catch (error) {
     if (error instanceof BadJsonError) return badRequest(error.message);

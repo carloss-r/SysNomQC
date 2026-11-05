@@ -40,21 +40,28 @@ let lineCounter = 0;
 const newLine = (articleId = ""): Line => ({ key: ++lineCounter, article_id: articleId, quantity: "1" });
 
 export function MovementModal({
+  site,
   kind,
   articles,
   employees,
   movements,
   presetArticleId,
   presetEmployee,
+  presetItems,
+  presetNotes,
   onClose,
   onDone,
 }: {
+  site: string;
   kind: MovementKind;
   articles: EppArticle[];
   employees: EppEmployee[];
   movements: EppMovement[];
   presetArticleId?: number;
   presetEmployee?: EppEmployee | null;
+  /** Para registrar la llegada de una solicitud de compra. */
+  presetItems?: { article_id: number; quantity: number }[];
+  presetNotes?: string;
   onClose: () => void;
   onDone: () => Promise<void>;
 }) {
@@ -62,11 +69,15 @@ export function MovementModal({
   const notify = useNotify();
   const copy = COPY[kind];
   const Icon = copy.icon;
-  const [lines, setLines] = useState<Line[]>([newLine(presetArticleId ? String(presetArticleId) : "")]);
+  const [lines, setLines] = useState<Line[]>(() =>
+    presetItems && presetItems.length > 0
+      ? presetItems.map((item) => ({ ...newLine(String(item.article_id)), quantity: String(item.quantity) }))
+      : [newLine(presetArticleId ? String(presetArticleId) : "")],
+  );
   const [employee, setEmployee] = useState<EppEmployee | null>(presetEmployee ?? null);
   const [query, setQuery] = useState("");
   const [date, setDate] = useState(todayLocal());
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(presetNotes ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -146,12 +157,12 @@ export function MovementModal({
     try {
       await requestApi(session, "/api/epp/movements", {
         method: "POST",
-        body: JSON.stringify({ kind, items, employee_id: employee?.id ?? null, moved_on: date, notes: notes.trim() || undefined }),
+        body: JSON.stringify({ site, kind, items, employee_id: employee?.id ?? null, moved_on: date, notes: notes.trim() || undefined }),
       });
       const units = items.reduce((sum, item) => sum + Math.abs(item.quantity), 0);
       const names = items.map((item) => byId.get(item.article_id)?.name).filter(Boolean).join(", ");
       if (kind === "entrega") notify("success", "Entrega registrada", `${units} pieza(s) entregadas a ${employee?.full_name}: ${names}.`);
-      else if (kind === "ingreso") notify("success", "Ingreso registrado", `Se sumaron ${units} pieza(s) al inventario: ${names}.`);
+      else if (kind === "ingreso") notify("success", "Ingreso registrado", `Se sumaron ${units} pieza(s) al inventario de ${site}: ${names}.`);
       else notify("success", "Ajuste guardado", `Se corrigió la existencia de: ${names}.`);
       await onDone();
       onClose();
@@ -168,7 +179,7 @@ export function MovementModal({
         <div className="modal-header">
           <div className="modal-heading-icon"><Icon size={19} /></div>
           <div>
-            <h2 id="epp-move-title">{copy.title}</h2>
+            <h2 id="epp-move-title">{copy.title} · {site}</h2>
             <p>{copy.hint}</p>
           </div>
           <button className="icon-button close-modal" onClick={onClose} disabled={busy} aria-label="Cerrar"><X size={20} /></button>

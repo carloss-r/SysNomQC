@@ -5,16 +5,17 @@ import type { FormEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
 import { describeError, requestApi } from "@/lib/api-client";
+import { SITES } from "@/lib/employees";
 import { PERMISSIONS, type AdminRole, type AdminUser, type Permission } from "@/lib/permissions";
 import { RequirePermission } from "@/shared/layout/require-permission";
 import { Field } from "@/shared/ui/field";
 import { PageHeader } from "@/shared/ui/page-header";
 
 type Tab = "users" | "roles";
-type UserForm = { email: string; full_name: string; password: string; role_id: string; active: boolean };
+type UserForm = { email: string; full_name: string; password: string; role_id: string; active: boolean; site: string };
 type RoleForm = { name: string; description: string; permissions: Permission[] };
 
-const EMPTY_USER: UserForm = { email: "", full_name: "", password: "", role_id: "", active: true };
+const EMPTY_USER: UserForm = { email: "", full_name: "", password: "", role_id: "", active: true, site: "" };
 const EMPTY_ROLE: RoleForm = { name: "", description: "", permissions: [] };
 export const MIN_PASSWORD_LENGTH = 12;
 
@@ -75,7 +76,7 @@ function AdminDashboard() {
   function openUserModal(user: AdminUser | null) {
     setUserForm(
       user
-        ? { email: user.email, full_name: user.full_name ?? "", password: "", role_id: user.role_id ? String(user.role_id) : "", active: user.active }
+        ? { email: user.email, full_name: user.full_name ?? "", password: "", role_id: user.role_id ? String(user.role_id) : "", active: user.active, site: user.site ?? "" }
         : { ...EMPTY_USER, role_id: String(roles.find((role) => !role.is_system)?.id ?? roles[0]?.id ?? "") },
     );
     setFormError("");
@@ -118,6 +119,7 @@ function AdminDashboard() {
                 full_name: userForm.full_name.trim(),
                 role_id: Number(userForm.role_id),
                 active: userForm.active,
+                site: userForm.site || null,
                 ...(userForm.password ? { password: userForm.password } : {}),
               }),
             })
@@ -129,6 +131,7 @@ function AdminDashboard() {
                 password: userForm.password,
                 role_id: Number(userForm.role_id),
                 active: userForm.active,
+                site: userForm.site || null,
               }),
             }),
       editing ? "Usuario actualizado." : "Usuario creado.",
@@ -202,14 +205,15 @@ function AdminDashboard() {
           {tab === "users" ? (
             <table className="employee-table">
               <thead>
-                <tr><th>Nombre</th><th className="hide-tablet">Correo</th><th className="hide-phone">Rol</th><th className="hide-phone">Estatus</th><th><span className="sr-only">Acciones</span></th></tr>
+                <tr><th>Nombre</th><th className="hide-tablet">Correo</th><th className="hide-phone">Rol</th><th className="hide-tablet">Sede</th><th className="hide-phone">Estatus</th><th><span className="sr-only">Acciones</span></th></tr>
               </thead>
               <tbody>
                 {users.map((user) => (
                   <tr key={user.user_id}>
-                    <td>{user.full_name || "—"}<small className="epp-muted show-phone">{user.role_name ?? "Sin rol"}{user.active ? "" : " · Inactivo"}</small><small className="epp-muted show-tablet">{user.email}</small></td>
+                    <td>{user.full_name || "—"}<small className="epp-muted show-phone">{user.role_name ?? "Sin rol"} · {user.site ?? "Todas las sedes"}{user.active ? "" : " · Inactivo"}</small><small className="epp-muted show-tablet">{user.email}</small></td>
                     <td className="hide-tablet">{user.email}</td>
                     <td className="hide-phone">{user.role_name ?? "Sin rol"}</td>
+                    <td className="hide-tablet">{user.site ?? "Todas"}</td>
                     <td className="hide-phone"><span className={`status-badge ${user.active ? "status-active" : "status-inactive"}`}><span />{user.active ? "Activo" : "Inactivo"}</span></td>
                     <td className="row-actions">
                       <button className="icon-button row-edit" onClick={() => openUserModal(user)} aria-label={`Editar ${user.email}`} title="Editar"><Pencil size={16} /></button>
@@ -270,6 +274,12 @@ function AdminDashboard() {
                   <select value={userForm.role_id} onChange={(event) => setUserForm({ ...userForm, role_id: event.target.value })} required>
                     <option value="" disabled>Selecciona un rol</option>
                     {roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+                  </select>
+                </Field>
+                <Field label="Sede">
+                  <select value={userForm.site} onChange={(event) => setUserForm({ ...userForm, site: event.target.value })}>
+                    <option value="">Todas las sedes</option>
+                    {SITES.map((site) => <option key={site} value={site}>{site}</option>)}
                   </select>
                 </Field>
                 <Field label="Estatus">

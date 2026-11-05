@@ -1,8 +1,10 @@
 "use client";
 
 import { Building2, Filter, Pencil, Plus, Search, UserRound, UsersRound, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
+import { NAVIGATION } from "@/shared/config/navigation";
 import { ApiError, describeError, requestApi } from "@/lib/api-client";
 import {
   POSITIONS,
@@ -26,7 +28,20 @@ const PAGE_SIZE = 500;
 type FormState = { editing: Employee | null } | null;
 
 // Dashboard de empleados: directorio general, alta/edición, expediente y descarga.
+// "/" es la entrada de todos: quien no ve expedientes (almacén, compras) pasa a su primera pantalla.
 export function EmployeesView() {
+  const { can } = useAuth();
+  const router = useRouter();
+  const allowed = can("employees.view");
+  const home = allowed
+    ? null
+    : NAVIGATION.flatMap((section) => section.items).find((item) => item.href !== "/" && (!item.permission || can(item.permission)))?.href ?? null;
+
+  useEffect(() => {
+    if (home) router.replace(home);
+  }, [home, router]);
+
+  if (home) return null;
   return (
     <RequirePermission permission="employees.view">
       <EmployeesDashboard />

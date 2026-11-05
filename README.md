@@ -8,6 +8,7 @@ Aplicación con Next.js y React para administrar el directorio de empleados usan
    1. `202611030001_create_employee_directory.sql` (empleados, `authorized_users`, bucket de fotos)
    2. `202611040002_roles_y_usuarios.sql` (roles, permisos y usuarios administrables)
    3. `202611050001_seguridad.sql` (políticas por permiso, bitácora de auditoría y cierre de tablas sin RLS)
+   4. `202611060001_epp.sql`, `202611060002_epp_historial.sql` y `202611070001_epp_por_sede.sql` (módulo de EPP, ver abajo)
 2. En **Authentication > Users**, crea las cuentas autorizadas. El sistema no ofrece registro público.
 3. Por cada cuenta, copia su UUID y correo desde Auth y autorízala ejecutando en SQL Editor:
 
@@ -75,8 +76,19 @@ Pantalla `/epp` (menú **Seguridad e higiene → EPP**). Ejecuta en Supabase `su
 - **Por trabajador**: busca a un trabajador y ve todo el EPP que ha recibido (resumen por artículo, control diario del mes como en el Excel, detalle con quién registró cada entrega) y descárgalo en CSV.
 - **Control mensual**: entregas, ingresos y ajustes del mes por artículo y por trabajador, con reporte descargable.
 - **Historial**: todos los movimientos con fecha, trabajador, quién los registró y notas.
-- Permisos (se asignan en *Usuarios y roles*): `epp.view`, `epp.deliver`, `epp.manage`.
-- La existencia solo cambia mediante la función `epp_apply()` (transacción atómica, valida permisos y existencia); los movimientos no se pueden editar ni borrar.
+- Permisos (se asignan en *Usuarios y roles*): `epp.view`, `epp.deliver`, `epp.manage`, `epp.request` (pedir material) y `epp.purchase` (atender compras).
+- La existencia solo cambia mediante la función `epp_apply_site()` (transacción atómica, valida permisos, sede y existencia); los movimientos no se pueden editar ni borrar.
+
+### Inventario por sede y solicitudes de compra
+
+Ejecuta `202611070001_epp_por_sede.sql` después de las dos anteriores (es seguro repetirla).
+
+- **Cada sede tiene su propio inventario.** El catálogo de artículos es común; la existencia y el mínimo son de cada sede (`epp_stock`). La existencia que había pasó completa a **Campeche**; Lagunas y Cruz Azul empiezan sin registro y cargan la suya con **Ingreso** o **Ajuste**.
+- **Sede de cada cuenta:** en *Usuarios y roles* → editar usuario → **Sede**. Con sede asignada, la cuenta solo ve y mueve el inventario de esa sede (la base de datos lo impide aunque se llame directo a Supabase). Sin sede (*Todas las sedes*) y SuperAdmin eligen la sede en la pantalla.
+- **Pedir más:** en el inventario, lo agotado o bajo el mínimo muestra **Pedir más**, y **Pedir faltantes** junta todo en una solicitud con cantidad sugerida (hasta el doble del mínimo). Un artículo con una solicitud abierta no se puede volver a pedir hasta que se cierre.
+- **Encargado de compras:** el rol `EncargadoCompras` (lo crea la migración) es el único que recibe el aviso especial de solicitudes nuevas (campana morada y aviso emergente). Desde **EPP → Solicitudes** las marca *En compra*, *Recibida* o *Cancelada* y descarga el **PDF** (una solicitud o todas las abiertas, con resumen por artículo para hacer una sola compra).
+- **Llegada del material:** quien administra el inventario de la sede usa **Registrar llegada** en la solicitud: abre el ingreso con los artículos ya capturados y, al guardarlo, la solicitud queda *Recibida*.
+- La migración da a `AlmacenistaEPP` los permisos de inventario (`epp.view`, `epp.deliver`, `epp.manage`, `epp.request`). Recuerda asignarle su **sede** a cada cuenta de almacén.
 
 ## Arquitectura
 

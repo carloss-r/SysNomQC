@@ -614,3 +614,57 @@ td.row-actions > * { vertical-align: middle; }
   .bell-dismiss { width: 36px; height: 36px; }
   .bell-chip { padding: 7px 11px; }
 }
+
+/* EPP por sede y solicitudes de compra */
+.epp-site-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; color: var(--muted); font-size: 13px; }
+.epp-site-bar > svg { color: var(--gold-dark); }
+.epp-site-bar strong { color: var(--ink); }
+.epp-state-none { color: var(--ink-soft); border-color: var(--line-strong); background: var(--surface-3); }
+.epp-requested { display: inline-flex; margin-left: 6px; padding: 3px 8px; border: 1px dashed var(--purple-line); border-radius: 999px; color: var(--purple-text); background: var(--purple-bg); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.epp-request-all { margin-left: auto; }
+.epp-toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.epp-note { margin: 10px 0 0; }
+.epp-meta-wide { grid-template-columns: 1fr; }
+
+.epp-requests { margin: 0; padding: 0; list-style: none; }
+.epp-request { border-bottom: 1px solid var(--line); border-left: 4px solid var(--purple-line); }
+.epp-request:last-child { border-bottom: 0; }
+.epp-request-pendiente { border-left-color: var(--gold-accent); }
+.epp-request-en_compra { border-left-color: var(--blue-accent); }
+.epp-request-recibida { border-left-color: var(--green-accent); }
+.epp-request-cancelada { border-left-color: var(--line-strong); opacity: .75; }
+.epp-request summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 13px 16px; cursor: pointer; list-style: none; }
+.epp-request summary::-webkit-details-marker { display: none; }
+.epp-request summary:hover { background: var(--surface-2); }
+.epp-request-folio { color: var(--ink); font-size: 14px; font-weight: 800; }
+.epp-request-meta { flex: 1 1 260px; color: var(--muted); font-size: 12px; }
+.epp-request-chevron { margin-left: auto; color: var(--faint); transition: transform .15s ease; }
+.epp-request details[open] .epp-request-chevron { transform: rotate(180deg); }
+.epp-request-body { padding: 0 16px 16px; }
+.epp-request-body .table-scroll { border: 1px solid var(--line); border-radius: 8px; }
+.epp-request-note { margin: 10px 0 0; color: var(--ink-soft); font-size: 13px; }
+.epp-request-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.epp-status { display: inline-flex; padding: 3px 9px; border: 1px solid; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.epp-status-pendiente { color: var(--gold-text); border-color: var(--gold-line); background: var(--gold-bg); }
+.epp-status-en_compra { color: var(--blue-text); border-color: var(--blue-line); background: var(--blue-bg); }
+.epp-status-recibida { color: var(--green-text); border-color: var(--green-line); background: var(--green-bg); }
+.epp-status-cancelada { color: var(--ink-soft); border-color: var(--line-strong); background: var(--surface-3); }
+
+/* Aviso especial del encargado de compras */
+.bell-count-purchase { color: #fff; background: #7b4fa8; }
+.bell-purchase { background: var(--purple-bg); }
+.bell-purchase > svg { color: var(--purple-text); }
+.bell-purchase .bell-item-text strong { color: var(--purple-text); }
+.notification-purchase { --tone-text: var(--purple-text); --tone-bg: var(--purple-bg); --tone-line: var(--purple-line); --tone-accent: #7b4fa8; }
+
+@media (max-width: 700px) {
+  .epp-request-all, .epp-toolbar-actions { width: 100%; margin-left: 0; }
+  .epp-toolbar-actions .button { flex: 1; }
+  .epp-request summary { padding: 12px; }
+  .epp-request-body { padding: 0 12px 12px; }
+  .epp-request-actions .button { flex: 1 1 140px; }
+}
+
+/* Botones de fila sin partirse; en teléfono la sede no necesita el ícono */
+.epp-actions .button { white-space: nowrap; }
+@media (max-width: 700px) { .epp-site-bar > svg { display: none; } .epp-site-bar { margin-top: 12px; } }

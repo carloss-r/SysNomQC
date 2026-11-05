@@ -3,19 +3,21 @@ import { reportServerIncident } from "@/lib/incidents";
 import {
   employeeNotifications,
   eppNotifications,
+  purchaseNotifications,
   sortNotifications,
   type AppNotification,
   type EmployeeCheckRow,
-  type EppArticleRow,
+  type EppStockRow,
   type NotificationSourceStatus,
   type NotificationsResponse,
 } from "@/lib/notifications";
 import { getAuthenticatedClient } from "../employees/_server";
+import { readPurchaseRequests } from "../epp/requests/_read";
 
 const BATCH_SIZE = 1000;
 const MAX_ROWS = 20_000;
-// La tabla aún no existe en este entorno (p. ej. una base local sin el módulo de EPP).
-const MISSING_TABLE_CODES = new Set(["42P01", "PGRST205"]);
+// La tabla aún no existe en este entorno (p. ej. falta ejecutar una migración).
+const MISSING_TABLE_CODES = new Set(["42P01", "PGRST205", "42703"]);
 
 type PageResult<T> = { data: T[] | null; error: { code?: string; message: string } | null };
 
@@ -41,14 +43,19 @@ function failedSource(area: string, error: unknown): SourceResult {
   return { status: "unavailable", items: [] };
 }
 
-// Cada fuente se revisa por separado: si una falla, las alertas de la otra siguen llegando.
+type ArticleRef = { name: string; unit: string; active: boolean };
+type StockJoin = { article_id: number; site: string; stock: number; min_stock: number; article: ArticleRef | ArticleRef[] | null };
+const articleOf = (row: StockJoin) => (Array.isArray(row.article) ? (row.article[0] ?? null) : row.article);
+
+// Cada fuente se revisa por separado: si una falla, las alertas de las otras siguen llegando.
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedClient(request);
   if ("response" in auth) return auth.response;
   const { client, access } = auth;
+  const has = (key: string) => access.permissions.includes(key as never);
 
   const readEmployees = async (): Promise<SourceResult> => {
-    if (!access.permissions.includes("employees.view")) return { status: "no_permission", items: [] };
+    if (!has("employees.view")) return { status: "no_permission", items: [] };
     try {
       const rows = await readAll<EmployeeCheckRow>((from, to) =>
         client
@@ -64,28 +71,61 @@ export async function GET(request: NextRequest) {
     }
   };
 
+  // Faltantes por sede: solo para quien opera el inventario (no para compras, que recibe solicitudes).
+  // Las políticas RLS ya devuelven únicamente las sedes a las que la cuenta tiene acceso.
   const readInventory = async (): Promise<SourceResult> => {
-    if (!access.permissions.includes("epp.view")) return { status: "no_permission", items: [] };
+    const operates = has("epp.view") && (has("epp.request") || has("epp.manage") || has("epp.deliver"));
+    if (!operates) return { status: "no_permission", items: [] };
     try {
-      const rows = await readAll<EppArticleRow>((from, to) =>
-        client
-          .from("epp_articles")
-          .select("id,name,stock,min_stock,unit")
-          .eq("active", true)
-          .order("id")
-          .range(from, to),
-      );
+      const [stock, open] = await Promise.all([
+        readAll<StockJoin>((from, to) =>
+          client
+            .from("epp_stock")
+            .select("article_id,site,stock,min_stock,article:epp_articles(name,unit,active)")
+            .order("site")
+            .order("article_id")
+            .range(from, to),
+        ),
+        readPurchaseRequests(client, { open: true, limit: 1000 }),
+      ]);
+      if (open.error) throw open.error;
+      const requested = new Map<string, number>();
+      for (const req of open.requests) for (const item of req.items) requested.set(`${req.site}:${item.article_id}`, req.id);
+
+      const rows: EppStockRow[] = stock
+        .filter((row) => articleOf(row)?.active)
+        .map((row) => ({
+          article_id: row.article_id,
+          site: row.site,
+          name: articleOf(row)?.name ?? "Artículo",
+          unit: articleOf(row)?.unit ?? "PIEZAS",
+          stock: row.stock,
+          min_stock: row.min_stock,
+          open_request: requested.get(`${row.site}:${row.article_id}`) ?? null,
+        }));
       return { status: "ok", items: eppNotifications(rows) };
     } catch (error) {
       return failedSource("inventario", error);
     }
   };
 
-  const [employees, inventory] = await Promise.all([readEmployees(), readInventory()]);
+  // Aviso especial: solo el rol que atiende compras (SuperAdmin las consulta en la pantalla de EPP).
+  const readPurchases = async (): Promise<SourceResult> => {
+    if (!has("epp.purchase") || access.is_super_admin) return { status: "no_permission", items: [] };
+    try {
+      const { error, requests } = await readPurchaseRequests(client, { open: true, limit: 500 });
+      if (error) throw error;
+      return { status: "ok", items: purchaseNotifications(requests.filter((row) => row.status === "pendiente")) };
+    } catch (error) {
+      return failedSource("solicitudes de compra", error);
+    }
+  };
+
+  const [employees, inventory, purchases] = await Promise.all([readEmployees(), readInventory(), readPurchases()]);
 
   const body: NotificationsResponse = {
-    items: sortNotifications([...inventory.items, ...employees.items]),
-    sources: { employees: employees.status, inventory: inventory.status },
+    items: sortNotifications([...purchases.items, ...inventory.items, ...employees.items]),
+    sources: { employees: employees.status, inventory: inventory.status, purchases: purchases.status },
     checked_at: new Date().toISOString(),
   };
   return NextResponse.json(body);

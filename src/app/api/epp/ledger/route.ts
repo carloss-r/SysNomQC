@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { reportServerIncident } from "@/lib/incidents";
 import { getAuthenticatedClient } from "../../employees/_server";
-import { eppDatabaseError } from "../_shared";
+import { eppDatabaseError, resolveSite } from "../_shared";
 
 const PAGE = 1000;
 const MAX_ROWS = 20000;
@@ -13,12 +13,15 @@ const COLUMNS =
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedClient(request, "epp.view");
   if ("response" in auth) return auth.response;
+  const resolved = resolveSite(auth.access, request.nextUrl.searchParams.get("site"));
+  if ("response" in resolved) return resolved.response;
   try {
     const rows: Array<Record<string, unknown>> = [];
     for (let from = 0; from < MAX_ROWS; from += PAGE) {
       const { data, error } = await auth.client
         .from("epp_movements")
         .select(COLUMNS)
+        .eq("site", resolved.site)
         .order("moved_on", { ascending: false })
         .order("id", { ascending: false })
         .range(from, from + PAGE - 1);

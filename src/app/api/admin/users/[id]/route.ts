@@ -3,6 +3,7 @@ import { recordAudit } from "@/lib/audit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { BadJsonError, readJson } from "../../../employees/_server";
+import { userSiteSchema } from "../../_schemas";
 import { adminDbError, badRequest, requireAdmin } from "../../_admin";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -13,6 +14,7 @@ const userPatchSchema = z
     role_id: z.number().int().positive(),
     active: z.boolean(),
     password: z.string().min(12).max(72),
+    site: userSiteSchema,
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, "Debes enviar al menos un campo.")

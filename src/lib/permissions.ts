@@ -7,6 +7,8 @@ export const PERMISSIONS = [
   { key: "epp.view", label: "Ver inventario y entregas de EPP" },
   { key: "epp.deliver", label: "Registrar entregas de EPP" },
   { key: "epp.manage", label: "Administrar catálogo, ingresos y ajustes de EPP" },
+  { key: "epp.request", label: "Solicitar compra de EPP cuando falta material" },
+  { key: "epp.purchase", label: "Atender solicitudes de compra de EPP (encargado de compras)" },
   { key: "users.manage", label: "Administrar usuarios y roles" },
 ] as const;
 
@@ -21,6 +23,8 @@ export type Access = {
   role_name: string;
   is_super_admin: boolean;
   permissions: Permission[];
+  /** Sede asignada. null = todas las sedes (también SuperAdmin). */
+  site: string | null;
 };
 
 export type AdminRole = {
@@ -39,9 +43,11 @@ export type AdminUser = {
   active: boolean;
   role_id: number | null;
   role_name: string | null;
+  site: string | null;
   created_at: string | null;
 };
 
+/** Artículo del catálogo con la existencia y el mínimo de UNA sede. */
 export type EppArticle = {
   id: number;
   name: string;
@@ -51,8 +57,35 @@ export type EppArticle = {
   stock: number;
   min_stock: number;
   active: boolean;
+  site: string;
+  /** false si la sede nunca ha manejado el artículo (sin ingresos ni mínimo propio). */
+  tracked: boolean;
   updated_at: string;
   updated_by_name: string | null;
+};
+
+export type PurchaseStatus = "pendiente" | "en_compra" | "recibida" | "cancelada";
+
+export type EppPurchaseItem = {
+  article_id: number;
+  article_name: string;
+  unit: string;
+  quantity: number;
+  stock_at_request: number;
+  min_stock: number;
+};
+
+export type EppPurchaseRequest = {
+  id: number;
+  site: string;
+  status: PurchaseStatus;
+  notes: string | null;
+  requested_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+  handled_by_name: string | null;
+  status_note: string | null;
+  items: EppPurchaseItem[];
 };
 
 export type EppMovement = {

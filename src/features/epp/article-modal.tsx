@@ -21,11 +21,13 @@ export const EPP_CATEGORIES = [
 ];
 
 export function ArticleModal({
+  site,
   article,
   categories,
   onClose,
   onSaved,
 }: {
+  site: string;
   article: EppArticle | null;
   categories: string[];
   onClose: () => void;
@@ -58,6 +60,7 @@ export function ArticleModal({
         unit: form.unit,
         min_stock: Number(form.min_stock) || 0,
         active: form.active,
+        site,
       });
       await requestApi(session, article ? `/api/epp/articles/${article.id}` : "/api/epp/articles", {
         method: article ? "PATCH" : "POST",
@@ -98,7 +101,7 @@ export function ArticleModal({
             </Field>
             <Field label="Talla (opcional)"><input value={form.size} onChange={(e) => setForm({ ...form, size: e.target.value })} maxLength={20} placeholder="M, XL, 27…" /></Field>
             <Field label="Unidad"><input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value.toUpperCase() })} maxLength={20} required /></Field>
-            <Field label="Mínimo antes de reponer" required><input type="number" min={0} max={100000} value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: e.target.value })} required /></Field>
+            <Field label={`Mínimo en ${site} antes de reponer`} required><input type="number" min={0} max={100000} value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: e.target.value })} required /></Field>
             <Field label="Estatus">
               <select value={form.active ? "1" : "0"} onChange={(e) => setForm({ ...form, active: e.target.value === "1" })}>
                 <option value="1">Activo</option>

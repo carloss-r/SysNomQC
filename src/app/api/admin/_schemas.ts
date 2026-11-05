@@ -1,5 +1,9 @@
 import { z } from "zod";
+import { SITES } from "@/lib/employees";
 import { ALL_PERMISSIONS, type Permission } from "@/lib/permissions";
+
+/** null = todas las sedes. */
+export const userSiteSchema = z.enum(SITES).nullable();
 
 export const roleSchema = z
   .object({
@@ -16,5 +20,6 @@ export const userCreateSchema = z
     password: z.string().min(12).max(72),
     role_id: z.number().int().positive(),
     active: z.boolean(),
+    site: userSiteSchema.optional(),
   })
   .strict();

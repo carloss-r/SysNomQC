@@ -93,7 +93,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
       // Olvida lo vencido y lo ya resuelto, para que un problema que regrese avise de inmediato.
       // Si una fuente no se pudo revisar, sus alertas siguen contando como vigentes.
-      const complete = result.sources.employees !== "unavailable" && result.sources.inventory !== "unavailable";
+      const complete = Object.values(result.sources).every((status) => status !== "unavailable");
       const present = new Set(result.items.map((item) => item.id));
       setSnoozes((previous) =>
         Object.fromEntries(
@@ -104,8 +104,30 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       // Aviso emergente una sola vez por sesión del navegador; respeta lo que ya se descartó.
       const saved = readSnoozes(storageKey);
       const pending = result.items.filter((item) => (saved[item.id] ?? 0) <= checkedAt);
-      const out = pending.filter((item) => item.kind === "out_of_stock").length;
-      const low = pending.filter((item) => item.kind === "low_stock").length;
+
+      // Encargado de compras: aviso especial cada vez que llega una solicitud que no había visto.
+      const purchases = pending.filter((item) => item.kind === "purchase_request");
+      if (result.sources.purchases === "ok") {
+        const seenKey = `sysnomqc.notifications.seen-purchases.${userId}`;
+        let seen: string[] = [];
+        try {
+          seen = JSON.parse(window.localStorage.getItem(seenKey) ?? "[]") as string[];
+        } catch {
+          seen = [];
+        }
+        const fresh = purchases.filter((item) => !seen.includes(item.id));
+        if (fresh.length === 1) notify("info", "Nueva solicitud de compra de EPP", `${fresh[0]?.title}. ${fresh[0]?.detail}`);
+        else if (fresh.length > 1) notify("info", "Nuevas solicitudes de compra de EPP", `Tienes ${fresh.length} solicitudes nuevas por atender. Revisa la campana.`);
+        try {
+          window.localStorage.setItem(seenKey, JSON.stringify(result.items.filter((item) => item.kind === "purchase_request").map((item) => item.id)));
+        } catch {
+          // Sin almacenamiento: puede repetirse el aviso al recargar.
+        }
+      }
+
+      const urgentStock = pending.filter((item) => item.severity !== "minor");
+      const out = urgentStock.filter((item) => item.kind === "out_of_stock").length;
+      const low = urgentStock.filter((item) => item.kind === "low_stock").length;
       if (out + low > 0) {
         let alreadyShown = false;
         try {
@@ -125,7 +147,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [notify, storageKey]);
+  }, [notify, storageKey, userId]);
 
   useEffect(() => {
     const first = window.setTimeout(() => void refresh(), 0);

@@ -1,31 +1,48 @@
 "use client";
 
-import { ClipboardCheck, PackagePlus, Pencil, Search, X } from "lucide-react";
+import { ClipboardCheck, PackagePlus, Pencil, Search, ShoppingCart, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { EppArticle } from "@/lib/permissions";
 import { formatDateTime } from "./format";
 
-export function stockState(article: EppArticle): "out" | "low" | "ok" {
+export type StockState = "out" | "low" | "ok" | "none";
+
+export function stockState(article: EppArticle): StockState {
+  if (!article.tracked) return "none";
   if (article.stock === 0) return "out";
   return article.stock <= article.min_stock ? "low" : "ok";
 }
 
-const STATE_LABELS = { out: "Agotado", low: "Por reponer", ok: "Disponible" } as const;
+/** Artículos que se pueden pedir: agotados o bajo el mínimo, activos y sin una solicitud abierta. */
+export function needsRequest(article: EppArticle, openRequests: Map<number, number>) {
+  const state = stockState(article);
+  return article.active && (state === "out" || state === "low") && !openRequests.has(article.id);
+}
+
+const STATE_LABELS: Record<StockState, string> = { out: "Agotado", low: "Por reponer", ok: "Disponible", none: "Sin registro" };
 
 export function InventoryTab({
+  site,
   articles,
+  openRequests,
   canDeliver,
   canManage,
+  canRequest,
   onDeliver,
   onEntry,
   onEdit,
+  onRequest,
 }: {
+  site: string;
   articles: EppArticle[];
+  openRequests: Map<number, number>;
   canDeliver: boolean;
   canManage: boolean;
+  canRequest: boolean;
   onDeliver: (articleId: number) => void;
   onEntry: (articleId: number) => void;
   onEdit: (article: EppArticle) => void;
+  onRequest: (articleIds: number[]) => void;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
@@ -36,10 +53,12 @@ export function InventoryTab({
     const term = query.trim().toLowerCase();
     return articles.filter((item) => {
       if (category && item.category !== category) return false;
-      if (onlyLow && stockState(item) === "ok") return false;
+      const state = stockState(item);
+      if (onlyLow && state !== "out" && state !== "low") return false;
       return !term || `${item.name} ${item.size ?? ""} ${item.category}`.toLowerCase().includes(term);
     });
   }, [articles, query, category, onlyLow]);
+  const missing = useMemo(() => articles.filter((item) => needsRequest(item, openRequests)), [articles, openRequests]);
 
   return (
     <>
@@ -54,24 +73,36 @@ export function InventoryTab({
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar artículo o talla" />
           {query && <button type="button" onClick={() => setQuery("")} aria-label="Limpiar búsqueda"><X size={14} /></button>}
         </label>
+        {canRequest && missing.length > 0 && (
+          <button type="button" className="button button-gold epp-request-all" onClick={() => onRequest(missing.map((item) => item.id))}>
+            <ShoppingCart size={15} /> Pedir faltantes ({missing.length})
+          </button>
+        )}
       </div>
       <div className="table-scroll">
         <table className="employee-table">
           <thead>
-            <tr><th>Artículo</th><th className="hide-phone">Categoría</th><th>Existencia</th><th className="hide-phone">Mínimo</th><th className="hide-tablet">Última actualización</th><th><span className="sr-only">Acciones</span></th></tr>
+            <tr><th>Artículo</th><th className="hide-phone">Categoría</th><th>Existencia en {site}</th><th className="hide-phone">Mínimo</th><th className="hide-tablet">Última actualización</th><th><span className="sr-only">Acciones</span></th></tr>
           </thead>
           <tbody>
             {rows.map((item) => {
               const state = stockState(item);
+              const folio = openRequests.get(item.id);
               return (
                 <tr key={item.id} className={item.active ? "" : "epp-inactive"}>
                   <td><strong>{item.name}</strong>{!item.active && <small className="epp-muted"> · desactivado</small>}</td>
                   <td className="hide-phone">{item.category}</td>
-                  <td><span className="epp-stock">{item.stock}</span> <span className={`epp-state epp-state-${state}`}>{STATE_LABELS[state]}</span></td>
-                  <td className="hide-phone">{item.min_stock}</td>
-                  <td className="hide-tablet">{item.updated_by_name ?? "—"}<br /><small className="epp-muted">{formatDateTime(item.updated_at)}</small></td>
+                  <td>
+                    <span className="epp-stock">{item.stock}</span> <span className={`epp-state epp-state-${state}`}>{STATE_LABELS[state]}</span>
+                    {folio && <span className="epp-requested" title="Ya se pidió a compras">Pedido · folio {folio}</span>}
+                  </td>
+                  <td className="hide-phone">{item.tracked ? item.min_stock : "—"}</td>
+                  <td className="hide-tablet">{item.tracked ? <>{item.updated_by_name ?? "—"}<br /><small className="epp-muted">{formatDateTime(item.updated_at)}</small></> : <span className="epp-muted">Aún sin movimientos en {site}</span>}</td>
                   <td>
                     <div className="epp-actions">
+                      {canRequest && needsRequest(item, openRequests) && (
+                        <button className="button button-gold" onClick={() => onRequest([item.id])} aria-label={`Pedir más ${item.name}`} title="Pedir más a compras"><ShoppingCart size={14} /> <span className="hide-phone">Pedir más</span></button>
+                      )}
                       {canDeliver && item.active && item.stock > 0 && (
                         <button className="button button-outline" onClick={() => onDeliver(item.id)} aria-label={`Entregar ${item.name}`} title="Entregar"><ClipboardCheck size={14} /> <span className="hide-phone">Entregar</span></button>
                       )}
