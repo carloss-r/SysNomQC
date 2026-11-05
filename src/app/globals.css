@@ -668,3 +668,25 @@ td.row-actions > * { vertical-align: middle; }
 /* Botones de fila sin partirse; en teléfono la sede no necesita el ícono */
 .epp-actions .button { white-space: nowrap; }
 @media (max-width: 700px) { .epp-site-bar > svg { display: none; } .epp-site-bar { margin-top: 12px; } }
+
+/* Roles: varios por cuenta y nombres legibles */
+.role-chip { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.role-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.role-pill { display: inline-flex; padding: 3px 8px; border: 1px solid var(--green-line); border-radius: 999px; color: var(--green-text); background: var(--green-bg); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.role-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin: 16px 0 4px; padding: 0; border: 0; }
+.role-picker legend { margin-bottom: 8px; padding: 0; color: var(--ink-soft); font-size: 12px; font-weight: 700; }
+.role-picker legend small { display: block; margin-top: 2px; color: var(--muted); font-weight: 500; }
+.role-option { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface); cursor: pointer; }
+.role-option:hover { background: var(--surface-2); }
+.role-option.checked { border-color: var(--brand-text); background: var(--green-bg); }
+.role-option input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--green-800); }
+.role-option strong { display: block; color: var(--ink); font-size: 13px; }
+.role-option small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.35; }
+
+/* Solicitudes por sede y quién las hizo */
+.site-count { display: inline-grid; min-width: 18px; height: 18px; margin-left: 6px; place-items: center; padding: 0 5px; border-radius: 999px; color: #fff; background: #7b4fa8; font-size: 10px; font-weight: 800; }
+.epp-scope { color: var(--muted); font-size: 13px; }
+.epp-scope strong { color: var(--ink); }
+.epp-requester { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-soft); font-size: 12px; }
+.epp-requester strong { color: var(--ink); }
+.epp-request-who { margin: 0 0 10px; }

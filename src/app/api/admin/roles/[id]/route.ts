@@ -4,6 +4,7 @@ import { z } from "zod";
 import { BadJsonError, readJson } from "../../../employees/_server";
 import { adminDbError, badRequest, requireAdmin } from "../../_admin";
 import { roleSchema } from "../../_schemas";
+import { readUserRoleIds } from "../../_user-roles";
 
 type RouteContext = { params: Promise<{ id: string }> };
 const idSchema = z.coerce.number().int().positive();
@@ -61,12 +62,10 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   if (!role) return NextResponse.json({ error: "No se encontró el rol." }, { status: 404 });
   if (role.es_sistema) return badRequest("El rol SuperAdmin no se puede eliminar.");
 
-  const { count, error: countError } = await auth.admin
-    .from("authorized_users")
-    .select("user_id", { count: "exact", head: true })
-    .eq("role_id", id.data);
+  const { error: countError, map } = await readUserRoleIds(auth.admin);
   if (countError) return adminDbError(countError);
-  if ((count ?? 0) > 0) return badRequest("Reasigna primero a los usuarios que tienen este rol.");
+  const inUse = Array.from(map.values()).filter((roleIds) => roleIds.includes(id.data)).length;
+  if (inUse > 0) return badRequest(`Quita primero este rol a las ${inUse} cuenta(s) que lo tienen.`);
 
   const { error } = await auth.admin.from("roles").delete().eq("id_rol", id.data);
   if (error) return adminDbError(error);

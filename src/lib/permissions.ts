@@ -20,7 +20,10 @@ export type Access = {
   user_id: string;
   email: string;
   full_name: string | null;
+  /** Rol principal (nombre técnico; en pantalla usa roleLabel). */
   role_name: string;
+  /** Todos los roles de la cuenta; los permisos son la suma de todos. */
+  role_names: string[];
   is_super_admin: boolean;
   permissions: Permission[];
   /** Sede asignada. null = todas las sedes (también SuperAdmin). */
@@ -41,8 +44,9 @@ export type AdminUser = {
   email: string;
   full_name: string | null;
   active: boolean;
-  role_id: number | null;
-  role_name: string | null;
+  /** El primero es el rol principal. */
+  role_ids: number[];
+  role_names: string[];
   site: string | null;
   created_at: string | null;
 };

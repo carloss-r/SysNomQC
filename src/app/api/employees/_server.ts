@@ -87,16 +87,28 @@ export async function getAuthenticatedClient(
     }
 
     const row = authorizedUser as unknown as { full_name: string | null; site?: string | null; role: RoleRow | null };
-    const role = row.role;
-    const isSuperAdmin = role?.es_sistema === true;
+
+    // Roles adicionales (migración 202611080001). Si la tabla aún no existe, queda solo el rol principal.
+    const extra = await client.from("authorized_user_roles").select("role:roles(nombre,permisos,es_sistema)").eq("user_id", userData.user.id);
+    if (extra.error && !["42P01", "PGRST205"].includes(extra.error.code ?? "")) {
+      console.error("No se pudieron leer los roles adicionales:", extra.error);
+    }
+    const roles: RoleRow[] = [];
+    for (const candidate of [row.role, ...((extra.data ?? []) as unknown as { role: RoleRow | RoleRow[] | null }[]).map((item) => (Array.isArray(item.role) ? item.role[0] : item.role))]) {
+      if (candidate && !roles.some((known) => known.nombre === candidate.nombre)) roles.push(candidate);
+    }
+
+    // Los permisos son la suma de los de todos los roles.
+    const isSuperAdmin = roles.some((item) => item.es_sistema === true);
     const permissions = isSuperAdmin
       ? ALL_PERMISSIONS
-      : ALL_PERMISSIONS.filter((item) => role?.permisos?.includes(item));
+      : ALL_PERMISSIONS.filter((item) => roles.some((roleItem) => roleItem.permisos?.includes(item)));
     const access: Access = {
       user_id: userData.user.id,
       email: userData.user.email ?? "",
       full_name: row.full_name ?? null,
-      role_name: role?.nombre ?? "Sin rol",
+      role_name: roles[0]?.nombre ?? "Sin rol",
+      role_names: roles.map((item) => item.nombre),
       is_super_admin: isSuperAdmin,
       permissions,
       site: isSuperAdmin ? null : (row.site ?? null),

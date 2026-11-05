@@ -138,7 +138,13 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
     }
     return map;
   }, [requests, site]);
-  const openCount = requests.filter((row) => (row.status === "pendiente" || row.status === "en_compra") && (buyer || row.site === site)).length;
+  // Solicitudes abiertas por sede: la pestaña cuenta solo la sede elegida y cada sede muestra las suyas.
+  const openBySite = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const row of requests) if (row.status === "pendiente" || row.status === "en_compra") counts[row.site] = (counts[row.site] ?? 0) + 1;
+    return counts;
+  }, [requests]);
+  const openCount = openBySite[site] ?? 0;
 
   const stats = useMemo(() => {
     const active = articles.filter((item) => item.active);
@@ -221,6 +227,9 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
               {SITES.map((item) => (
                 <button key={item} type="button" aria-pressed={site === item} className={`site-tab${site === item ? " active" : ""}`} onClick={() => changeSite(item)}>
                   {item}
+                  {canSeeRequests && (openBySite[item] ?? 0) > 0 && (
+                    <span className="site-count" title={`${openBySite[item]} solicitud(es) de compra abiertas`}>{openBySite[item]}</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -256,12 +265,12 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
         </div>
         {tab === "requests" ? (
           <RequestsTab
-            requests={buyer ? requests : requests.filter((row) => row.site === site)}
+            site={site}
+            requests={requests}
             loading={requestsLoading}
             buyer={buyer}
             canManage={canManage}
             canRequest={canRequest}
-            showSiteFilter={buyer && !fixedSite}
             busyId={busyRequest}
             onStatus={(request, status) => void changeStatus(request, status)}
             onReceive={receive}

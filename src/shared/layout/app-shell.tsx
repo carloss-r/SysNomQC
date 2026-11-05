@@ -10,6 +10,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { NotificationsBell } from "@/features/notifications/notifications-bell";
 import { NotificationsProvider } from "@/features/notifications/notifications-provider";
 import { ThemeToggle } from "@/shared/ui/theme-toggle";
+import { roleLabels } from "@/lib/roles";
 import { Sidebar } from "./sidebar";
 
 function Splash({ message }: { message: string }) {
@@ -90,7 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="signed-user" title={session?.user.email ?? ""}>
               <CircleUserRound size={18} />
               <span>{access?.full_name || session?.user.email}</span>
-              {access && <small className="role-chip">{access.role_name}</small>}
+              {access && <small className="role-chip" title={roleLabels(access.role_names)}>{roleLabels(access.role_names)}</small>}
             </span>
             <NotificationsBell />
             <ThemeToggle />

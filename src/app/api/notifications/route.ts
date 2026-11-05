@@ -113,7 +113,8 @@ export async function GET(request: NextRequest) {
   const readPurchases = async (): Promise<SourceResult> => {
     if (!has("epp.purchase") || access.is_super_admin) return { status: "no_permission", items: [] };
     try {
-      const { error, requests } = await readPurchaseRequests(client, { open: true, limit: 500 });
+      // Con sede asignada, solo las solicitudes de esa sede.
+      const { error, requests } = await readPurchaseRequests(client, { open: true, limit: 500, site: access.site });
       if (error) throw error;
       return { status: "ok", items: purchaseNotifications(requests.filter((row) => row.status === "pendiente")) };
     } catch (error) {

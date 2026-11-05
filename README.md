@@ -9,6 +9,7 @@ Aplicación con Next.js y React para administrar el directorio de empleados usan
    2. `202611040002_roles_y_usuarios.sql` (roles, permisos y usuarios administrables)
    3. `202611050001_seguridad.sql` (políticas por permiso, bitácora de auditoría y cierre de tablas sin RLS)
    4. `202611060001_epp.sql`, `202611060002_epp_historial.sql` y `202611070001_epp_por_sede.sql` (módulo de EPP, ver abajo)
+   5. `202611080001_varios_roles.sql` (una cuenta puede tener varios roles; sus permisos se suman)
 2. En **Authentication > Users**, crea las cuentas autorizadas. El sistema no ofrece registro público.
 3. Por cada cuenta, copia su UUID y correo desde Auth y autorízala ejecutando en SQL Editor:
 
@@ -88,6 +89,7 @@ Ejecuta `202611070001_epp_por_sede.sql` después de las dos anteriores (es segur
 - **Pedir más:** en el inventario, lo agotado o bajo el mínimo muestra **Pedir más**, y **Pedir faltantes** junta todo en una solicitud con cantidad sugerida (hasta el doble del mínimo). Un artículo con una solicitud abierta no se puede volver a pedir hasta que se cierre.
 - **Encargado de compras:** el rol `EncargadoCompras` (lo crea la migración) es el único que recibe el aviso especial de solicitudes nuevas (campana morada y aviso emergente). Desde **EPP → Solicitudes** las marca *En compra*, *Recibida* o *Cancelada* y descarga el **PDF** (una solicitud o todas las abiertas, con resumen por artículo para hacer una sola compra).
 - **Llegada del material:** quien administra el inventario de la sede usa **Registrar llegada** en la solicitud: abre el ingreso con los artículos ya capturados y, al guardarlo, la solicitud queda *Recibida*.
+- Una cuenta de compras **con sede asignada** solo recibe y ve las solicitudes de su sede; con *Todas las sedes* ve todas, y cada sede muestra en su pestaña cuántas tiene abiertas. La lista de solicitudes siempre corresponde a la sede elegida arriba.
 - La migración da a `AlmacenistaEPP` los permisos de inventario (`epp.view`, `epp.deliver`, `epp.manage`, `epp.request`). Recuerda asignarle su **sede** a cada cuenta de almacén.
 
 ## Arquitectura
@@ -170,3 +172,9 @@ Despliega como aplicación Next.js (por ejemplo, en Vercel) y configura las dos 
 La API de Next.js exige una sesión de Supabase válida en cada operación de empleados y aplica además las políticas RLS de Postgres. Las fotos son opcionales, se almacenan en un bucket privado y se sirven mediante enlaces firmados.
 
 > Los expedientes incluyen información personal. Todo usuario autorizado tiene acceso completo a todas las sedes y operaciones; para un despliegue con roles o restricciones por sede, adapta las políticas antes de otorgar acceso.
+
+## Roles
+
+- **Varios roles por cuenta:** en *Usuarios y roles* → editar usuario se marcan uno o varios roles; la cuenta tiene los permisos de todos (el primero marcado queda como rol principal en `authorized_users.role_id`). Requiere `202611080001_varios_roles.sql`; sin ella solo se puede guardar un rol.
+- **Nombres en pantalla:** la base guarda nombres técnicos (`EncargadoCompras`) y la app los muestra legibles (*Encargado de compras*) con `src/lib/roles.ts`. Para cambiar cómo se ve un rol, agrégalo ahí; no lo renombres en la base, porque las migraciones lo buscan por ese nombre.
+- **Pantalla de inicio:** si una cuenta abre una pantalla para la que no tiene permiso (por ejemplo, compras en Empleados), la app la lleva a la primera pantalla del menú que sí puede usar.

@@ -13,12 +13,19 @@ export const roleSchema = z
   })
   .strict();
 
+/** Uno o varios roles; el primero queda como rol principal. */
+export const roleIdsSchema = z
+  .array(z.number().int().positive())
+  .min(1)
+  .max(10)
+  .transform((ids) => Array.from(new Set(ids)));
+
 export const userCreateSchema = z
   .object({
     email: z.email().max(150),
     full_name: z.string().trim().min(1).max(150),
     password: z.string().min(12).max(72),
-    role_id: z.number().int().positive(),
+    role_ids: roleIdsSchema,
     active: z.boolean(),
     site: userSiteSchema.optional(),
   })

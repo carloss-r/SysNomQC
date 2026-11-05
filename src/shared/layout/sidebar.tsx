@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/features/auth/auth-provider";
 import { useNotifications } from "@/features/notifications/notifications-provider";
 import { NAVIGATION } from "@/shared/config/navigation";
+import { roleLabels } from "@/lib/roles";
 import { ThemeToggle } from "@/shared/ui/theme-toggle";
 
 // Menú lateral desplegable: permanece cerrado y se abre con el botón de tres rayas.
@@ -76,7 +77,7 @@ export function Sidebar({ open, onClose, onSignOut }: { open: boolean; onClose: 
             <CircleUserRound size={18} />
             <span>
               {access?.full_name || session?.user.email}
-              {access && <small>{access.role_name}</small>}
+              {access && <small>{roleLabels(access.role_names)}</small>}
             </span>
           </p>
           <ThemeToggle variant="menu" tabIndex={tabIndex} />

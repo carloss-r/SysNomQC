@@ -6,7 +6,7 @@ import { BadJsonError, getAuthenticatedClient, readJson } from "../../employees/
 import { eppDatabaseError, purchaseRequestSchema, resolveSite } from "../_shared";
 import { readPurchaseRequests } from "./_read";
 
-// Compras ve las de todas las sedes (o filtra con ?site=); una sede solo ve las suyas.
+// Una cuenta con sede asignada (aunque sea de compras) solo ve las de su sede; sin sede, todas (o ?site=).
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedClient(request);
   if ("response" in auth) return auth.response;
@@ -15,9 +15,8 @@ export async function GET(request: NextRequest) {
   if (!canSee) return NextResponse.json({ error: "Tu rol no tiene permiso para ver las solicitudes." }, { status: 403 });
 
   const requested = request.nextUrl.searchParams.get("site");
-  const buyer = access.permissions.includes("epp.purchase");
   let site: string | null = null;
-  if (access.site && !access.is_super_admin && !buyer) site = access.site;
+  if (access.site && !access.is_super_admin) site = access.site;
   else if (requested && (SITES as readonly string[]).includes(requested)) site = requested;
 
   try {

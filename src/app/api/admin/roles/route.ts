@@ -4,6 +4,7 @@ import type { AdminRole, Permission } from "@/lib/permissions";
 import { BadJsonError, readJson } from "../../employees/_server";
 import { adminDbError, badRequest, requireAdmin } from "../_admin";
 import { roleSchema } from "../_schemas";
+import { readUserRoleIds } from "../_user-roles";
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -11,14 +12,15 @@ export async function GET(request: NextRequest) {
 
   const [roles, users] = await Promise.all([
     auth.admin.from("roles").select("id_rol,nombre,descripcion,permisos,es_sistema").order("nombre"),
-    auth.admin.from("authorized_users").select("role_id"),
+    readUserRoleIds(auth.admin),
   ]);
   if (roles.error) return adminDbError(roles.error);
   if (users.error) return adminDbError(users.error);
 
+  // Una cuenta con varios roles cuenta en cada uno.
   const counts = new Map<number, number>();
-  for (const row of users.data ?? []) {
-    if (row.role_id) counts.set(row.role_id as number, (counts.get(row.role_id as number) ?? 0) + 1);
+  for (const roleIds of users.map.values()) {
+    for (const roleId of roleIds) counts.set(roleId, (counts.get(roleId) ?? 0) + 1);
   }
 
   const result: AdminRole[] = (roles.data ?? []).map((role) => ({

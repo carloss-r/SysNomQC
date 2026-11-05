@@ -1,8 +1,7 @@
 "use client";
 
-import { Ban, ChevronDown, FileDown, PackageCheck, ShoppingCart, Truck } from "lucide-react";
+import { Ban, ChevronDown, FileDown, PackageCheck, ShoppingCart, Truck, UserRound } from "lucide-react";
 import { useMemo, useState } from "react";
-import { SITES } from "@/lib/employees";
 import type { EppPurchaseRequest, PurchaseStatus } from "@/lib/permissions";
 import { SiteBadge } from "@/shared/ui/badges";
 import { formatDateTime } from "./format";
@@ -20,24 +19,25 @@ const FILTERS: { key: "open" | "all" | PurchaseStatus; label: string }[] = [
 const isOpen = (status: PurchaseStatus) => status === "pendiente" || status === "en_compra";
 
 export function RequestsTab({
+  site,
   requests,
   loading,
   buyer,
   canManage,
   canRequest,
-  showSiteFilter,
   busyId,
   onStatus,
   onReceive,
   onPdf,
   onNew,
 }: {
+  /** Sede elegida arriba: solo se listan sus solicitudes. */
+  site: string;
   requests: EppPurchaseRequest[];
   loading: boolean;
   buyer: boolean;
   canManage: boolean;
   canRequest: boolean;
-  showSiteFilter: boolean;
   busyId: number | null;
   onStatus: (request: EppPurchaseRequest, status: "en_compra" | "recibida" | "cancelada") => void;
   onReceive: (request: EppPurchaseRequest) => void;
@@ -45,12 +45,11 @@ export function RequestsTab({
   onNew?: () => void;
 }) {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("open");
-  const [site, setSite] = useState("");
 
   const rows = useMemo(
     () =>
       requests.filter((row) => {
-        if (site && row.site !== site) return false;
+        if (row.site !== site) return false;
         if (filter === "all") return true;
         if (filter === "open") return isOpen(row.status);
         return row.status === filter;
@@ -58,6 +57,8 @@ export function RequestsTab({
     [requests, filter, site],
   );
   const openRows = rows.filter((row) => isOpen(row.status));
+  const countFor = (key: (typeof FILTERS)[number]["key"]) =>
+    requests.filter((row) => row.site === site && (key === "all" || (key === "open" ? isOpen(row.status) : row.status === key))).length;
 
   return (
     <>
@@ -65,21 +66,16 @@ export function RequestsTab({
         <div className="site-tabs" role="group" aria-label="Estado de la solicitud">
           {FILTERS.map((item) => (
             <button key={item.key} type="button" aria-pressed={filter === item.key} className={`site-tab${filter === item.key ? " active" : ""}`} onClick={() => setFilter(item.key)}>
-              {item.label}
+              {item.label} ({countFor(item.key)})
             </button>
           ))}
         </div>
-        {showSiteFilter && (
-          <select className="epp-select" value={site} onChange={(e) => setSite(e.target.value)} aria-label="Filtrar por sede">
-            <option value="">Todas las sedes</option>
-            {SITES.map((item) => <option key={item}>{item}</option>)}
-          </select>
-        )}
+        <span className="epp-scope">Solicitudes de <strong>{site}</strong></span>
         <div className="epp-push epp-toolbar-actions">
           {canRequest && onNew && <button type="button" className="button button-outline" onClick={onNew}><ShoppingCart size={15} /> Pedir material</button>}
           {openRows.length > 0 && (
             <button type="button" className="button button-gold" onClick={() => onPdf(openRows)}>
-              <FileDown size={15} /> PDF de {openRows.length === 1 ? "la abierta" : `las ${openRows.length} abiertas`}
+              <FileDown size={15} /> PDF de {openRows.length === 1 ? "la abierta" : `las ${openRows.length} abiertas`} de {site}
             </button>
           )}
         </div>
@@ -87,7 +83,7 @@ export function RequestsTab({
 
       {loading && <p className="epp-empty">Cargando solicitudes…</p>}
       {!loading && rows.length === 0 && (
-        <p className="epp-empty">{filter === "open" ? "No hay solicitudes abiertas. Cuando falte material, pídelo desde el inventario." : "No hay solicitudes con ese filtro."}</p>
+        <p className="epp-empty">{filter === "open" ? `No hay solicitudes abiertas en ${site}. Cuando falte material, pídelo desde el inventario.` : `No hay solicitudes de ${site} con ese filtro.`}</p>
       )}
 
       <ul className="epp-requests">
@@ -101,13 +97,15 @@ export function RequestsTab({
                   <span className="epp-request-folio">Folio {row.id}</span>
                   <SiteBadge site={row.site} />
                   <span className={`epp-status epp-status-${row.status}`}>{PURCHASE_STATUS_LABELS[row.status]}</span>
+                  <span className="epp-requester" title="Quién hizo la solicitud"><UserRound size={14} /> Solicitó: <strong>{row.requested_by_name ?? "Sin nombre"}</strong></span>
                   <span className="epp-request-meta">
-                    {row.items.length} artículo(s) · {pieces} pza · {row.requested_by_name ?? "Sin nombre"} · {formatDateTime(row.created_at)}
+                    {row.items.length} artículo(s) · {pieces} pza · {formatDateTime(row.created_at)}
                   </span>
                   <ChevronDown size={16} className="epp-request-chevron" />
                 </summary>
 
                 <div className="epp-request-body">
+                  <p className="epp-request-note epp-request-who">Solicitada por <strong>{row.requested_by_name ?? "Sin nombre"}</strong> para <strong>{row.site}</strong> · {formatDateTime(row.created_at)}</p>
                   <div className="table-scroll">
                     <table className="employee-table">
                       <thead><tr><th>Artículo</th><th>Cantidad</th><th className="hide-phone">Había al pedir</th><th className="hide-phone">Mínimo</th></tr></thead>

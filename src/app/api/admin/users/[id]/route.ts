@@ -1,17 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { recordAudit } from "@/lib/audit";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { BadJsonError, readJson } from "../../../employees/_server";
-import { userSiteSchema } from "../../_schemas";
+import { roleIdsSchema, userSiteSchema } from "../../_schemas";
 import { adminDbError, badRequest, requireAdmin } from "../../_admin";
+import { MIGRATION_MISSING, otherActiveSuperAdmins, readUserRoleIds, saveUserRoles, superAdminRoleIds } from "../../_user-roles";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 const userPatchSchema = z
   .object({
     full_name: z.string().trim().min(1).max(150),
-    role_id: z.number().int().positive(),
+    role_ids: roleIdsSchema,
     active: z.boolean(),
     password: z.string().min(12).max(72),
     site: userSiteSchema,
@@ -19,21 +19,6 @@ const userPatchSchema = z
   .partial()
   .refine((value) => Object.keys(value).length > 0, "Debes enviar al menos un campo.")
   .strict();
-
-async function superAdminRoleIds(admin: SupabaseClient): Promise<number[]> {
-  const { data } = await admin.from("roles").select("id_rol").eq("es_sistema", true);
-  return (data ?? []).map((row) => row.id_rol as number);
-}
-
-async function otherActiveSuperAdmins(admin: SupabaseClient, roleIds: number[], excludeUserId: string) {
-  const { count } = await admin
-    .from("authorized_users")
-    .select("user_id", { count: "exact", head: true })
-    .in("role_id", roleIds)
-    .eq("active", true)
-    .neq("user_id", excludeUserId);
-  return count ?? 0;
-}
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const auth = await requireAdmin(request);
@@ -44,12 +29,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   try {
     const input = userPatchSchema.safeParse(await readJson(request));
-    if (!input.success) return badRequest("Revisa los campos enviados (contraseña mínimo 12 caracteres).");
-    const { password, ...fields } = input.data;
+    if (!input.success) return badRequest("Revisa los campos enviados (al menos un rol; contraseña mínimo 12 caracteres).");
+    const { password, role_ids, ...fields } = input.data;
 
     const { data: target, error: readError } = await auth.admin
       .from("authorized_users")
-      .select("user_id,role_id,active")
+      .select("user_id,active")
       .eq("user_id", id)
       .maybeSingle();
     if (readError) return adminDbError(readError);
@@ -59,11 +44,15 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return badRequest("No puedes desactivar tu propia cuenta.");
     }
 
+    // Nunca debe quedarse el sistema sin un super administrador activo.
     const superIds = await superAdminRoleIds(auth.admin);
-    const wasSuper = superIds.includes(target.role_id as number) && target.active;
-    const nextRole = (fields.role_id ?? target.role_id) as number;
+    const current = await readUserRoleIds(auth.admin, [id]);
+    if (current.error) return adminDbError(current.error);
+    const currentRoles = current.map.get(id) ?? [];
+    const wasSuper = currentRoles.some((roleId) => superIds.includes(roleId)) && target.active;
+    const nextRoles = role_ids ?? currentRoles;
     const nextActive = fields.active ?? target.active;
-    if (wasSuper && (!superIds.includes(nextRole) || !nextActive)) {
+    if (wasSuper && (!nextRoles.some((roleId) => superIds.includes(roleId)) || !nextActive)) {
       if ((await otherActiveSuperAdmins(auth.admin, superIds, id)) === 0) {
         return badRequest("Debe quedar al menos un super administrador activo.");
       }
@@ -73,11 +62,19 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       const { error } = await auth.admin.from("authorized_users").update(fields).eq("user_id", id);
       if (error) return adminDbError(error);
     }
+    if (role_ids) {
+      const error = await saveUserRoles(auth.admin, id, role_ids);
+      if (error && error.code === MIGRATION_MISSING.code) return badRequest(error.message);
+      if (error) return adminDbError(error);
+    }
     if (password) {
       const { error } = await auth.admin.auth.admin.updateUserById(id, { password });
       if (error) return adminDbError({ message: error.message });
     }
-    await recordAudit(request, auth.access, "user.update", id, { fields: Object.keys(fields), password_changed: Boolean(password) });
+    await recordAudit(request, auth.access, "user.update", id, {
+      fields: [...Object.keys(fields), ...(role_ids ? ["role_ids"] : [])],
+      password_changed: Boolean(password),
+    });
     return NextResponse.json({ user_id: id });
   } catch (error) {
     if (error instanceof BadJsonError) return badRequest(error.message);
@@ -95,14 +92,16 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
   const { data: target, error: readError } = await auth.admin
     .from("authorized_users")
-    .select("role_id,active")
+    .select("active")
     .eq("user_id", id)
     .maybeSingle();
   if (readError) return adminDbError(readError);
   if (!target) return NextResponse.json({ error: "No se encontró el usuario." }, { status: 404 });
 
   const superIds = await superAdminRoleIds(auth.admin);
-  if (superIds.includes(target.role_id as number) && target.active) {
+  const current = await readUserRoleIds(auth.admin, [id]);
+  if (current.error) return adminDbError(current.error);
+  if ((current.map.get(id) ?? []).some((roleId) => superIds.includes(roleId)) && target.active) {
     if ((await otherActiveSuperAdmins(auth.admin, superIds, id)) === 0) {
       return badRequest("Debe quedar al menos un super administrador activo.");
     }
