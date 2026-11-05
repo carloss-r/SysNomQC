@@ -27,10 +27,10 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await query;
     if (error) return eppDatabaseError(error, "movimientos");
-    const rows = (data ?? []).map((row) => {
-      const { article: joined, ...rest } = row as typeof row & { article: { name: string } | { name: string }[] | null };
-      const name = Array.isArray(joined) ? joined[0]?.name : joined?.name;
-      return { ...rest, article_name: name ?? "Artículo eliminado" };
+    const rows = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((row) => {
+      const { article: joined, ...rest } = row;
+      const found = (Array.isArray(joined) ? joined[0] : joined) as { name?: string } | null | undefined;
+      return { ...rest, article_name: found?.name ?? "Artículo eliminado" };
     });
     return NextResponse.json(rows);
   } catch (error) {
