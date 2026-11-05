@@ -4,7 +4,10 @@ Aplicación con Next.js y React para administrar el directorio de empleados usan
 
 ## Preparación de Supabase
 
-1. En el proyecto de Supabase, abre **SQL Editor** y ejecuta `supabase/migrations/202611030001_create_employee_directory.sql`.
+1. En el proyecto de Supabase, abre **SQL Editor** y ejecuta, **en este orden**, las migraciones de `supabase/migrations/`:
+   1. `202611030001_create_employee_directory.sql` (empleados, `authorized_users`, bucket de fotos)
+   2. `202611040002_roles_y_usuarios.sql` (roles, permisos y usuarios administrables)
+   3. `202611050001_seguridad.sql` (políticas por permiso, bitácora de auditoría y cierre de tablas sin RLS)
 2. En **Authentication > Users**, crea las cuentas autorizadas. El sistema no ofrece registro público.
 3. Por cada cuenta, copia su UUID y correo desde Auth y autorízala ejecutando en SQL Editor:
 
@@ -46,6 +49,55 @@ Para evitar spam y costos: el mismo error se envía una vez cada 10 minutos, hay
 - Guardar o eliminar actualiza la lista en memoria, sin volver a descargarla.
 - Cambiar de pestaña o renovarse el token de sesión no recarga el directorio.
 - Las fotos se piden solo al abrir un expediente o editarlo.
+
+## Arquitectura
+
+```
+src/
+  app/                      Rutas (solo enrutamiento; cada pantalla es una carpeta)
+    layout.tsx              Raíz: notificaciones + sesión
+    (app)/layout.tsx        Marco con menú lateral (exige sesión)
+    (app)/page.tsx          Dashboard de empleados  ->  /
+    (app)/admin/            Usuarios y roles        ->  /admin
+    api/                    API del servidor (valida sesión, permisos y datos)
+  features/                 Una carpeta por módulo, con su propia lógica y componentes
+    auth/  employees/  admin/
+  shared/                   Piezas reutilizables: ui/, layout/ (marco, menú), config/navigation.ts
+  lib/                      Utilidades sin interfaz (Supabase, API, permisos, seguridad, fotos)
+```
+
+**Aislamiento:** cada pantalla tiene su propio `error.tsx`. Si una falla, solo se reemplaza su contenido por un aviso con "Reintentar"; el menú y las demás pantallas siguen funcionando (y la incidencia se reporta por correo).
+
+**Agregar una pantalla nueva**
+1. Crea `src/app/(app)/<ruta>/page.tsx` y `error.tsx` (copia el de `admin/`).
+2. Pon su lógica en `src/features/<modulo>/` y envuélvela en `<RequirePermission permission="...">`.
+3. Agrega una entrada en `src/shared/config/navigation.ts`; el menú la muestra solo a quien tenga el permiso.
+4. Si necesita un permiso nuevo, agrégalo en `src/lib/permissions.ts`; aparece solo en el editor de roles.
+5. Su API va en `src/app/api/<modulo>/` usando `getAuthenticatedClient(request, "<permiso>")`.
+
+## Seguridad
+
+**Qué ya incluye el código**
+- Cabeceras HTTP en `next.config.ts`: CSP (solo este dominio y Supabase), HSTS, anti-iframe, `nosniff`, política de referrer y de permisos, sin indexación, y sin caché en `/api`.
+- Cada petición a la API verifica la sesión con Supabase, el permiso del rol, el origen (cambios solo desde esta app) y un límite por IP; los cuerpos están limitados a 100 KB y validados con Zod.
+- **Permisos por rol aplicados también en la base de datos** (`has_app_permission` en las políticas RLS de `employees` y de las fotos): una cuenta no puede saltarse la API llamando directo a Supabase.
+- RLS activado y cerrado para `anon` en todas las tablas de `public`; `audit_log` y la administración de cuentas solo con la llave de servidor.
+- Bitácora `audit_log`: altas, cambios y bajas de empleados, consulta de expedientes completos, y cambios de usuarios y roles (guarda identificadores y nombres de campos, nunca datos personales).
+- Cierre de sesión tras 30 minutos de inactividad, bloqueo de 1 minuto tras 5 contraseñas incorrectas, contraseñas nuevas de mínimo 12 caracteres.
+- Fotos en bucket privado con enlaces firmados de 1 hora; al comprimirlas se eliminan los metadatos EXIF.
+- Protecciones de administración: no puedes borrar ni desactivar tu cuenta, y siempre queda un SuperAdmin activo.
+
+**Qué debes configurar tú en Supabase (Authentication)**
+1. Deshabilitar el registro público (**Sign In / Providers → Allow new users to sign up: off**).
+2. Activar **Prevent use of leaked passwords** y subir la longitud mínima de contraseña a 12.
+3. Activar **MFA (TOTP)** y, cuando quieras, exigirlo a los SuperAdmin.
+4. En **URL Configuration**, dejar solo las URLs reales de producción (y localhost para desarrollo).
+5. Activar **CAPTCHA** (Turnstile/hCaptcha) en el inicio de sesión si hay intentos de fuerza bruta.
+6. Reducir la duración del JWT (p. ej. 1 hora) y revisar los límites de **Rate Limits**.
+7. Activar **backups diarios / PITR** en el plan del proyecto y restringir quién tiene acceso al panel.
+8. En Vercel: `SUPABASE_SERVICE_ROLE_KEY` solo en entornos de servidor, y habilitar el Firewall / protección contra bots.
+
+**Límites conocidos:** el límite de peticiones es en memoria por instancia (para uno global usa el Firewall de Vercel o Upstash) y el CSP permite scripts en línea porque Next.js los usa (se puede endurecer con nonces).
 
 ## Local vs. nube
 

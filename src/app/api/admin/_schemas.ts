@@ -13,7 +13,7 @@ export const userCreateSchema = z
   .object({
     email: z.email().max(150),
     full_name: z.string().trim().min(1).max(150),
-    password: z.string().min(8).max(72),
+    password: z.string().min(12).max(72),
     role_id: z.number().int().positive(),
     active: z.boolean(),
   })

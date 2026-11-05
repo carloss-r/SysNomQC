@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { recordAudit } from "@/lib/audit";
 import type { AdminRole, Permission } from "@/lib/permissions";
 import { BadJsonError, readJson } from "../../employees/_server";
 import { adminDbError, badRequest, requireAdmin } from "../_admin";
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
       .select("id_rol")
       .single();
     if (error) return adminDbError(error);
+    await recordAudit(request, auth.access, "role.create", data.id_rol, { name: input.data.name, permissions: input.data.permissions });
     return NextResponse.json({ id: data.id_rol }, { status: 201 });
   } catch (error) {
     if (error instanceof BadJsonError) return badRequest(error.message);

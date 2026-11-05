@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { recordAudit } from "@/lib/audit";
 import { reportServerIncident } from "@/lib/incidents";
 import type { AdminUser } from "@/lib/permissions";
 import { BadJsonError, readJson } from "../../employees/_server";
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
   try {
     const input = userCreateSchema.safeParse(await readJson(request));
     if (!input.success) {
-      return badRequest("Revisa nombre, correo, rol y contraseña (mínimo 8 caracteres).");
+      return badRequest("Revisa nombre, correo, rol y contraseña (mínimo 12 caracteres).");
     }
     const { email, full_name, password, role_id, active } = input.data;
 
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
       await auth.admin.auth.admin.deleteUser(created.user.id);
       return adminDbError(error);
     }
+    await recordAudit(request, auth.access, "user.create", created.user.id, { email, role_id });
     return NextResponse.json({ user_id: created.user.id }, { status: 201 });
   } catch (error) {
     if (error instanceof BadJsonError) return badRequest(error.message);

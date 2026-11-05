@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { recordAudit } from "@/lib/audit";
 import { z } from "zod";
 import { reportServerIncident } from "@/lib/incidents";
 import { BadJsonError, databaseErrorResponse, getAuthenticatedClient, readJson } from "../_server";
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const { data, error } = await auth.client.from("employees").select("*").eq("id", id).maybeSingle();
     if (error) return databaseErrorResponse(error);
     if (!data) return NextResponse.json({ error: "No se encontró el empleado." }, { status: 404 });
+    await recordAudit(request, auth.access, "employee.view", id, { code: data.employee_code });
     return NextResponse.json(data);
   } catch (error) {
     console.error("Error inesperado al consultar empleado:", error);
@@ -54,6 +56,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       .single();
 
     if (error) return databaseErrorResponse(error);
+    await recordAudit(request, auth.access, "employee.update", id, { fields: Object.keys(input.data) });
     return NextResponse.json(data);
   } catch (error) {
     console.error("Error inesperado al actualizar empleado:", error);
@@ -77,6 +80,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { error } = await auth.client.from("employees").delete().eq("id", id);
     if (error) return databaseErrorResponse(error);
+    await recordAudit(request, auth.access, "employee.delete", id);
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     console.error("Error inesperado al eliminar empleado:", error);

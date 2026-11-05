@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { recordAudit } from "@/lib/audit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { BadJsonError, readJson } from "../../../employees/_server";
@@ -11,7 +12,7 @@ const userPatchSchema = z
     full_name: z.string().trim().min(1).max(150),
     role_id: z.number().int().positive(),
     active: z.boolean(),
-    password: z.string().min(8).max(72),
+    password: z.string().min(12).max(72),
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, "Debes enviar al menos un campo.")
@@ -41,7 +42,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   try {
     const input = userPatchSchema.safeParse(await readJson(request));
-    if (!input.success) return badRequest("Revisa los campos enviados (contraseña mínimo 8 caracteres).");
+    if (!input.success) return badRequest("Revisa los campos enviados (contraseña mínimo 12 caracteres).");
     const { password, ...fields } = input.data;
 
     const { data: target, error: readError } = await auth.admin
@@ -74,6 +75,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       const { error } = await auth.admin.auth.admin.updateUserById(id, { password });
       if (error) return adminDbError({ message: error.message });
     }
+    await recordAudit(request, auth.access, "user.update", id, { fields: Object.keys(fields), password_changed: Boolean(password) });
     return NextResponse.json({ user_id: id });
   } catch (error) {
     if (error instanceof BadJsonError) return badRequest(error.message);
@@ -108,5 +110,6 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   if (error) return adminDbError(error);
   const { error: authError } = await auth.admin.auth.admin.deleteUser(id);
   if (authError) return adminDbError({ message: authError.message });
+  await recordAudit(request, auth.access, "user.delete", id);
   return new NextResponse(null, { status: 204 });
 }

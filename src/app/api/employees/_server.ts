@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAuthenticatedSupabaseClient } from "@/lib/database";
 import { reportServerIncident } from "@/lib/incidents";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { ALL_PERMISSIONS, type Access, type Permission } from "@/lib/permissions";
 
 type AuthenticatedClientResult =
@@ -10,11 +11,37 @@ type AuthenticatedClientResult =
 
 type RoleRow = { nombre: string; permisos: string[] | null; es_sistema: boolean | null };
 
+const API_LIMIT_PER_MINUTE = 240;
+const MAX_BODY_BYTES = 100_000;
+
+/** Las peticiones que modifican datos solo se aceptan desde esta misma aplicación. */
+function isSameOrigin(request: NextRequest): boolean {
+  if (request.method === "GET" || request.method === "HEAD") return true;
+  const origin = request.headers.get("origin");
+  if (!origin) return true; // clientes no-navegador: se protegen con el token Bearer
+  try {
+    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
 /** Valida la sesión y, si se indica, que el rol de la cuenta tenga ese permiso. */
 export async function getAuthenticatedClient(
   request: NextRequest,
   permission?: Permission,
 ): Promise<AuthenticatedClientResult> {
+  // Límite de peticiones por IP (antes de tocar Supabase) y verificación de origen en cambios.
+  if (!rateLimit(`api:${clientIp(request.headers)}`, API_LIMIT_PER_MINUTE, 60_000)) {
+    return {
+      response: NextResponse.json({ error: "Demasiadas solicitudes. Espera un momento." }, { status: 429 }),
+    };
+  }
+  if (!isSameOrigin(request)) {
+    return { response: NextResponse.json({ error: "Origen no permitido." }, { status: 403 }) };
+  }
+
   const token = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
 
   if (!token) {
@@ -97,8 +124,11 @@ export class BadJsonError extends Error {}
 
 export async function readJson(request: NextRequest): Promise<unknown> {
   try {
-    return await request.json();
-  } catch {
+    const raw = await request.text();
+    if (raw.length > MAX_BODY_BYTES) throw new BadJsonError("La solicitud es demasiado grande.");
+    return JSON.parse(raw);
+  } catch (error) {
+    if (error instanceof BadJsonError) throw error;
     throw new BadJsonError("El cuerpo de la solicitud no contiene JSON válido.");
   }
 }

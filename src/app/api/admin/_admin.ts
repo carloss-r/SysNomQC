@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { reportServerIncident } from "@/lib/incidents";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import type { Access } from "@/lib/permissions";
 import { getAuthenticatedClient } from "../employees/_server";
 
@@ -12,6 +13,13 @@ type AdminResult =
 export async function requireAdmin(request: NextRequest): Promise<AdminResult> {
   const auth = await getAuthenticatedClient(request, "users.manage");
   if ("response" in auth) return auth;
+
+  // Las acciones de administración tienen un límite más estricto que el resto de la API.
+  if (!rateLimit(`admin:${clientIp(request.headers)}`, 60, 60_000)) {
+    return {
+      response: NextResponse.json({ error: "Demasiadas solicitudes. Espera un momento." }, { status: 429 }),
+    };
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

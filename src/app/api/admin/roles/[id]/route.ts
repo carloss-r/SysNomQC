@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { recordAudit } from "@/lib/audit";
 import { z } from "zod";
 import { BadJsonError, readJson } from "../../../employees/_server";
 import { adminDbError, badRequest, requireAdmin } from "../../_admin";
@@ -36,6 +37,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       })
       .eq("id_rol", id.data);
     if (error) return adminDbError(error);
+    await recordAudit(request, auth.access, "role.update", id.data, { name: input.data.name, permissions: input.data.permissions });
     return NextResponse.json({ id: id.data });
   } catch (error) {
     if (error instanceof BadJsonError) return badRequest(error.message);
@@ -68,5 +70,6 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
   const { error } = await auth.admin.from("roles").delete().eq("id_rol", id.data);
   if (error) return adminDbError(error);
+  await recordAudit(request, auth.access, "role.delete", id.data);
   return new NextResponse(null, { status: 204 });
 }
