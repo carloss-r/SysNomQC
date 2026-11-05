@@ -42,7 +42,8 @@ function EmployeesDashboard() {
   const [pageError, setPageError] = useState("");
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [filterSite, setFilterSite] = useState("Todas");
-  const [search, setSearch] = useState("");
+  // Los avisos enlazan aquí con ?buscar=<ID>. Esta pantalla solo se monta en el navegador, ya con sesión.
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get("buscar") ?? "");
   const [formState, setFormState] = useState<FormState>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const sessionRef = useRef(session);

@@ -33,6 +33,21 @@ Las fotos se guardan en el bucket privado `employee-photos` (la migración lo cr
 
 En el expediente de cada empleado, **Descargar expediente** abre la impresión con una hoja A4 con todos sus datos y su foto, con el logotipo como único membrete. Desde ahí se imprime o se guarda como PDF.
 
+## Notificaciones
+
+La pantalla `/notificaciones` y la campana de la barra superior muestran avisos calculados con los datos reales, sin una tabla propia: al corregir el problema, el aviso desaparece solo.
+
+| Gravedad | Aviso | Condición |
+| --- | --- | --- |
+| Grave | Sin existencias | `inventario_epp.existencia_total` en cero |
+| Importante | Stock bajo | Existencia igual o menor que `stock_minimo` |
+| Importante | Expediente incompleto | Empleado activo sin NSS, CURP, RFC, cuenta bancaria o salario |
+| Menor importancia | Datos de contacto | Empleado activo sin correo o teléfono |
+
+- **Descartar** oculta un aviso 24 horas (`SNOOZE_MS`). Si el problema sigue, vuelve a mostrarse; si se agrava de stock bajo a sin existencias, avisa de inmediato. Lo descartado se guarda en el navegador de cada cuenta, no se comparte entre equipos.
+- Los avisos de expedientes requieren `employees.view`. Los de inventario requieren `inventory.view` y `SUPABASE_SERVICE_ROLE_KEY`; ejecuta `202611050002_permiso_inventario.sql` para dárselo a `AlmacenistaEPP`.
+- Para agregar un aviso nuevo: añade su tipo y regla en `src/lib/notifications.ts` y léelo en `src/app/api/notifications/route.ts`.
+
 ## Aviso de incidencias por correo
 
 Cuando ocurre un error en el servidor (base de datos, API) o en el navegador (red caída, error de JavaScript), el sistema envía un correo a `crlos.trabajo.dev@gmail.com`.

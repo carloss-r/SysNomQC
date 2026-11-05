@@ -7,7 +7,9 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { LoginScreen } from "@/features/auth/login-screen";
 import { useAuth } from "@/features/auth/auth-provider";
-import { EppAlertsBell } from "@/features/epp/epp-alerts-bell";
+import { NotificationsBell } from "@/features/notifications/notifications-bell";
+import { NotificationsProvider } from "@/features/notifications/notifications-provider";
+import { ThemeToggle } from "@/shared/ui/theme-toggle";
 import { Sidebar } from "./sidebar";
 
 function Splash({ message }: { message: string }) {
@@ -60,6 +62,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
+    <NotificationsProvider key={session?.user.id}>
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-inner">
@@ -89,7 +92,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span>{access?.full_name || session?.user.email}</span>
               {access && <small className="role-chip">{access.role_name}</small>}
             </span>
-            <EppAlertsBell />
+            <NotificationsBell />
+            <ThemeToggle />
             <button className="icon-button logout-button" onClick={() => void handleSignOut()} disabled={signingOut} aria-label="Cerrar sesión" title="Cerrar sesión">
               <LogOut size={18} />
             </button>
@@ -106,5 +110,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         <span>© 2026 Cooperativa Quinta Generación S.C. de R.L. de C.V.</span>
       </footer>
     </div>
+    </NotificationsProvider>
   );
 }
