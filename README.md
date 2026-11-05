@@ -50,6 +50,16 @@ Para evitar spam y costos: el mismo error se envía una vez cada 10 minutos, hay
 - Cambiar de pestaña o renovarse el token de sesión no recarga el directorio.
 - Las fotos se piden solo al abrir un expediente o editarlo.
 
+## Módulo de EPP
+
+Pantalla `/epp` (menú **Seguridad e higiene → EPP**). Ejecuta en Supabase `supabase/migrations/202611060001_epp.sql` (después de la de seguridad): crea el catálogo con existencias, el historial de movimientos y carga los artículos de los Excel de `Archivos/`.
+
+- **Entregar EPP**: busca al trabajador, agrega uno o varios artículos y confirma; descuenta existencia y guarda quién entregó y cuándo.
+- **Ingreso de material** y **Ajuste** (conteo físico, con motivo obligatorio); **Nuevo artículo** y edición del catálogo.
+- **Historial**: todos los movimientos con fecha, trabajador, quién los registró y notas.
+- Permisos (se asignan en *Usuarios y roles*): `epp.view`, `epp.deliver`, `epp.manage`.
+- La existencia solo cambia mediante la función `epp_apply()` (transacción atómica, valida permisos y existencia); los movimientos no se pueden editar ni borrar.
+
 ## Arquitectura
 
 ```
