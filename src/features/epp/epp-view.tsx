@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ClipboardCheck, History, HardHat, Package, PackagePlus, Plus, Scale, Boxes } from "lucide-react";
+import { AlertTriangle, Boxes, CalendarDays, ClipboardCheck, HardHat, History, Package, PackagePlus, Plus, Scale, UserSearch } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EppArticle, EppEmployee, EppMovement } from "@/lib/permissions";
 import { describeError, requestApi } from "@/lib/api-client";
@@ -12,10 +12,12 @@ import { ArticleModal } from "./article-modal";
 import { EPP_CHANGED_EVENT } from "./epp-alerts-bell";
 import { HistoryTab } from "./history-tab";
 import { InventoryTab, stockState } from "./inventory-tab";
+import { MonthlyTab } from "./monthly-tab";
 import { MovementModal, type MovementKind } from "./movement-modal";
+import { WorkersTab } from "./workers-tab";
 
 type Dialog =
-  | { type: "movement"; kind: MovementKind; articleId?: number }
+  | { type: "movement"; kind: MovementKind; articleId?: number; employee?: EppEmployee | null }
   | { type: "article"; article: EppArticle | null }
   | null;
 
@@ -33,7 +35,10 @@ function EppScreen() {
   const [articles, setArticles] = useState<EppArticle[]>([]);
   const [movements, setMovements] = useState<EppMovement[]>([]);
   const [employees, setEmployees] = useState<EppEmployee[]>([]);
-  const [tab, setTab] = useState<"inventory" | "history">("inventory");
+  const [tab, setTab] = useState<"inventory" | "workers" | "monthly" | "history">("inventory");
+  const [workerKey, setWorkerKey] = useState<string | null>(null);
+  const [workerMonth, setWorkerMonth] = useState("");
+  const [reportMonth, setReportMonth] = useState("");
   const [dialog, setDialog] = useState<Dialog>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -50,7 +55,7 @@ function EppScreen() {
     try {
       const [items, moves] = await Promise.all([
         requestApi<EppArticle[]>(active, "/api/epp/articles"),
-        requestApi<EppMovement[]>(active, "/api/epp/movements?limit=500"),
+        requestApi<EppMovement[]>(active, "/api/epp/ledger"),
       ]);
       setArticles(items);
       setMovements(moves);
@@ -127,6 +132,12 @@ function EppScreen() {
             <button role="tab" aria-selected={tab === "inventory"} className={`site-tab${tab === "inventory" ? " active" : ""}`} onClick={() => setTab("inventory")}>
               <Boxes size={14} /> Inventario ({articles.length})
             </button>
+            <button role="tab" aria-selected={tab === "workers"} className={`site-tab${tab === "workers" ? " active" : ""}`} onClick={() => setTab("workers")}>
+              <UserSearch size={14} /> Por trabajador
+            </button>
+            <button role="tab" aria-selected={tab === "monthly"} className={`site-tab${tab === "monthly" ? " active" : ""}`} onClick={() => setTab("monthly")}>
+              <CalendarDays size={14} /> Control mensual
+            </button>
             <button role="tab" aria-selected={tab === "history"} className={`site-tab${tab === "history" ? " active" : ""}`} onClick={() => setTab("history")}>
               <History size={14} /> Historial ({movements.length})
             </button>
@@ -143,6 +154,24 @@ function EppScreen() {
             onEntry={(articleId) => setDialog({ type: "movement", kind: "ingreso", articleId })}
             onEdit={(article) => setDialog({ type: "article", article })}
           />
+        ) : tab === "workers" ? (
+          <WorkersTab
+            movements={movements}
+            employees={employees}
+            canDeliver={canDeliver}
+            selectedKey={workerKey}
+            month={workerMonth}
+            onSelect={(key) => { setWorkerKey(key); setWorkerMonth(""); }}
+            onMonth={setWorkerMonth}
+            onDeliver={(employee) => setDialog({ type: "movement", kind: "entrega", employee })}
+          />
+        ) : tab === "monthly" ? (
+          <MonthlyTab
+            movements={movements}
+            month={reportMonth}
+            onMonth={setReportMonth}
+            onOpenWorker={(key, month) => { setWorkerKey(key); setWorkerMonth(month); setTab("workers"); }}
+          />
         ) : (
           <HistoryTab movements={movements} />
         )}
@@ -155,6 +184,7 @@ function EppScreen() {
           employees={employees}
           movements={movements}
           presetArticleId={dialog.articleId}
+          presetEmployee={dialog.employee}
           onClose={() => setDialog(null)}
           onDone={load}
         />

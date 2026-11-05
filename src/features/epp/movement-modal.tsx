@@ -9,6 +9,7 @@ import { Field } from "@/shared/ui/field";
 import { SiteBadge } from "@/shared/ui/badges";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { formatDay, todayLocal } from "./format";
+import { normalize } from "./people";
 
 export type MovementKind = "entrega" | "ingreso" | "ajuste";
 type Line = { key: number; article_id: string; quantity: string };
@@ -35,9 +36,6 @@ const COPY = {
 } as const;
 
 const MAX_RESULTS = 5;
-/** Minúsculas y sin acentos, para que "jose" encuentre "José". */
-const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
-
 let lineCounter = 0;
 const newLine = (articleId = ""): Line => ({ key: ++lineCounter, article_id: articleId, quantity: "1" });
 
@@ -47,6 +45,7 @@ export function MovementModal({
   employees,
   movements,
   presetArticleId,
+  presetEmployee,
   onClose,
   onDone,
 }: {
@@ -55,6 +54,7 @@ export function MovementModal({
   employees: EppEmployee[];
   movements: EppMovement[];
   presetArticleId?: number;
+  presetEmployee?: EppEmployee | null;
   onClose: () => void;
   onDone: () => Promise<void>;
 }) {
@@ -63,7 +63,7 @@ export function MovementModal({
   const copy = COPY[kind];
   const Icon = copy.icon;
   const [lines, setLines] = useState<Line[]>([newLine(presetArticleId ? String(presetArticleId) : "")]);
-  const [employee, setEmployee] = useState<EppEmployee | null>(null);
+  const [employee, setEmployee] = useState<EppEmployee | null>(presetEmployee ?? null);
   const [query, setQuery] = useState("");
   const [date, setDate] = useState(todayLocal());
   const [notes, setNotes] = useState("");
@@ -118,7 +118,7 @@ export function MovementModal({
 
   function lastDelivery(articleId: number) {
     if (!employee) return null;
-    return movements.find((m) => m.kind === "entrega" && m.employee_id === employee.id && m.article_id === articleId) ?? null;
+    return movements.find((m) => m.kind === "entrega" && m.article_id === articleId && (m.employee_id === employee.id || (m.employee_name ? normalize(m.employee_name) === normalize(employee.full_name) : false))) ?? null;
   }
 
   function updateLine(key: number, patch: Partial<Line>) {

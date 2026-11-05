@@ -426,3 +426,30 @@ h1, h2, h3, p { margin-top: 0; }
 .bell-link { display: block; padding: 11px 14px; color: var(--green-800); font-size: 11px; font-weight: 700; text-align: center; }
 .epp-results button.active { background: #e6f3e9; }
 .epp-more { padding: 8px 12px; color: #879188; font-size: 10px; text-align: center; background: #fafcfb; }
+
+/* ---- EPP: por trabajador y control mensual ---- */
+.epp-workers { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 380px; }
+.epp-workers-search { padding: 14px; border-right: 1px solid var(--line); background: #fafcfb; }
+.epp-workers-search .epp-muted { margin: 10px 0 4px; }
+.epp-people { margin: 0; }
+.epp-worker-detail { min-width: 0; padding: 16px 18px; }
+.epp-worker-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.epp-worker-head h2 { margin: 0; color: var(--green-900); font-size: 17px; }
+.epp-worker-head p { margin: 3px 0 0; color: #647168; font-size: 11px; }
+.epp-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 14px 0 4px; }
+.epp-filters .epp-check { gap: 8px; }
+.epp-sub { margin: 18px 0 8px; color: var(--green-900); font-size: 11px; font-weight: 800; letter-spacing: .035em; text-transform: uppercase; }
+.epp-grid { border-collapse: collapse; font-size: 10px; }
+.epp-grid th, .epp-grid td { min-width: 24px; padding: 5px 4px; border: 1px solid #e9edea; text-align: center; }
+.epp-grid thead th { color: #748077; background: #fbfcfb; }
+.epp-grid tbody th { min-width: 150px; padding: 5px 8px; color: #28372d; background: #fbfcfb; text-align: left; white-space: nowrap; }
+.epp-grid td.has { color: #fff; background: #2f8f4e; font-weight: 800; }
+.epp-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 4px 18px 18px; }
+.epp-monthly .directory-toolbar .epp-check { gap: 8px; }
+.epp-push { margin-left: auto; }
+.epp-link { padding: 0; border: 0; color: var(--green-800); background: none; font-size: 11px; font-weight: 700; text-align: left; text-decoration: underline; cursor: pointer; }
+@media (max-width: 900px) {
+  .epp-workers { grid-template-columns: 1fr; }
+  .epp-workers-search { border-right: 0; border-bottom: 1px solid var(--line); }
+  .epp-two { grid-template-columns: 1fr; }
+}

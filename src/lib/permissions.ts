@@ -61,15 +61,18 @@ export type EppMovement = {
   article_name: string;
   kind: "ingreso" | "entrega" | "ajuste";
   delta: number;
-  stock_after: number;
+  stock_after: number | null;
   employee_id: string | null;
   employee_name: string | null;
   employee_code: string | null;
+  employee_group: string | null;
+  employee_position: string | null;
   site: string | null;
   moved_on: string;
   notes: string | null;
   created_at: string;
   created_by_name: string | null;
+  historical: boolean;
 };
 
 export type EppEmployee = { id: string; employee_code: string; full_name: string; site: string; position: string };

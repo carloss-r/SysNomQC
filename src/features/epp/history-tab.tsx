@@ -6,6 +6,8 @@ import type { EppMovement } from "@/lib/permissions";
 import { SiteBadge } from "@/shared/ui/badges";
 import { formatDateTime, formatDay, KIND_LABELS } from "./format";
 
+const MAX_ROWS = 300;
+
 const FILTERS = [
   { key: "all", label: "Todo" },
   { key: "entrega", label: "Entregas" },
@@ -52,11 +54,11 @@ export function HistoryTab({ movements }: { movements: EppMovement[] }) {
             <tr><th>Fecha</th><th>Movimiento</th><th>Artículo</th><th>Cantidad</th><th>Trabajador</th><th>Registró</th><th>Notas</th></tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {rows.slice(0, MAX_ROWS).map((row) => (
               <tr key={row.id}>
                 <td>{formatDay(row.moved_on)}</td>
                 <td><span className={`epp-kind epp-kind-${row.kind}`}>{KIND_LABELS[row.kind]}</span></td>
-                <td><strong>{row.article_name}</strong><br /><small className="epp-muted">Quedó en {row.stock_after}</small></td>
+                <td><strong>{row.article_name}</strong><br />{row.stock_after !== null && <small className="epp-muted">Quedó en {row.stock_after}</small>}</td>
                 <td className={row.delta < 0 ? "epp-out" : "epp-in"}>{row.delta > 0 ? `+${row.delta}` : row.delta}</td>
                 <td>
                   {row.employee_name ? (
@@ -66,7 +68,7 @@ export function HistoryTab({ movements }: { movements: EppMovement[] }) {
                     </>
                   ) : "—"}
                 </td>
-                <td>{row.created_by_name ?? "—"}<br /><small className="epp-muted">{formatDateTime(row.created_at)}</small></td>
+                <td>{row.historical ? <span className="epp-muted">Importación Excel</span> : <>{row.created_by_name ?? "—"}<br /><small className="epp-muted">{formatDateTime(row.created_at)}</small></>}</td>
                 <td>{row.notes ?? "—"}</td>
               </tr>
             ))}
@@ -74,6 +76,7 @@ export function HistoryTab({ movements }: { movements: EppMovement[] }) {
           </tbody>
         </table>
       </div>
+      {rows.length > MAX_ROWS && <p className="epp-more">Mostrando {MAX_ROWS} de {rows.length}. Usa la búsqueda o el Control mensual para acotar.</p>}
     </>
   );
 }
