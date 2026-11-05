@@ -86,10 +86,10 @@ export function MonthlyTab({
           <h3 className="epp-sub">Por artículo</h3>
           <div className="table-scroll">
             <table className="employee-table">
-              <thead><tr><th>Material</th><th>Entregas</th><th>Ingresos</th><th>Ajustes</th></tr></thead>
+              <thead><tr><th>Material</th><th>Entregas</th><th className="hide-phone">Ingresos</th><th className="hide-phone">Ajustes</th></tr></thead>
               <tbody>
                 {byArticle.map((item) => (
-                  <tr key={item.name}><td><strong>{item.name}</strong></td><td className="epp-out">{item.out ? `−${item.out}` : "—"}</td><td className="epp-in">{item.in ? `+${item.in}` : "—"}</td><td>{item.adjust ? (item.adjust > 0 ? `+${item.adjust}` : item.adjust) : "—"}</td></tr>
+                  <tr key={item.name}><td><strong>{item.name}</strong></td><td className="epp-out">{item.out ? `−${item.out}` : "—"}</td><td className="epp-in hide-phone">{item.in ? `+${item.in}` : "—"}</td><td className="hide-phone">{item.adjust ? (item.adjust > 0 ? `+${item.adjust}` : item.adjust) : "—"}</td></tr>
                 ))}
                 {byArticle.length === 0 && <tr><td colSpan={4} className="epp-empty">Sin movimientos en este mes.</td></tr>}
               </tbody>
@@ -100,13 +100,13 @@ export function MonthlyTab({
           <h3 className="epp-sub">Por trabajador</h3>
           <div className="table-scroll">
             <table className="employee-table">
-              <thead><tr><th>Trabajador</th><th>Piezas</th><th>Qué recibió</th></tr></thead>
+              <thead><tr><th>Trabajador</th><th>Piezas</th><th className="hide-phone">Qué recibió</th></tr></thead>
               <tbody>
                 {byWorker.map((item) => (
                   <tr key={item.key}>
                     <td><button className="epp-link" onClick={() => onOpenWorker(item.key, current)}>{item.name}</button><br /><small className="epp-muted">{item.group ?? ""}</small></td>
                     <td>{item.pieces}</td>
-                    <td className="epp-muted">{Array.from(item.items, ([name, qty]) => `${name} (${qty})`).join(", ")}</td>
+                    <td className="epp-muted hide-phone">{Array.from(item.items, ([name, qty]) => `${name} (${qty})`).join(", ")}</td>
                   </tr>
                 ))}
                 {byWorker.length === 0 && <tr><td colSpan={3} className="epp-empty">Sin entregas en este mes.</td></tr>}

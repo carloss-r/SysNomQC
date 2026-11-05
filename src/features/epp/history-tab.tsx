@@ -51,16 +51,16 @@ export function HistoryTab({ movements }: { movements: EppMovement[] }) {
       <div className="table-scroll">
         <table className="employee-table">
           <thead>
-            <tr><th>Fecha</th><th>Movimiento</th><th>Artículo</th><th>Cantidad</th><th>Trabajador</th><th>Registró</th><th>Notas</th></tr>
+            <tr><th>Fecha</th><th className="hide-phone">Movimiento</th><th>Artículo</th><th>Cantidad</th><th className="hide-phone">Trabajador</th><th className="hide-tablet">Registró</th><th className="hide-tablet">Notas</th></tr>
           </thead>
           <tbody>
             {rows.slice(0, MAX_ROWS).map((row) => (
               <tr key={row.id}>
                 <td>{formatDay(row.moved_on)}</td>
-                <td><span className={`epp-kind epp-kind-${row.kind}`}>{KIND_LABELS[row.kind]}</span></td>
-                <td><strong>{row.article_name}</strong><br />{row.stock_after !== null && <small className="epp-muted">Quedó en {row.stock_after}</small>}</td>
+                <td className="hide-phone"><span className={`epp-kind epp-kind-${row.kind}`}>{KIND_LABELS[row.kind]}</span></td>
+                <td><strong>{row.article_name}</strong><br />{row.stock_after !== null && <small className="epp-muted hide-phone">Quedó en {row.stock_after}</small>}<small className="epp-muted show-phone">{row.employee_name ?? KIND_LABELS[row.kind]}</small></td>
                 <td className={row.delta < 0 ? "epp-out" : "epp-in"}>{row.delta > 0 ? `+${row.delta}` : row.delta}</td>
-                <td>
+                <td className="hide-phone">
                   {row.employee_name ? (
                     <>
                       <strong>{row.employee_name}</strong><br />
@@ -68,8 +68,8 @@ export function HistoryTab({ movements }: { movements: EppMovement[] }) {
                     </>
                   ) : "—"}
                 </td>
-                <td>{row.historical ? <span className="epp-muted">Importación Excel</span> : <>{row.created_by_name ?? "—"}<br /><small className="epp-muted">{formatDateTime(row.created_at)}</small></>}</td>
-                <td>{row.notes ?? "—"}</td>
+                <td className="hide-tablet">{row.historical ? <span className="epp-muted">Importación Excel</span> : <>{row.created_by_name ?? "—"}<br /><small className="epp-muted">{formatDateTime(row.created_at)}</small></>}</td>
+                <td className="hide-tablet">{row.notes ?? "—"}</td>
               </tr>
             ))}
             {rows.length === 0 && <tr><td colSpan={7} className="epp-empty">No hay movimientos con ese filtro.</td></tr>}

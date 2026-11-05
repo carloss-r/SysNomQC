@@ -35,7 +35,7 @@ En el expediente de cada empleado, **Descargar expediente** abre la impresión c
 
 ## Notificaciones
 
-La pantalla `/notificaciones` y la campana de la barra superior muestran avisos calculados con los datos reales, sin una tabla propia: al corregir el problema, el aviso desaparece solo.
+La campana de la barra superior abre un panel pequeño con lo más urgente, y **Ver todas** lleva a la pantalla completa `/notificaciones` (también en la parte de abajo del menú lateral). Los avisos se calculan con los datos reales, sin una tabla propia: al corregir el problema, el aviso desaparece solo.
 
 | Gravedad | Aviso | Condición |
 | --- | --- | --- |
@@ -93,6 +93,8 @@ src/
   shared/                   Piezas reutilizables: ui/, layout/ (marco, menú), config/navigation.ts
   lib/                      Utilidades sin interfaz (Supabase, API, permisos, seguridad, fotos)
 ```
+
+**Pantallas de cualquier tamaño:** computadora muestra todo; hasta 1060 px se ocultan las columnas secundarias y hasta 700 px queda lo indispensable. Se controla con las clases `hide-tablet`, `hide-phone`, `show-tablet` y `show-phone` en `globals.css`; en una tabla nueva, ponlas en el `th` y en su `td`.
 
 **Aislamiento:** cada pantalla tiene su propio `error.tsx`. Si una falla, solo se reemplaza su contenido por un aviso con "Reintentar"; el menú y las demás pantallas siguen funcionando (y la incidencia se reporta por correo).
 

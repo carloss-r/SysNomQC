@@ -91,7 +91,7 @@ export function NotificationsView() {
           </button>
         }
       >
-        <div className="stats-grid">
+        <div className="stats-grid hide-phone">
           <StatCard label="Graves" count={countBy(active, (item) => item.severity, "critical")} tone="red" icon={<CircleAlert size={18} />} />
           <StatCard label="Importantes" count={countBy(active, (item) => item.severity, "important")} tone="gold" icon={<TriangleAlert size={18} />} />
           <StatCard label="Menor importancia" count={countBy(active, (item) => item.severity, "minor")} tone="blue" icon={<Info size={18} />} />

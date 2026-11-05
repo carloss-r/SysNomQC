@@ -1,15 +1,20 @@
 "use client";
 
-import { X } from "lucide-react";
+import { Bell, CircleUserRound, LogOut, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/features/auth/auth-provider";
+import { useNotifications } from "@/features/notifications/notifications-provider";
 import { NAVIGATION } from "@/shared/config/navigation";
+import { ThemeToggle } from "@/shared/ui/theme-toggle";
 
 // Menú lateral desplegable: permanece cerrado y se abre con el botón de tres rayas.
-export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function Sidebar({ open, onClose, onSignOut }: { open: boolean; onClose: () => void; onSignOut: () => void }) {
   const pathname = usePathname();
-  const { can } = useAuth();
+  const { can, access, session } = useAuth();
+  const { active } = useNotifications();
+  const urgent = active.filter((item) => item.severity !== "minor").length;
+  const tabIndex = open ? 0 : -1;
 
   const sections = NAVIGATION.map((section) => ({
     ...section,
@@ -20,7 +25,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
     <aside id="main-menu" className={`sidebar${open ? " open" : ""}`} aria-label="Menú principal" aria-hidden={!open}>
       <div className="sidebar-header">
         <span>MENÚ</span>
-        <button type="button" className="icon-button sidebar-close" onClick={onClose} aria-label="Cerrar menú" tabIndex={open ? 0 : -1}>
+        <button type="button" className="icon-button sidebar-close" onClick={onClose} aria-label="Cerrar menú" tabIndex={tabIndex}>
           <X size={20} />
         </button>
       </div>
@@ -30,7 +35,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           <div className="nav-section" key={section.title}>
             <p className="nav-section-title">{section.title}</p>
             {section.items.map((item) => {
-              const active = item.exact
+              const isActive = item.exact
                 ? pathname === item.href
                 : pathname === item.href || pathname.startsWith(`${item.href}/`);
               const Icon = item.icon;
@@ -38,9 +43,9 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`nav-link${active ? " active" : ""}`}
-                  aria-current={active ? "page" : undefined}
-                  tabIndex={open ? 0 : -1}
+                  className={`nav-link${isActive ? " active" : ""}`}
+                  aria-current={isActive ? "page" : undefined}
+                  tabIndex={tabIndex}
                   onClick={onClose}
                 >
                   <Icon size={18} />
@@ -51,6 +56,36 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           </div>
         ))}
       </nav>
+
+      <div className="sidebar-footer">
+        <Link
+          href="/notificaciones"
+          className={`nav-link${pathname === "/notificaciones" ? " active" : ""}`}
+          aria-current={pathname === "/notificaciones" ? "page" : undefined}
+          tabIndex={tabIndex}
+          onClick={onClose}
+        >
+          <Bell size={18} />
+          <span>Notificaciones</span>
+          {urgent > 0 && <span className="nav-count">{urgent > 99 ? "99+" : urgent}</span>}
+        </Link>
+
+        {/* En teléfono la barra superior solo deja lo indispensable; lo demás vive aquí. */}
+        <div className="sidebar-account show-phone">
+          <p className="sidebar-user">
+            <CircleUserRound size={18} />
+            <span>
+              {access?.full_name || session?.user.email}
+              {access && <small>{access.role_name}</small>}
+            </span>
+          </p>
+          <ThemeToggle variant="menu" tabIndex={tabIndex} />
+          <button type="button" className="nav-link nav-button" onClick={onSignOut} tabIndex={tabIndex}>
+            <LogOut size={18} />
+            <span>Cerrar sesión</span>
+          </button>
+        </div>
+      </div>
     </aside>
   );
 }

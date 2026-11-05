@@ -58,7 +58,7 @@ export function InventoryTab({
       <div className="table-scroll">
         <table className="employee-table">
           <thead>
-            <tr><th>Artículo</th><th>Categoría</th><th>Existencia</th><th>Mínimo</th><th>Última actualización</th><th><span className="sr-only">Acciones</span></th></tr>
+            <tr><th>Artículo</th><th className="hide-phone">Categoría</th><th>Existencia</th><th className="hide-phone">Mínimo</th><th className="hide-tablet">Última actualización</th><th><span className="sr-only">Acciones</span></th></tr>
           </thead>
           <tbody>
             {rows.map((item) => {
@@ -66,18 +66,18 @@ export function InventoryTab({
               return (
                 <tr key={item.id} className={item.active ? "" : "epp-inactive"}>
                   <td><strong>{item.name}</strong>{!item.active && <small className="epp-muted"> · desactivado</small>}</td>
-                  <td>{item.category}</td>
+                  <td className="hide-phone">{item.category}</td>
                   <td><span className="epp-stock">{item.stock}</span> <span className={`epp-state epp-state-${state}`}>{STATE_LABELS[state]}</span></td>
-                  <td>{item.min_stock}</td>
-                  <td>{item.updated_by_name ?? "—"}<br /><small className="epp-muted">{formatDateTime(item.updated_at)}</small></td>
+                  <td className="hide-phone">{item.min_stock}</td>
+                  <td className="hide-tablet">{item.updated_by_name ?? "—"}<br /><small className="epp-muted">{formatDateTime(item.updated_at)}</small></td>
                   <td>
                     <div className="epp-actions">
                       {canDeliver && item.active && item.stock > 0 && (
-                        <button className="button button-outline" onClick={() => onDeliver(item.id)}><ClipboardCheck size={14} /> Entregar</button>
+                        <button className="button button-outline" onClick={() => onDeliver(item.id)} aria-label={`Entregar ${item.name}`} title="Entregar"><ClipboardCheck size={14} /> <span className="hide-phone">Entregar</span></button>
                       )}
                       {canManage && (
                         <>
-                          <button className="icon-button row-edit" onClick={() => onEntry(item.id)} aria-label={`Registrar ingreso de ${item.name}`} title="Registrar ingreso"><PackagePlus size={16} /></button>
+                          <button className="icon-button row-edit hide-phone" onClick={() => onEntry(item.id)} aria-label={`Registrar ingreso de ${item.name}`} title="Registrar ingreso"><PackagePlus size={16} /></button>
                           <button className="icon-button row-edit" onClick={() => onEdit(item)} aria-label={`Editar ${item.name}`} title="Editar"><Pencil size={16} /></button>
                         </>
                       )}

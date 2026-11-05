@@ -144,10 +144,10 @@ export function WorkersTab({
             <h3 className="epp-sub">Artículos entregados</h3>
             <div className="table-scroll">
               <table className="employee-table">
-                <thead><tr><th>Artículo</th><th>Piezas</th><th>Veces</th><th>Última entrega</th></tr></thead>
+                <thead><tr><th>Artículo</th><th>Piezas</th><th className="hide-phone">Veces</th><th>Última entrega</th></tr></thead>
                 <tbody>
                   {summary.map((item) => (
-                    <tr key={item.name}><td><strong>{item.name}</strong></td><td>{item.pieces}</td><td>{item.times}</td><td>{formatDay(item.last)}</td></tr>
+                    <tr key={item.name}><td><strong>{item.name}</strong></td><td>{item.pieces}</td><td className="hide-phone">{item.times}</td><td>{formatDay(item.last)}</td></tr>
                   ))}
                   {summary.length === 0 && <tr><td colSpan={4} className="epp-empty">Sin entregas en este periodo.</td></tr>}
                 </tbody>
@@ -156,8 +156,8 @@ export function WorkersTab({
 
             {grid && summary.length > 0 && (
               <>
-                <h3 className="epp-sub">Control diario de {monthLabel(month)}</h3>
-                <div className="table-scroll">
+                <h3 className="epp-sub hide-phone">Control diario de {monthLabel(month)}</h3>
+                <div className="table-scroll hide-phone">
                   <table className="epp-grid">
                     <thead>
                       <tr><th>Material</th>{Array.from({ length: grid.days }, (_, index) => <th key={index}>{index + 1}</th>)}</tr>
@@ -181,15 +181,15 @@ export function WorkersTab({
             <h3 className="epp-sub">Detalle de entregas</h3>
             <div className="table-scroll">
               <table className="employee-table">
-                <thead><tr><th>Fecha</th><th>Artículo</th><th>Piezas</th><th>Entregó / registró</th><th>Notas</th></tr></thead>
+                <thead><tr><th>Fecha</th><th>Artículo</th><th>Piezas</th><th className="hide-phone">Entregó / registró</th><th className="hide-tablet">Notas</th></tr></thead>
                 <tbody>
                   {visible.map((row) => (
                     <tr key={row.id}>
                       <td>{formatDay(row.moved_on)}</td>
                       <td>{row.article_name}</td>
                       <td>{Math.abs(row.delta)}</td>
-                      <td>{row.historical ? <span className="epp-muted">Importado de Excel</span> : <>{row.created_by_name ?? "—"}<br /><small className="epp-muted">{formatDateTime(row.created_at)}</small></>}</td>
-                      <td>{row.notes ?? "—"}</td>
+                      <td className="hide-phone">{row.historical ? <span className="epp-muted">Importado de Excel</span> : <>{row.created_by_name ?? "—"}<br /><small className="epp-muted">{formatDateTime(row.created_at)}</small></>}</td>
+                      <td className="hide-tablet">{row.notes ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -14,7 +14,7 @@ function subscribe(listener: () => void) {
 const isDark = () => document.documentElement.dataset.theme === "dark";
 
 // El tema claro es el predeterminado; el oscuro solo se activa si la persona lo elige.
-export function ThemeToggle() {
+export function ThemeToggle({ variant = "icon", tabIndex }: { variant?: "icon" | "menu"; tabIndex?: number }) {
   const dark = useSyncExternalStore(subscribe, isDark, () => false);
 
   const toggle = useCallback(() => {
@@ -31,8 +31,17 @@ export function ThemeToggle() {
   }, []);
 
   const label = dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro";
+  if (variant === "menu") {
+    return (
+      <button type="button" className="nav-link nav-button" onClick={toggle} tabIndex={tabIndex}>
+        {dark ? <Sun size={18} /> : <Moon size={18} />}
+        <span>{dark ? "Modo claro" : "Modo oscuro"}</span>
+      </button>
+    );
+  }
+
   return (
-    <button type="button" className="icon-button topbar-icon" onClick={toggle} aria-label={label} title={label}>
+    <button type="button" className="icon-button topbar-icon hide-phone" onClick={toggle} aria-label={label} title={label}>
       {dark ? <Sun size={18} /> : <Moon size={18} />}
     </button>
   );

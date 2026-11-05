@@ -233,11 +233,11 @@ function EmployeesDashboard() {
           <table className="employee-table">
             <thead>
               <tr>
-                <th>ID empleado</th>
+                <th className="hide-phone">ID empleado</th>
                 <th>Nombre completo</th>
-                <th>Sede</th>
-                <th>Área / departamento</th>
-                <th>Tipo de contrato</th>
+                <th className="hide-phone">Sede</th>
+                <th className="hide-tablet">Área / departamento</th>
+                <th className="hide-tablet">Tipo de contrato</th>
                 <th>Estatus</th>
                 <th><span className="sr-only">Acciones</span></th>
               </tr>
@@ -245,22 +245,23 @@ function EmployeesDashboard() {
             <tbody>
               {filteredEmployees.map((employee) => (
                 <tr key={employee.id}>
-                  <td className="employee-code">{employee.employee_code}</td>
+                  <td className="employee-code hide-phone">{employee.employee_code}</td>
                   <td>
                     <button className="employee-name-button" onClick={() => void openProfile(employee)} disabled={detailLoadingId === employee.id}>
                       <Avatar name={employee.full_name} />
                       <span>
                         <strong>{employee.full_name}</strong>
-                        <small>{employee.email || "Sin correo registrado"}</small>
+                        <small className="hide-phone">{employee.email || "Sin correo registrado"}</small>
+                        <small className="show-phone">{employee.employee_code} · {employee.site}</small>
                       </span>
                     </button>
                   </td>
-                  <td><SiteBadge site={employee.site} /></td>
-                  <td className="position-cell">{employee.position}</td>
-                  <td className="contract-cell">{employee.contract_type}</td>
+                  <td className="hide-phone"><SiteBadge site={employee.site} /></td>
+                  <td className="position-cell hide-tablet">{employee.position}</td>
+                  <td className="contract-cell hide-tablet">{employee.contract_type}</td>
                   <td><StatusBadge active={employee.active} /></td>
                   <td className="row-actions">
-                    <button className="text-button" onClick={() => void openProfile(employee)} disabled={detailLoadingId === employee.id}>{detailLoadingId === employee.id ? "Abriendo…" : "Ver expediente"}</button>
+                    <button className="text-button hide-tablet" onClick={() => void openProfile(employee)} disabled={detailLoadingId === employee.id}>{detailLoadingId === employee.id ? "Abriendo…" : "Ver expediente"}</button>
                     {can("employees.edit") && <button className="icon-button row-edit" onClick={() => void openEditFromRow(employee)} disabled={detailLoadingId === employee.id} aria-label={`Editar ${employee.full_name}`} title="Editar"><Pencil size={16} /></button>}
                   </td>
                 </tr>

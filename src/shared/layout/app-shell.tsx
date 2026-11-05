@@ -94,14 +94,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
             <NotificationsBell />
             <ThemeToggle />
-            <button className="icon-button logout-button" onClick={() => void handleSignOut()} disabled={signingOut} aria-label="Cerrar sesión" title="Cerrar sesión">
+            <button className="icon-button logout-button hide-phone" onClick={() => void handleSignOut()} disabled={signingOut} aria-label="Cerrar sesión" title="Cerrar sesión">
               <LogOut size={18} />
             </button>
           </div>
         </div>
       </header>
 
-      <Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} />
+      <Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} onSignOut={() => void handleSignOut()} />
       {menuOpen && <button type="button" className="sidebar-backdrop" aria-label="Cerrar menú" tabIndex={-1} onClick={() => setMenuOpen(false)} />}
 
       {children}

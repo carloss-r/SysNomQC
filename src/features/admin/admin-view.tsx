@@ -202,15 +202,15 @@ function AdminDashboard() {
           {tab === "users" ? (
             <table className="employee-table">
               <thead>
-                <tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estatus</th><th><span className="sr-only">Acciones</span></th></tr>
+                <tr><th>Nombre</th><th className="hide-tablet">Correo</th><th className="hide-phone">Rol</th><th className="hide-phone">Estatus</th><th><span className="sr-only">Acciones</span></th></tr>
               </thead>
               <tbody>
                 {users.map((user) => (
                   <tr key={user.user_id}>
-                    <td>{user.full_name || "—"}</td>
-                    <td>{user.email}</td>
-                    <td>{user.role_name ?? "Sin rol"}</td>
-                    <td><span className={`status-badge ${user.active ? "status-active" : "status-inactive"}`}><span />{user.active ? "Activo" : "Inactivo"}</span></td>
+                    <td>{user.full_name || "—"}<small className="epp-muted show-phone">{user.role_name ?? "Sin rol"}{user.active ? "" : " · Inactivo"}</small><small className="epp-muted show-tablet">{user.email}</small></td>
+                    <td className="hide-tablet">{user.email}</td>
+                    <td className="hide-phone">{user.role_name ?? "Sin rol"}</td>
+                    <td className="hide-phone"><span className={`status-badge ${user.active ? "status-active" : "status-inactive"}`}><span />{user.active ? "Activo" : "Inactivo"}</span></td>
                     <td className="row-actions">
                       <button className="icon-button row-edit" onClick={() => openUserModal(user)} aria-label={`Editar ${user.email}`} title="Editar"><Pencil size={16} /></button>
                       <button className="icon-button row-edit" onClick={() => void remove("users", user.user_id, user.email)} aria-label={`Eliminar ${user.email}`} title="Eliminar"><Trash2 size={16} /></button>
@@ -222,15 +222,15 @@ function AdminDashboard() {
           ) : (
             <table className="employee-table">
               <thead>
-                <tr><th>Rol</th><th>Descripción</th><th>Permisos</th><th>Usuarios</th><th><span className="sr-only">Acciones</span></th></tr>
+                <tr><th>Rol</th><th className="hide-phone">Descripción</th><th>Permisos</th><th className="hide-phone">Usuarios</th><th><span className="sr-only">Acciones</span></th></tr>
               </thead>
               <tbody>
                 {roles.map((role) => (
                   <tr key={role.id}>
                     <td><strong>{role.name}</strong>{role.is_system && <small> · del sistema</small>}</td>
-                    <td>{role.description || "—"}</td>
+                    <td className="hide-phone">{role.description || "—"}</td>
                     <td>{role.is_system ? "Todos" : `${role.permissions.length} de ${PERMISSIONS.length}`}</td>
-                    <td>{role.user_count}</td>
+                    <td className="hide-phone">{role.user_count}</td>
                     <td className="row-actions">
                       {!role.is_system && (
                         <>
