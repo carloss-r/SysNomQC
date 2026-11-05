@@ -271,7 +271,6 @@ h1, h2, h3, p { margin-top: 0; }
   .print-sheet { position: static; left: auto; width: auto; padding: 0; }
   .print-sheet, .print-sheet * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
-}
 
 /* Marco con menú lateral */
 .shell { display: grid; min-height: 100vh; grid-template-columns: 256px minmax(0, 1fr); }
