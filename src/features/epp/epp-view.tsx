@@ -9,6 +9,7 @@ import { RequirePermission } from "@/shared/layout/require-permission";
 import { StatCard } from "@/shared/ui/badges";
 import { PageHeader } from "@/shared/ui/page-header";
 import { ArticleModal } from "./article-modal";
+import { EPP_CHANGED_EVENT } from "./epp-alerts-bell";
 import { HistoryTab } from "./history-tab";
 import { InventoryTab, stockState } from "./inventory-tab";
 import { MovementModal, type MovementKind } from "./movement-modal";
@@ -54,6 +55,7 @@ function EppScreen() {
       setArticles(items);
       setMovements(moves);
       setError("");
+      window.dispatchEvent(new Event(EPP_CHANGED_EVENT));
     } catch (err) {
       setError(describeError(err, "No se pudo cargar el inventario de EPP."));
     } finally {

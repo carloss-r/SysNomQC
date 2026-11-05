@@ -404,3 +404,23 @@ h1, h2, h3, p { margin-top: 0; }
   .epp-meta { grid-template-columns: 1fr; }
   .epp-actions { flex-wrap: wrap; }
 }
+
+/* ---- Notificaciones ---- */
+.bell { position: relative; }
+.bell-button { position: relative; border: 1px solid rgb(255 255 255 / 22%); }
+.bell-button:hover { background: rgb(255 255 255 / 13%); }
+.bell-count { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; color: #fff; background: #c9382e; font-size: 10px; font-weight: 800; line-height: 18px; text-align: center; }
+.bell-count-soft { color: #5c4710; background: #f0c64a; }
+.bell-panel { position: absolute; top: calc(100% + 10px); right: 0; z-index: 60; width: min(360px, calc(100vw - 28px)); max-height: 70vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: #fff; box-shadow: 0 12px 34px rgb(15 40 24 / 22%); }
+.bell-panel header { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border-bottom: 1px solid #e9edea; font-size: 12px; }
+.bell-panel header .icon-button { color: #647168; }
+.bell-panel ul { margin: 0; padding: 0; list-style: none; }
+.bell-item { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid #eef1ef; }
+.bell-item > div { display: flex; flex-direction: column; gap: 2px; font-size: 11px; }
+.bell-item small { color: #647168; font-size: 10px; }
+.bell-out svg { color: #c9382e; }
+.bell-low svg { color: #d98a1c; }
+.bell-soon svg { color: #b39222; }
+.bell-out { background: #fff7f6; }
+.bell-empty { padding: 20px 14px; color: #647168; font-size: 11px; text-align: center; }
+.bell-link { display: block; padding: 11px 14px; color: var(--green-800); font-size: 11px; font-weight: 700; text-align: center; }

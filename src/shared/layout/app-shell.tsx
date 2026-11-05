@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { LoginScreen } from "@/features/auth/login-screen";
 import { useAuth } from "@/features/auth/auth-provider";
+import { EppAlertsBell } from "@/features/epp/epp-alerts-bell";
 import { Sidebar } from "./sidebar";
 
 function Splash({ message }: { message: string }) {
@@ -88,6 +89,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span>{access?.full_name || session?.user.email}</span>
               {access && <small className="role-chip">{access.role_name}</small>}
             </span>
+            <EppAlertsBell />
             <button className="icon-button logout-button" onClick={() => void handleSignOut()} disabled={signingOut} aria-label="Cerrar sesión" title="Cerrar sesión">
               <LogOut size={18} />
             </button>
