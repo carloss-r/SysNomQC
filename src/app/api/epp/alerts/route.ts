@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { reportServerIncident } from "@/lib/incidents";
 import { getAuthenticatedClient } from "../../employees/_server";
 
+const ORDER: Record<"out" | "low" | "soon", number> = { out: 0, low: 1, soon: 2 };
+
 // Niveles: out = agotado, low = en o bajo el mínimo (reponer ya), soon = cerca del mínimo (anticipar compra).
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedClient(request, "epp.view");
@@ -19,7 +21,7 @@ export async function GET(request: NextRequest) {
         return level ? { ...item, level } : null;
       })
       .filter((item): item is NonNullable<typeof item> => item !== null)
-      .sort((a, b) => ({ out: 0, low: 1, soon: 2 })[a.level] - ({ out: 0, low: 1, soon: 2 })[b.level] || a.stock - b.stock);
+      .sort((a, b) => ORDER[a.level] - ORDER[b.level] || a.stock - b.stock);
     return NextResponse.json(alerts);
   } catch (error) {
     reportServerIncident("api · epp · alertas", error);

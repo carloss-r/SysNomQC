@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ClipboardCheck, PackagePlus, Plus, Scale, Search, Trash2, X } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useDeferredValue, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { EppArticle, EppEmployee, EppMovement } from "@/lib/permissions";
 import { describeError, requestApi } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -33,6 +33,10 @@ const COPY = {
     button: "Guardar ajuste",
   },
 } as const;
+
+const MAX_RESULTS = 5;
+/** Minúsculas y sin acentos, para que "jose" encuentre "José". */
+const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 
 let lineCounter = 0;
 const newLine = (articleId = ""): Line => ({ key: ++lineCounter, article_id: articleId, quantity: "1" });
@@ -71,13 +75,46 @@ export function MovementModal({
     [articles, kind],
   );
   const byId = useMemo(() => new Map(articles.map((item) => [item.id, item])), [articles]);
-  const matches = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return [];
-    return employees
-      .filter((item) => `${item.full_name} ${item.employee_code}`.toLowerCase().includes(term))
-      .slice(0, 6);
-  }, [employees, query]);
+  const [highlight, setHighlight] = useState(0);
+  const deferredQuery = useDeferredValue(query);
+  const indexed = useMemo(
+    () => employees.map((item) => ({ item, name: normalize(item.full_name), code: normalize(item.employee_code) })),
+    [employees],
+  );
+  const { matches, extra } = useMemo(() => {
+    const tokens = normalize(deferredQuery).split(" ").filter(Boolean);
+    if (tokens.length === 0) return { matches: [] as EppEmployee[], extra: 0 };
+    const scored = indexed
+      .filter((entry) => tokens.every((token) => entry.name.includes(token) || entry.code.includes(token)))
+      .map((entry) => ({
+        item: entry.item,
+        // Primero los que empiezan con lo escrito, luego los que coinciden al inicio de alguna palabra.
+        score: entry.name.startsWith(tokens[0] ?? "") || entry.code.startsWith(tokens[0] ?? "") ? 0 : entry.name.includes(` ${tokens[0]}`) ? 1 : 2,
+      }))
+      .sort((a, b) => a.score - b.score || a.item.full_name.localeCompare(b.item.full_name, "es"));
+    return { matches: scored.slice(0, MAX_RESULTS).map((entry) => entry.item), extra: Math.max(0, scored.length - MAX_RESULTS) };
+  }, [indexed, deferredQuery]);
+
+  function pick(item: EppEmployee) {
+    setEmployee(item);
+    setQuery("");
+    setHighlight(0);
+  }
+
+  function onSearchKey(event: KeyboardEvent<HTMLInputElement>) {
+    if (matches.length === 0) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setHighlight((value) => Math.min(value + 1, matches.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setHighlight((value) => Math.max(value - 1, 0));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const chosen = matches[highlight] ?? matches[0];
+      if (chosen) pick(chosen);
+    }
+  }
 
   function lastDelivery(articleId: number) {
     if (!employee) return null;
@@ -153,19 +190,20 @@ export function MovementModal({
                 <>
                   <div className="search-box epp-search">
                     <Search size={15} />
-                    <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Busca por nombre o ID del trabajador" autoFocus />
+                    <input value={query} onChange={(e) => { setQuery(e.target.value); setHighlight(0); }} onKeyDown={onSearchKey} placeholder="Escribe nombre o ID del trabajador" autoFocus />
                   </div>
                   {query.trim() && (
                     <ul className="epp-results">
-                      {matches.length === 0 && <li className="epp-empty">Sin coincidencias entre los trabajadores activos.</li>}
-                      {matches.map((item) => (
+                      {matches.length === 0 && <li className="epp-empty">{employees.length === 0 ? "Cargando trabajadores…" : "Sin coincidencias entre los trabajadores activos."}</li>}
+                      {matches.map((item, index) => (
                         <li key={item.id}>
-                          <button type="button" onClick={() => setEmployee(item)}>
+                          <button type="button" className={index === highlight ? "active" : ""} onMouseEnter={() => setHighlight(index)} onClick={() => pick(item)}>
                             <strong>{item.full_name}</strong>
                             <small>{item.employee_code} · {item.position} · {item.site}</small>
                           </button>
                         </li>
                       ))}
+                      {extra > 0 && <li className="epp-more">{extra} más… sigue escribiendo para acotar</li>}
                     </ul>
                   )}
                 </>
