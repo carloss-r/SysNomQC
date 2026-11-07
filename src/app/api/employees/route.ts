@@ -25,6 +25,26 @@ export async function GET(request: NextRequest) {
   const limit = Number.isSafeInteger(limitValue) ? Math.min(Math.max(limitValue, 1), 500) : 500;
 
   try {
+    // ?next_code=1 → siguiente ID sugerido (QG-n). Lee solo la columna del código y solo se pide
+    // al abrir "Registrar empleado", porque la lista paginada no tiene todos los códigos.
+    if (params.get("next_code") === "1") {
+      const CHUNK = 1000;
+      let highest = 100;
+      for (let from = 0; ; from += CHUNK) {
+        const { data: codes, error: codesError } = await auth.client
+          .from("employees")
+          .select("employee_code")
+          .order("employee_code")
+          .range(from, from + CHUNK - 1);
+        if (codesError) return databaseErrorResponse(codesError);
+        for (const row of codes) {
+          highest = Math.max(highest, Number(row.employee_code.match(/(\d+)$/)?.[1] ?? 0));
+        }
+        if (codes.length < CHUNK) break;
+      }
+      return NextResponse.json({ next_code: `QG-${highest + 1}` });
+    }
+
     // ?stats=1 → solo conteos (sin traer filas) para los contadores de la pantalla.
     if (params.get("stats") === "1") {
       const countSite = (site?: string) => {

@@ -368,14 +368,20 @@ export default function Home() {
     }
   }
 
-  function openCreateForm() {
-    const nextNumber = employees.reduce((highest, employee) => {
-      const number = Number(employee.employee_code.match(/(\d+)$/)?.[1] ?? 0);
-      return Math.max(highest, number);
-    }, 100) + 1;
+  async function openCreateForm() {
+    // La lista paginada no tiene todos los IDs: el siguiente se calcula en el servidor.
+    let nextCode = "";
+    const activeSession = sessionRef.current;
+    if (activeSession) {
+      try {
+        nextCode = (await requestApi<{ next_code: string }>(activeSession, "/api/employees?next_code=1")).next_code;
+      } catch (error) {
+        console.error("No se pudo calcular el siguiente ID:", error);
+      }
+    }
     setEditing(null);
     resetPhotoState();
-    setForm({ ...EMPTY_EMPLOYEE_FORM, employee_code: `QG-${nextNumber}` });
+    setForm({ ...EMPTY_EMPLOYEE_FORM, employee_code: nextCode });
     setFormError("");
     setIsFormOpen(true);
   }
@@ -662,7 +668,7 @@ export default function Home() {
               <p className="subheading">Consulta y administra los expedientes por sede operacional.</p>
             </div>
             {can("employees.create") && (
-              <button className="button button-gold" onClick={openCreateForm}>
+              <button className="button button-gold" onClick={() => void openCreateForm()}>
                 <Plus size={18} /> Registrar empleado
               </button>
             )}
@@ -754,7 +760,7 @@ export default function Home() {
                 <div className="empty-icon"><UserRound size={25} /></div>
                 <h2>{!hasFilters ? "Aún no hay empleados registrados" : "No se encontraron empleados"}</h2>
                 <p>{!hasFilters ? "Agrega el primer expediente para empezar a usar el directorio." : "Prueba con otro nombre, ID o sede."}</p>
-                {!hasFilters && can("employees.create") && <button className="button button-primary" onClick={openCreateForm}><Plus size={17} /> Registrar empleado</button>}
+                {!hasFilters && can("employees.create") && <button className="button button-primary" onClick={() => void openCreateForm()}><Plus size={17} /> Registrar empleado</button>}
               </div>
             )}
           </div>
