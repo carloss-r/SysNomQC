@@ -55,14 +55,3 @@ export function monthLabel(key: string) {
   const [year, month] = key.split("-");
   return `${MONTHS[Number(month) - 1] ?? month} ${year}`;
 }
-
-export function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
-  const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
-  const blob = new Blob(["﻿" + rows.map((row) => row.map(escape).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}

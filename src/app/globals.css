@@ -438,6 +438,8 @@ h1, h2, h3, p { margin-top: 0; }
 .epp-people { min-height: calc(5 * 52px); }
 .epp-fixed-date { display: flex; min-height: 38px; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); background: var(--surface-2); font-size: 13px; font-weight: 700; }
 .epp-fixed-date small { color: var(--faint); font-weight: 500; }
+.epp-export { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.epp-export-label { color: var(--muted); font-size: 12px; font-weight: 700; }
 
 /* ---- EPP: por trabajador y control mensual ---- */
 .epp-workers { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 380px; }

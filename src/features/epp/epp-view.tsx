@@ -299,6 +299,7 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
           />
         ) : tab === "workers" ? (
           <WorkersTab
+            site={site}
             movements={movements}
             employees={employees}
             canDeliver={canDeliver}
@@ -310,6 +311,7 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
           />
         ) : tab === "monthly" ? (
           <MonthlyTab
+            site={site}
             movements={movements}
             month={reportMonth}
             onMonth={setReportMonth}

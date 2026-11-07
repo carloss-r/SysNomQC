@@ -1,14 +1,17 @@
 "use client";
 
-import { ClipboardCheck, Download, Search, UserRound, X } from "lucide-react";
+import { ClipboardCheck, Search, UserRound, X } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 import type { EppEmployee, EppMovement } from "@/lib/permissions";
 import { formatDateTime, formatDay } from "./format";
-import { buildPeople, downloadCsv, monthKey, monthLabel, normalize, type Person } from "./people";
+import { ExportButtons } from "./export-buttons";
+import { buildPeople, monthKey, monthLabel, normalize, type Person } from "./people";
+import { fileSafe, type Report } from "./report-export";
 
 const MAX_RESULTS = 5;
 
 export function WorkersTab({
+  site,
   movements,
   employees,
   canDeliver,
@@ -18,6 +21,7 @@ export function WorkersTab({
   onMonth,
   onDeliver,
 }: {
+  site: string;
   movements: EppMovement[];
   employees: EppEmployee[];
   canDeliver: boolean;
@@ -82,12 +86,52 @@ export function WorkersTab({
     return employees.find((item) => item.id === target.employeeId || normalize(item.full_name) === target.key) ?? null;
   }
 
-  function exportCsv() {
-    if (!person) return;
-    downloadCsv(`EPP-${person.name.replace(/\s+/g, "_")}${month ? `-${month}` : ""}.csv`, [
-      ["Fecha", "Artículo", "Piezas", "Registró", "Notas"],
-      ...visible.map((row) => [formatDay(row.moved_on), row.article_name, Math.abs(row.delta), row.created_by_name ?? "", row.notes ?? ""]),
-    ]);
+  function buildReport(generatedBy: string): Report {
+    const target = person as Person;
+    const period = month ? monthLabel(month) : "Todo el historial";
+    const pieces = visible.reduce((sum, row) => sum + Math.abs(row.delta), 0);
+    const info: [string, string][] = [["Trabajador", target.name]];
+    if (target.position || target.group) info.push(["Puesto / grupo", [target.position, target.group].filter(Boolean).join(" · ")]);
+    info.push(["Sede", site], ["Periodo", period]);
+    return {
+      title: "Entregas de EPP por trabajador",
+      info,
+      summary: [
+        ["Piezas entregadas", pieces],
+        ["Entregas", visible.length],
+        ["Artículos distintos", summary.length],
+      ],
+      sections: [
+        {
+          title: "Artículos entregados",
+          columns: [
+            { header: "Artículo", width: 44 },
+            { header: "Piezas", width: 10, align: "right" },
+            { header: "Veces", width: 10, align: "right" },
+            { header: "Última entrega", width: 16 },
+          ],
+          rows: summary.map((item) => [item.name, item.pieces, item.times, formatDay(item.last)]),
+          empty: "Sin entregas en este periodo.",
+        },
+        {
+          title: "Detalle de entregas",
+          columns: [
+            { header: "Fecha", width: 12 },
+            { header: "Artículo", width: 36 },
+            { header: "Piezas", width: 9, align: "right" },
+            { header: "Entregó / registró", width: 26 },
+            { header: "Notas", width: 34 },
+          ],
+          rows: visible.map((row) => [
+            formatDay(row.moved_on), row.article_name, Math.abs(row.delta),
+            row.historical ? "Importado de Excel" : row.created_by_name ?? "", row.notes ?? "",
+          ]),
+          empty: "Sin entregas en este periodo.",
+        },
+      ],
+      generatedBy,
+      fileName: `EPP_Entregas_${fileSafe(target.name)}_${fileSafe(site)}_${fileSafe(period)}`,
+    };
   }
 
   return (
@@ -127,7 +171,7 @@ export function WorkersTab({
                 {canDeliver && employeeFor(person) && (
                   <button className="button button-gold" onClick={() => onDeliver(employeeFor(person) as EppEmployee)}><ClipboardCheck size={16} /> Entregar EPP</button>
                 )}
-                <button className="button button-outline" onClick={exportCsv}><Download size={16} /> Descargar</button>
+                <ExportButtons build={buildReport} />
               </div>
             </header>
 
