@@ -6,7 +6,7 @@ import type { EppEmployee, EppMovement } from "@/lib/permissions";
 import { formatDateTime, formatDay } from "./format";
 import { buildPeople, downloadCsv, monthKey, monthLabel, normalize, type Person } from "./people";
 
-const MAX_RESULTS = 8;
+const MAX_RESULTS = 5;
 
 export function WorkersTab({
   movements,
@@ -104,7 +104,7 @@ export function WorkersTab({
           {results.map((item) => (
             <li key={item.key}>
               <button type="button" className={item.key === selectedKey ? "active" : ""} onClick={() => onSelect(item.key)}>
-                <strong>{item.name}</strong>
+                <strong title={item.name}>{item.name}</strong>
                 <small>{[item.position, item.group].filter(Boolean).join(" · ") || "—"} · {item.pieces} pza en {item.deliveries} entregas</small>
               </button>
             </li>

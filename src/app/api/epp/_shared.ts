@@ -26,7 +26,8 @@ export const movementSchema = z.object({
   kind: z.enum(["ingreso", "entrega", "ajuste"]),
   items: itemsSchema,
   employee_id: z.uuid().nullable().optional(),
-  moved_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // La fecha la pone el servidor (hoy); se acepta el campo solo por compatibilidad y se ignora.
+  moved_on: z.string().optional(),
   notes: z.string().trim().max(500).optional(),
 });
 
@@ -72,7 +73,7 @@ export function eppDatabaseError(error: { code?: string; message: string }, cont
   }
   if (error.code === "42P01" || error.code === "PGRST205" || error.code === "PGRST202" || error.code === "42883") {
     return NextResponse.json(
-      { error: "Falta ejecutar en Supabase la migración 202611070001_epp_por_sede.sql." },
+      { error: "Falta ejecutar en Supabase las migraciones de EPP (hasta 202611090001_epp_controles.sql)." },
       { status: 503 },
     );
   }

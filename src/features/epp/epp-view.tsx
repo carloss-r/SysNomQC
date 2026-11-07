@@ -46,6 +46,8 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
   const sessionRef = useRef(session);
   const canDeliver = can("epp.deliver");
   const canManage = can("epp.manage");
+  // Ajustar existencias sin respaldo físico queda reservado al SuperAdmin (la API y la base lo vuelven a validar).
+  const canAdjust = canManage && access?.is_super_admin === true;
   const canRequest = can("epp.request");
   const buyer = can("epp.purchase");
   const canSeeRequests = canRequest || buyer || canManage;
@@ -114,19 +116,22 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
     return () => window.clearTimeout(timer);
   }, [loadRequests]);
 
-  // La lista de trabajadores solo se pide a quien puede entregar EPP.
+  // La lista de trabajadores solo se pide a quien puede entregar EPP, y solo los de la sede elegida.
   useEffect(() => {
     const active = sessionRef.current;
     if (!active || !canDeliver) return;
-    requestApi<EppEmployee[]>(active, "/api/epp/employees")
-      .then(setEmployees)
-      .catch((err) => setError(describeError(err, "No se pudo cargar la lista de trabajadores.")));
-  }, [canDeliver, session?.user.id]);
+    let cancelled = false;
+    requestApi<EppEmployee[]>(active, `/api/epp/employees?site=${encodeURIComponent(site)}`)
+      .then((rows) => { if (!cancelled) setEmployees(rows.filter((item) => item.site === site)); })
+      .catch((err) => { if (!cancelled) setError(describeError(err, "No se pudo cargar la lista de trabajadores.")); });
+    return () => { cancelled = true; };
+  }, [canDeliver, session?.user.id, site]);
 
   function changeSite(next: string) {
     if (next === site) return;
     setLoading(true);
     setWorkerKey(null);
+    setEmployees([]);
     setSite(next);
   }
 
@@ -213,7 +218,7 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
             {canDeliver && <button className="button button-gold" onClick={() => setDialog({ type: "movement", kind: "entrega" })}><ClipboardCheck size={17} /> Entregar EPP</button>}
             {canRequest && <button className="button button-outline" onClick={() => setDialog({ type: "request", articleIds: [] })}><ShoppingCart size={17} /> Pedir material</button>}
             {canManage && <button className="button button-outline" onClick={() => setDialog({ type: "movement", kind: "ingreso" })}><PackagePlus size={17} /> Ingreso de material</button>}
-            {canManage && <button className="button button-outline" onClick={() => setDialog({ type: "movement", kind: "ajuste" })}><Scale size={17} /> Ajuste</button>}
+            {canAdjust && <button className="button button-outline" onClick={() => setDialog({ type: "movement", kind: "ajuste" })}><Scale size={17} /> Ajuste</button>}
             {canManage && <button className="button button-outline" onClick={() => setDialog({ type: "article", article: null })}><Plus size={17} /> Nuevo artículo</button>}
           </div>
         }

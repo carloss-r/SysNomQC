@@ -54,6 +54,10 @@ export async function POST(request: NextRequest) {
     if (!auth.access.permissions.includes(needed)) {
       return NextResponse.json({ error: "Tu rol no tiene permiso para realizar esta acción." }, { status: 403 });
     }
+    // Los ajustes cambian la existencia sin respaldo físico: solo un SuperAdmin los autoriza.
+    if (body.kind === "ajuste" && !auth.access.is_super_admin) {
+      return NextResponse.json({ error: "Solo un SuperAdmin puede ajustar el inventario." }, { status: 403 });
+    }
     const resolved = resolveSite(auth.access, body.site);
     if ("response" in resolved) return resolved.response;
 
@@ -62,7 +66,8 @@ export async function POST(request: NextRequest) {
       p_kind: body.kind,
       p_items: body.items,
       p_employee: body.employee_id ?? null,
-      p_date: body.moved_on,
+      // La fecha la fija la base de datos (hoy, hora de Campeche); no se toma la del navegador.
+      p_date: null,
       p_notes: body.notes ?? null,
     });
     if (error) return eppDatabaseError(error, "registrar movimiento");

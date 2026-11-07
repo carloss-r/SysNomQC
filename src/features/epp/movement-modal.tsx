@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, ClipboardCheck, PackagePlus, Plus, Scale, Search, Trash2, X } from "lucide-react";
-import { useDeferredValue, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { CalendarDays, Check, ClipboardCheck, PackagePlus, Plus, Scale, Search, Trash2, X } from "lucide-react";
+import { useDeferredValue, useId, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { EppArticle, EppEmployee, EppMovement } from "@/lib/permissions";
 import { describeError, requestApi } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -65,7 +65,7 @@ export function MovementModal({
   onClose: () => void;
   onDone: () => Promise<void>;
 }) {
-  const { session } = useAuth();
+  const { session, access } = useAuth();
   const notify = useNotify();
   const copy = COPY[kind];
   const Icon = copy.icon;
@@ -76,7 +76,8 @@ export function MovementModal({
   );
   const [employee, setEmployee] = useState<EppEmployee | null>(presetEmployee ?? null);
   const [query, setQuery] = useState("");
-  const [date, setDate] = useState(todayLocal());
+  // La fecha no se puede elegir: el servidor registra el día de hoy.
+  const today = todayLocal();
   const [notes, setNotes] = useState(presetNotes ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -85,12 +86,14 @@ export function MovementModal({
     () => articles.filter((item) => (kind === "ajuste" ? true : item.active) && (kind !== "entrega" || item.stock > 0)),
     [articles, kind],
   );
+  // Solo trabajadores de la sede del inventario (el servidor ya los filtra; esto es una segunda barrera).
+  const siteEmployees = useMemo(() => employees.filter((item) => item.site === site), [employees, site]);
   const byId = useMemo(() => new Map(articles.map((item) => [item.id, item])), [articles]);
   const [highlight, setHighlight] = useState(0);
   const deferredQuery = useDeferredValue(query);
   const indexed = useMemo(
-    () => employees.map((item) => ({ item, name: normalize(item.full_name), code: normalize(item.employee_code) })),
-    [employees],
+    () => siteEmployees.map((item) => ({ item, name: normalize(item.full_name), code: normalize(item.employee_code) })),
+    [siteEmployees],
   );
   const { matches, extra } = useMemo(() => {
     const tokens = normalize(deferredQuery).split(" ").filter(Boolean);
@@ -141,7 +144,9 @@ export function MovementModal({
     if (!session) return;
     setError("");
 
+    if (kind === "ajuste" && !access?.is_super_admin) return setError("Solo un SuperAdmin puede ajustar el inventario.");
     if (kind === "entrega" && !employee) return setError("Selecciona al trabajador que recibe el EPP.");
+    if (kind === "entrega" && employee && employee.site !== site) return setError(`${employee.full_name} es de ${employee.site}; solo se le puede entregar EPP del inventario de su sede.`);
     const items = lines.map((line) => ({ article_id: Number(line.article_id), quantity: Math.trunc(Number(line.quantity)) }));
     if (items.some((item) => !item.article_id)) return setError("Elige el artículo en cada renglón.");
     if (items.some((item) => !Number.isFinite(item.quantity) || item.quantity === 0)) return setError("Escribe una cantidad válida.");
@@ -157,7 +162,7 @@ export function MovementModal({
     try {
       await requestApi(session, "/api/epp/movements", {
         method: "POST",
-        body: JSON.stringify({ site, kind, items, employee_id: employee?.id ?? null, moved_on: date, notes: notes.trim() || undefined }),
+        body: JSON.stringify({ site, kind, items, employee_id: employee?.id ?? null, notes: notes.trim() || undefined }),
       });
       const units = items.reduce((sum, item) => sum + Math.abs(item.quantity), 0);
       const names = items.map((item) => byId.get(item.article_id)?.name).filter(Boolean).join(", ");
@@ -191,33 +196,34 @@ export function MovementModal({
               {employee ? (
                 <div className="epp-selected">
                   <div>
-                    <strong>{employee.full_name}</strong>
+                    <strong title={employee.full_name}>{employee.full_name}</strong>
                     <small>{employee.employee_code} · {employee.position}</small>
                   </div>
                   <SiteBadge site={employee.site} />
                   <button type="button" className="text-button" onClick={() => { setEmployee(null); setQuery(""); }}>Cambiar</button>
                 </div>
               ) : (
-                <>
+                <div className="epp-combo">
                   <div className="search-box epp-search">
                     <Search size={15} />
-                    <input value={query} onChange={(e) => { setQuery(e.target.value); setHighlight(0); }} onKeyDown={onSearchKey} placeholder="Escribe nombre o ID del trabajador" autoFocus />
+                    <input value={query} onChange={(e) => { setQuery(e.target.value); setHighlight(0); }} onKeyDown={onSearchKey} placeholder={`Escribe nombre o ID de un trabajador de ${site}`} autoFocus />
+                    {query && <button type="button" onClick={() => setQuery("")} aria-label="Limpiar búsqueda"><X size={14} /></button>}
                   </div>
                   {query.trim() && (
-                    <ul className="epp-results">
-                      {matches.length === 0 && <li className="epp-empty">{employees.length === 0 ? "Cargando trabajadores…" : "Sin coincidencias entre los trabajadores activos."}</li>}
+                    <ul className="epp-results epp-dropdown" role="listbox">
+                      {matches.length === 0 && <li className="epp-empty">{employees.length === 0 ? "Cargando trabajadores…" : `Sin coincidencias entre los trabajadores activos de ${site}.`}</li>}
                       {matches.map((item, index) => (
                         <li key={item.id}>
                           <button type="button" className={index === highlight ? "active" : ""} onMouseEnter={() => setHighlight(index)} onClick={() => pick(item)}>
-                            <strong>{item.full_name}</strong>
-                            <small>{item.employee_code} · {item.position} · {item.site}</small>
+                            <strong title={item.full_name}>{item.full_name}</strong>
+                            <small>{item.employee_code} · {item.position}</small>
                           </button>
                         </li>
                       ))}
                       {extra > 0 && <li className="epp-more">{extra} más… sigue escribiendo para acotar</li>}
                     </ul>
                   )}
-                </>
+                </div>
               )}
             </div>
           )}
@@ -231,12 +237,12 @@ export function MovementModal({
                 return (
                   <div key={line.key} className="epp-line">
                     <Field label="Artículo">
-                      <select value={line.article_id} onChange={(e) => updateLine(line.key, { article_id: e.target.value })}>
-                        <option value="">Selecciona…</option>
-                        {selectable.map((item) => (
-                          <option key={item.id} value={item.id}>{item.name} (hay {item.stock})</option>
-                        ))}
-                      </select>
+                      <ArticlePicker
+                        articles={selectable}
+                        value={line.article_id}
+                        taken={lines.filter((other) => other.key !== line.key).map((other) => other.article_id)}
+                        onChange={(id) => updateLine(line.key, { article_id: id })}
+                      />
                     </Field>
                     <Field label={kind === "ajuste" ? "Cantidad (+/−)" : "Cantidad"}>
                       <input type="number" step={1} min={kind === "ajuste" ? -100000 : 1} max={kind === "entrega" ? article?.stock : 100000} value={line.quantity} onChange={(e) => updateLine(line.key, { quantity: e.target.value })} />
@@ -251,8 +257,10 @@ export function MovementModal({
           </div>
 
           <div className="form-grid epp-meta">
-            <Field label={kind === "entrega" ? "Fecha de entrega" : "Fecha"} required>
-              <input type="date" value={date} max={todayLocal()} onChange={(e) => setDate(e.target.value)} required />
+            <Field label={kind === "entrega" ? "Fecha de entrega" : "Fecha"}>
+              <div className="epp-fixed-date" title="La fecha la registra el sistema y no se puede cambiar.">
+                <CalendarDays size={15} /> {formatDay(today)} <small>(hoy, del sistema)</small>
+              </div>
             </Field>
             <Field label={kind === "ajuste" ? "Motivo del ajuste" : "Observaciones (opcional)"} required={kind === "ajuste"}>
               <input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} placeholder={kind === "ajuste" ? "Conteo físico, merma, corrección…" : kind === "ingreso" ? "Proveedor, factura…" : "Motivo de reposición, cambio por desgaste…"} />
@@ -266,6 +274,107 @@ export function MovementModal({
           </div>
         </form>
       </section>
+    </div>
+  );
+}
+
+/** Buscador de artículos: escribe parte del nombre y elige entre máximo 5 coincidencias. */
+function ArticlePicker({
+  articles,
+  value,
+  taken,
+  onChange,
+}: {
+  articles: EppArticle[];
+  value: string;
+  taken: string[];
+  onChange: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const listId = useId();
+  const selected = articles.find((item) => String(item.id) === value) ?? null;
+  const indexed = useMemo(
+    () => articles.map((item) => ({ item, text: normalize(`${item.name} ${item.size ?? ""} ${item.category}`) })),
+    [articles],
+  );
+  const { matches, extra } = useMemo(() => {
+    const tokens = normalize(query).split(" ").filter(Boolean);
+    const found = indexed
+      .filter((entry) => !taken.includes(String(entry.item.id)))
+      .filter((entry) => tokens.every((token) => entry.text.includes(token)))
+      .map((entry) => entry.item)
+      .sort((a, b) => {
+        const first = tokens[0] ?? "";
+        const rank = (item: EppArticle) => (normalize(item.name).startsWith(first) ? 0 : 1);
+        return rank(a) - rank(b) || a.name.localeCompare(b.name, "es");
+      });
+    return { matches: found.slice(0, MAX_RESULTS), extra: Math.max(0, found.length - MAX_RESULTS) };
+  }, [indexed, query, taken]);
+
+  const label = (item: EppArticle) => `${item.name}${item.size ? ` · ${item.size}` : ""}`;
+
+  function choose(item: EppArticle) {
+    onChange(String(item.id));
+    setQuery("");
+    setOpen(false);
+    setHighlight(0);
+  }
+
+  function onKey(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Escape") return setOpen(false);
+    if (!open || matches.length === 0) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setHighlight((current) => Math.min(current + 1, matches.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setHighlight((current) => Math.max(current - 1, 0));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const chosen = matches[highlight] ?? matches[0];
+      if (chosen) choose(chosen);
+    }
+  }
+
+  return (
+    <div className="epp-combo">
+      <div className="search-box epp-search">
+        <Search size={15} />
+        <input
+          value={open ? query : selected ? `${label(selected)} (hay ${selected.stock})` : ""}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); setHighlight(0); }}
+          onFocus={() => { setQuery(""); setOpen(true); }}
+          onBlur={() => setOpen(false)}
+          onKeyDown={onKey}
+          placeholder={selected ? label(selected) : "Escribe el nombre del artículo"}
+          title={selected ? label(selected) : undefined}
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listId}
+        />
+      </div>
+      {open && (
+        <ul id={listId} className="epp-results epp-dropdown" role="listbox">
+          {matches.length === 0 && <li className="epp-empty">{articles.length === 0 ? "No hay artículos disponibles en esta sede." : "Sin coincidencias."}</li>}
+          {matches.map((item, index) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                className={index === highlight ? "active" : ""}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setHighlight(index)}
+                onClick={() => choose(item)}
+              >
+                <strong title={label(item)}>{label(item)}</strong>
+                <small>{item.category} · hay {item.stock}</small>
+              </button>
+            </li>
+          ))}
+          {extra > 0 && <li className="epp-more">{extra} más… sigue escribiendo para acotar</li>}
+        </ul>
+      )}
     </div>
   );
 }
