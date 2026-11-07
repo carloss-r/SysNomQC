@@ -1,14 +1,12 @@
 "use client";
 
 import { Building2, Filter, Pencil, Plus, Search, UserRound, UsersRound, X } from "lucide-react";
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
 import { ApiError, describeError, requestApi } from "@/lib/api-client";
 import {
   POSITIONS,
   SITES,
-  sortEmployees,
-  toEmployeeSummary,
   type Employee,
   type EmployeeSummary,
 } from "@/lib/employees";
@@ -21,7 +19,11 @@ import { PageHeader } from "@/shared/ui/page-header";
 import { EmployeeFormModal } from "./components/employee-form-modal";
 import { EmployeeProfileModal } from "./components/employee-profile-modal";
 
-const PAGE_SIZE = 500;
+// Empleados por página: el directorio nunca se descarga completo, solo una página a la vez.
+const PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 350;
+
+type EmployeeStats = { total: number; bySite: Record<string, number> };
 
 type FormState = { editing: Employee | null } | null;
 
@@ -40,11 +42,16 @@ function EmployeesDashboard() {
   const notify = useNotify();
   const [employees, setEmployees] = useState<EmployeeSummary[]>([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState<EmployeeStats | null>(null);
+  const [suggestedCode, setSuggestedCode] = useState("");
   const [pageError, setPageError] = useState("");
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [filterSite, setFilterSite] = useState("Todas");
   // Los avisos enlazan aquí con ?buscar=<ID>. Esta pantalla solo se monta en el navegador, ya con sesión.
   const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get("buscar") ?? "");
+  const [debouncedSearch, setDebouncedSearch] = useState(() => search.trim());
   const [formState, setFormState] = useState<FormState>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const sessionRef = useRef(session);
@@ -53,8 +60,17 @@ function EmployeesDashboard() {
     sessionRef.current = session;
   }, [session]);
 
+  // La búsqueda espera a que se deje de escribir: una consulta por pausa, no por tecla.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(0);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
   // Se lee siempre la sesión más reciente desde la referencia: así renovar el token o volver
-  // a la pestaña no dispara una descarga nueva de todo el directorio (menos lecturas y costo).
+  // a la pestaña no dispara una descarga nueva. Solo se pide la página visible (PAGE_SIZE filas).
   const refreshEmployees = useCallback(async () => {
     const activeSession = sessionRef.current;
     if (!activeSession) return;
@@ -62,20 +78,26 @@ function EmployeesDashboard() {
     setLoading(true);
     setPageError("");
     try {
-      const all: EmployeeSummary[] = [];
-      let offset = 0;
-      let page: EmployeeSummary[];
+      const params = new URLSearchParams({
+        offset: String(page * PAGE_SIZE),
+        limit: String(PAGE_SIZE),
+        count: "1",
+      });
+      if (filterSite !== "Todas") params.set("site", filterSite);
+      if (debouncedSearch) params.set("search", debouncedSearch);
 
-      do {
-        page = await requestApi<EmployeeSummary[]>(
-          activeSession,
-          `/api/employees?offset=${offset}&limit=${PAGE_SIZE}`,
-        );
-        all.push(...page);
-        offset += page.length;
-      } while (page.length === PAGE_SIZE);
+      const result = await requestApi<{ data: EmployeeSummary[]; total: number }>(
+        activeSession,
+        `/api/employees?${params.toString()}`,
+      );
 
-      setEmployees(all);
+      // Si se borró el último registro de la última página, se retrocede una página.
+      if (result.data.length === 0 && result.total > 0 && page > 0) {
+        setPage(Math.ceil(result.total / PAGE_SIZE) - 1);
+        return;
+      }
+      setEmployees(result.data);
+      setTotal(result.total);
     } catch (error) {
       console.error("No se pudo cargar el directorio:", error);
       const message = describeError(error, "No se pudo cargar el directorio de empleados.");
@@ -85,26 +107,35 @@ function EmployeesDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [notify]);
+  }, [notify, page, filterSite, debouncedSearch]);
+
+  // Contadores por sede: solo conteos en el servidor (sin traer filas).
+  const loadStats = useCallback(async () => {
+    const activeSession = sessionRef.current;
+    if (!activeSession) return;
+    try {
+      setStats(await requestApi<EmployeeStats>(activeSession, "/api/employees?stats=1"));
+    } catch (error) {
+      console.error("No se pudieron cargar los contadores:", error);
+    }
+  }, []);
 
   const userId = session?.user.id ?? null;
+  useEffect(() => {
+    if (!userId) return;
+    const timer = window.setTimeout(() => void loadStats(), 0);
+    return () => window.clearTimeout(timer);
+  }, [userId, loadStats]);
+
+  // La lista se vuelve a pedir solo al cambiar de página, de sede o de búsqueda.
   useEffect(() => {
     if (!userId) return;
     const timer = window.setTimeout(() => void refreshEmployees(), 0);
     return () => window.clearTimeout(timer);
   }, [userId, refreshEmployees]);
 
-  const deferredSearch = useDeferredValue(search);
-  const filteredEmployees = useMemo(() => {
-    const query = deferredSearch.trim().toLocaleLowerCase("es-MX");
-    return employees.filter((employee) => {
-      const matchesSite = filterSite === "Todas" || employee.site === filterSite;
-      const searchable = [employee.employee_code, employee.full_name, employee.position, employee.email ?? ""]
-        .join(" ")
-        .toLocaleLowerCase("es-MX");
-      return matchesSite && (!query || searchable.includes(query));
-    });
-  }, [employees, filterSite, deferredSearch]);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const hasFilters = filterSite !== "Todas" || debouncedSearch !== "";
 
   const positionSuggestions = useMemo(
     () =>
@@ -114,13 +145,20 @@ function EmployeesDashboard() {
     [employees],
   );
 
-  const suggestedCode = useMemo(() => {
-    const highest = employees.reduce((max, employee) => {
-      const number = Number(employee.employee_code.match(/(\d+)$/)?.[1] ?? 0);
-      return Math.max(max, number);
-    }, 100);
-    return `QG-${highest + 1}`;
-  }, [employees]);
+  // La lista paginada no tiene todos los IDs: el siguiente se calcula en el servidor al abrir el alta.
+  async function openCreateForm() {
+    let nextCode = "";
+    const activeSession = sessionRef.current;
+    if (activeSession) {
+      try {
+        nextCode = (await requestApi<{ next_code: string }>(activeSession, "/api/employees?next_code=1")).next_code;
+      } catch (error) {
+        console.error("No se pudo calcular el siguiente ID:", error);
+      }
+    }
+    setSuggestedCode(nextCode);
+    setFormState({ editing: null });
+  }
 
   // La lista solo trae columnas básicas; el expediente completo se pide al abrirlo.
   async function loadEmployeeDetail(summary: EmployeeSummary): Promise<Employee | null> {
@@ -148,14 +186,10 @@ function EmployeesDashboard() {
     if (employee) setFormState({ editing: employee });
   }
 
-  function handleSaved(saved: Employee, isEdit: boolean) {
-    // Se actualiza la lista en memoria con la respuesta: no hace falta volver a descargarla.
-    const summary = toEmployeeSummary(saved);
-    setEmployees((current) =>
-      sortEmployees(
-        isEdit ? current.map((item) => (item.id === summary.id ? summary : item)) : [...current, summary],
-      ),
-    );
+  function handleSaved() {
+    // Con paginación el orden y la página dependen del servidor: se vuelve a pedir solo la página actual.
+    void refreshEmployees();
+    void loadStats();
     setFormState(null);
   }
 
@@ -168,7 +202,8 @@ function EmployeesDashboard() {
       await requestApi<void>(session, `/api/employees/${employee.id}`, { method: "DELETE" });
       if (employee.photo_path) void deleteEmployeePhoto(employee.photo_path);
       setSelectedEmployee(null);
-      setEmployees((current) => current.filter((item) => item.id !== employee.id));
+      void refreshEmployees();
+      void loadStats();
       notify("success", "Empleado eliminado", `Se eliminó el expediente de ${employee.full_name}.`);
     } catch (error) {
       console.error("No se pudo eliminar el empleado:", error);
@@ -185,17 +220,17 @@ function EmployeesDashboard() {
         description="Consulta y administra los expedientes por sede operacional."
         actions={
           can("employees.create") && (
-            <button className="button button-gold" onClick={() => setFormState({ editing: null })}>
+            <button className="button button-gold" onClick={() => void openCreateForm()}>
               <Plus size={18} /> Registrar empleado
             </button>
           )
         }
       >
         <div className="stats-grid">
-          <StatCard label="Total empleados" count={employees.length} tone="green" icon={<UsersRound size={18} />} />
-          <StatCard label="Campeche" count={employees.filter((item) => item.site === "Campeche").length} tone="blue" icon={<Building2 size={18} />} />
-          <StatCard label="Lagunas" count={employees.filter((item) => item.site === "Lagunas").length} tone="gold" icon={<Building2 size={18} />} />
-          <StatCard label="Cruz Azul" count={employees.filter((item) => item.site === "Cruz Azul").length} tone="purple" icon={<Building2 size={18} />} />
+          <StatCard label="Total empleados" count={stats?.total ?? 0} tone="green" icon={<UsersRound size={18} />} />
+          <StatCard label="Campeche" count={stats?.bySite["Campeche"] ?? 0} tone="blue" icon={<Building2 size={18} />} />
+          <StatCard label="Lagunas" count={stats?.bySite["Lagunas"] ?? 0} tone="gold" icon={<Building2 size={18} />} />
+          <StatCard label="Cruz Azul" count={stats?.bySite["Cruz Azul"] ?? 0} tone="purple" icon={<Building2 size={18} />} />
         </div>
       </PageHeader>
 
@@ -210,7 +245,10 @@ function EmployeesDashboard() {
                 aria-selected={filterSite === site}
                 className={`site-tab${filterSite === site ? " active" : ""}`}
                 key={site}
-                onClick={() => setFilterSite(site)}
+                onClick={() => {
+                  setFilterSite(site);
+                  setPage(0);
+                }}
               >
                 {site === "Todas" ? "Todas las sedes" : site}
               </button>
@@ -244,7 +282,7 @@ function EmployeesDashboard() {
               </tr>
             </thead>
             <tbody>
-              {filteredEmployees.map((employee) => (
+              {employees.map((employee) => (
                 <tr key={employee.id}>
                   <td className="employee-code hide-phone">{employee.employee_code}</td>
                   <td>
@@ -270,18 +308,29 @@ function EmployeesDashboard() {
             </tbody>
           </table>
           {loading && <div className="table-state"><span className="spinner" /> Cargando empleados…</div>}
-          {!loading && filteredEmployees.length === 0 && (
+          {!loading && employees.length === 0 && (
             <div className="empty-state">
               <div className="empty-icon"><UserRound size={25} /></div>
-              <h2>{employees.length === 0 ? "Aún no hay empleados registrados" : "No se encontraron empleados"}</h2>
-              <p>{employees.length === 0 ? "Agrega el primer expediente para empezar a usar el directorio." : "Prueba con otro nombre, ID o sede."}</p>
-              {employees.length === 0 && can("employees.create") && <button className="button button-primary" onClick={() => setFormState({ editing: null })}><Plus size={17} /> Registrar empleado</button>}
+              <h2>{!hasFilters ? "Aún no hay empleados registrados" : "No se encontraron empleados"}</h2>
+              <p>{!hasFilters ? "Agrega el primer expediente para empezar a usar el directorio." : "Prueba con otro nombre, ID o sede."}</p>
+              {!hasFilters && can("employees.create") && <button className="button button-primary" onClick={() => void openCreateForm()}><Plus size={17} /> Registrar empleado</button>}
             </div>
           )}
         </div>
         <div className="table-footer">
-          <span>{filteredEmployees.length} {filteredEmployees.length === 1 ? "empleado" : "empleados"}</span>
-          {loading && <span>Sincronizando datos</span>}
+          <span>
+            {total === 0
+              ? "0 empleados"
+              : `${page * PAGE_SIZE + 1}–${page * PAGE_SIZE + employees.length} de ${total} ${total === 1 ? "empleado" : "empleados"}`}
+            {loading && " · Sincronizando datos"}
+          </span>
+          {totalPages > 1 && (
+            <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button type="button" className="text-button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0 || loading}>← Anterior</button>
+              <span>Página {page + 1} de {totalPages}</span>
+              <button type="button" className="text-button" onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))} disabled={page >= totalPages - 1 || loading}>Siguiente →</button>
+            </span>
+          )}
         </div>
       </section>
 
