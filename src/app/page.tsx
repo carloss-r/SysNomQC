@@ -30,7 +30,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import type { Access, Permission } from "@/lib/permissions";
 import { ApiError, describeError, requestApi } from "@/lib/api-client";
@@ -49,8 +49,6 @@ import {
   formToEmployeeInput,
   formatCurrency,
   formatDate,
-  sortEmployees,
-  toEmployeeSummary,
 } from "@/lib/employees";
 import {
   ACCEPTED_PHOTO_TYPES,
@@ -66,7 +64,11 @@ import { supabase } from "@/lib/supabase";
 
 class PhotoUploadError extends Error {}
 
-const PAGE_SIZE = 500;
+// Empleados por página: el directorio nunca se descarga completo, solo una página a la vez.
+const PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 350;
+
+type EmployeeStats = { total: number; bySite: Record<string, number> };
 
 type NoticeTone = "success" | "error" | "warning" | "info";
 type Notice = { id: number; tone: NoticeTone; title: string; message?: string };
@@ -114,6 +116,10 @@ export default function Home() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [employees, setEmployees] = useState<EmployeeSummary[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState<EmployeeStats | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [authError, setAuthError] = useState("");
   const [pageError, setPageError] = useState("");
@@ -161,6 +167,9 @@ export default function Home() {
         setCheckingSession(false);
         if (!nextSession) {
           setEmployees([]);
+          setTotal(0);
+          setStats(null);
+          setPage(0);
           setAccess(null);
           setPageError("");
         }
@@ -176,6 +185,9 @@ export default function Home() {
         setCheckingSession(false);
         if (!sessionData.session) {
           setEmployees([]);
+          setTotal(0);
+          setStats(null);
+          setPage(0);
           setPageError("");
         }
       })
@@ -197,8 +209,17 @@ export default function Home() {
     sessionRef.current = session;
   }, [session]);
 
+  // La búsqueda espera a que se deje de escribir: una consulta por pausa, no por tecla.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(0);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
   // Se lee siempre la sesión más reciente desde la referencia: así renovar el token o volver
-  // a la pestaña no dispara una descarga nueva de todo el directorio (menos lecturas y costo).
+  // a la pestaña no dispara una descarga nueva. Solo se pide la página visible (PAGE_SIZE filas).
   const refreshEmployees = useCallback(async () => {
     const activeSession = sessionRef.current;
     if (!activeSession) return;
@@ -206,20 +227,26 @@ export default function Home() {
     setLoadingEmployees(true);
     setPageError("");
     try {
-      const allEmployees: EmployeeSummary[] = [];
-      let offset = 0;
-      let page: EmployeeSummary[];
+      const params = new URLSearchParams({
+        offset: String(page * PAGE_SIZE),
+        limit: String(PAGE_SIZE),
+        count: "1",
+      });
+      if (filterSite !== "Todas") params.set("site", filterSite);
+      if (debouncedSearch) params.set("search", debouncedSearch);
 
-      do {
-        page = await requestApi<EmployeeSummary[]>(
-          activeSession,
-          `/api/employees?offset=${offset}&limit=${PAGE_SIZE}`,
-        );
-        allEmployees.push(...page);
-        offset += page.length;
-      } while (page.length === PAGE_SIZE);
+      const result = await requestApi<{ data: EmployeeSummary[]; total: number }>(
+        activeSession,
+        `/api/employees?${params.toString()}`,
+      );
 
-      setEmployees(allEmployees);
+      // Si se borró el último registro de la última página, se retrocede una página.
+      if (result.data.length === 0 && result.total > 0 && page > 0) {
+        setPage(Math.ceil(result.total / PAGE_SIZE) - 1);
+        return;
+      }
+      setEmployees(result.data);
+      setTotal(result.total);
     } catch (error) {
       console.error("No se pudo cargar el directorio:", error);
       const message = describeError(error, "No se pudo cargar el directorio de empleados.");
@@ -229,18 +256,36 @@ export default function Home() {
     } finally {
       setLoadingEmployees(false);
     }
-  }, [notify]);
+  }, [notify, page, filterSite, debouncedSearch]);
+
+  // Contadores por sede: solo conteos en el servidor (sin traer filas).
+  const loadStats = useCallback(async () => {
+    const activeSession = sessionRef.current;
+    if (!activeSession) return;
+    try {
+      setStats(await requestApi<EmployeeStats>(activeSession, "/api/employees?stats=1"));
+    } catch (error) {
+      console.error("No se pudieron cargar los contadores:", error);
+    }
+  }, []);
 
   const userId = session?.user.id ?? null;
   useEffect(() => {
     if (!userId) return;
     const timer = window.setTimeout(() => {
-      void refreshEmployees();
+      void loadStats();
       const activeSession = sessionRef.current;
       if (activeSession) {
         requestApi<Access>(activeSession, "/api/me").then(setAccess).catch(() => setAccess(null));
       }
     }, 0);
+    return () => window.clearTimeout(timer);
+  }, [userId, loadStats]);
+
+  // La lista se vuelve a pedir solo al cambiar de página, de sede o de búsqueda.
+  useEffect(() => {
+    if (!userId) return;
+    const timer = window.setTimeout(() => void refreshEmployees(), 0);
     return () => window.clearTimeout(timer);
   }, [userId, refreshEmployees]);
 
@@ -258,22 +303,8 @@ export default function Home() {
     }
   }, [profilePhotoPath, editingPhotoPath]);
 
-  const deferredSearch = useDeferredValue(search);
-  const filteredEmployees = useMemo(() => {
-    const query = deferredSearch.trim().toLocaleLowerCase("es-MX");
-    return employees.filter((employee) => {
-      const matchesSite = filterSite === "Todas" || employee.site === filterSite;
-      const searchable = [
-        employee.employee_code,
-        employee.full_name,
-        employee.position,
-        employee.email ?? "",
-      ]
-        .join(" ")
-        .toLocaleLowerCase("es-MX");
-      return matchesSite && (!query || searchable.includes(query));
-    });
-  }, [employees, filterSite, deferredSearch]);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const hasFilters = filterSite !== "Todas" || debouncedSearch !== "";
 
   const positionSuggestions = useMemo(
     () => Array.from(new Set([...POSITIONS, ...employees.map((employee) => employee.position)])).sort((a, b) => a.localeCompare(b, "es-MX")),
@@ -484,15 +515,9 @@ export default function Home() {
             body: JSON.stringify(payload),
           });
 
-      // Se actualiza la lista en memoria con la respuesta: no hace falta volver a descargarla.
-      const summary = toEmployeeSummary(saved);
-      setEmployees((current) =>
-        sortEmployees(
-          isEdit
-            ? current.map((item) => (item.id === summary.id ? summary : item))
-            : [...current, summary],
-        ),
-      );
+      // Con paginación el orden y la página dependen del servidor: se vuelve a pedir solo la página actual.
+      void refreshEmployees();
+      void loadStats();
 
       if (previousPath && previousPath !== photoPath) void deleteEmployeePhoto(previousPath);
 
@@ -528,7 +553,8 @@ export default function Home() {
       await requestApi<void>(session, `/api/employees/${employee.id}`, { method: "DELETE" });
       if (employee.photo_path) void deleteEmployeePhoto(employee.photo_path);
       setSelectedEmployee(null);
-      setEmployees((current) => current.filter((item) => item.id !== employee.id));
+      void refreshEmployees();
+      void loadStats();
       notify("success", "Empleado eliminado", `Se eliminó el expediente de ${employee.full_name}.`);
     } catch (error) {
       console.error("No se pudo eliminar el empleado:", error);
@@ -643,10 +669,10 @@ export default function Home() {
           </div>
 
           <div className="stats-grid">
-            <StatCard label="Total empleados" count={employees.length} tone="green" icon={<UsersRound size={18} />} />
-            <StatCard label="Campeche" count={employees.filter((item) => item.site === "Campeche").length} tone="blue" icon={<Building2 size={18} />} />
-            <StatCard label="Lagunas" count={employees.filter((item) => item.site === "Lagunas").length} tone="gold" icon={<Building2 size={18} />} />
-            <StatCard label="Cruz Azul" count={employees.filter((item) => item.site === "Cruz Azul").length} tone="purple" icon={<Building2 size={18} />} />
+            <StatCard label="Total empleados" count={stats?.total ?? 0} tone="green" icon={<UsersRound size={18} />} />
+            <StatCard label="Campeche" count={stats?.bySite["Campeche"] ?? 0} tone="blue" icon={<Building2 size={18} />} />
+            <StatCard label="Lagunas" count={stats?.bySite["Lagunas"] ?? 0} tone="gold" icon={<Building2 size={18} />} />
+            <StatCard label="Cruz Azul" count={stats?.bySite["Cruz Azul"] ?? 0} tone="purple" icon={<Building2 size={18} />} />
           </div>
         </section>
 
@@ -661,7 +687,10 @@ export default function Home() {
                   aria-selected={filterSite === site}
                   className={`site-tab${filterSite === site ? " active" : ""}`}
                   key={site}
-                  onClick={() => setFilterSite(site)}
+                  onClick={() => {
+                    setFilterSite(site);
+                    setPage(0);
+                  }}
                 >
                   {site === "Todas" ? "Todas las sedes" : site}
                 </button>
@@ -695,7 +724,7 @@ export default function Home() {
                 </tr>
               </thead>
               <tbody>
-                {filteredEmployees.map((employee) => (
+                {employees.map((employee) => (
                   <tr key={employee.id}>
                     <td className="employee-code">{employee.employee_code}</td>
                     <td>
@@ -720,18 +749,29 @@ export default function Home() {
               </tbody>
             </table>
             {loadingEmployees && <div className="table-state"><span className="spinner" /> Cargando empleados…</div>}
-            {!loadingEmployees && filteredEmployees.length === 0 && (
+            {!loadingEmployees && employees.length === 0 && (
               <div className="empty-state">
                 <div className="empty-icon"><UserRound size={25} /></div>
-                <h2>{employees.length === 0 ? "Aún no hay empleados registrados" : "No se encontraron empleados"}</h2>
-                <p>{employees.length === 0 ? "Agrega el primer expediente para empezar a usar el directorio." : "Prueba con otro nombre, ID o sede."}</p>
-                {employees.length === 0 && can("employees.create") && <button className="button button-primary" onClick={openCreateForm}><Plus size={17} /> Registrar empleado</button>}
+                <h2>{!hasFilters ? "Aún no hay empleados registrados" : "No se encontraron empleados"}</h2>
+                <p>{!hasFilters ? "Agrega el primer expediente para empezar a usar el directorio." : "Prueba con otro nombre, ID o sede."}</p>
+                {!hasFilters && can("employees.create") && <button className="button button-primary" onClick={openCreateForm}><Plus size={17} /> Registrar empleado</button>}
               </div>
             )}
           </div>
           <div className="table-footer">
-            <span>{filteredEmployees.length} {filteredEmployees.length === 1 ? "empleado" : "empleados"}</span>
-            {loadingEmployees && <span>Sincronizando datos</span>}
+            <span>
+              {total === 0
+                ? "0 empleados"
+                : `${page * PAGE_SIZE + 1}–${page * PAGE_SIZE + employees.length} de ${total} ${total === 1 ? "empleado" : "empleados"}`}
+              {loadingEmployees && " · Sincronizando datos"}
+            </span>
+            {totalPages > 1 && (
+              <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <button type="button" className="text-button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0 || loadingEmployees}>← Anterior</button>
+                <span>Página {page + 1} de {totalPages}</span>
+                <button type="button" className="text-button" onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))} disabled={page >= totalPages - 1 || loadingEmployees}>Siguiente →</button>
+              </span>
+            )}
           </div>
         </section>
       </main>
