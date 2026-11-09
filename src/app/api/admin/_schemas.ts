@@ -9,7 +9,7 @@ export const roleSchema = z
   .object({
     name: z.string().trim().min(2).max(60),
     description: z.string().trim().max(200).nullable(),
-    permissions: z.array(z.enum(ALL_PERMISSIONS as [Permission, ...Permission[]])).max(20),
+    permissions: z.array(z.enum(ALL_PERMISSIONS as [Permission, ...Permission[]])).max(60),
   })
   .strict();
 

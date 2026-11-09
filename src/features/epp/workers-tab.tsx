@@ -4,9 +4,9 @@ import { ClipboardCheck, Search, UserRound, X } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 import type { EppEmployee, EppMovement } from "@/lib/permissions";
 import { formatDateTime, formatDay } from "./format";
-import { ExportButtons } from "./export-buttons";
+import { ExportButtons } from "@/shared/reports/export-buttons";
 import { buildPeople, monthKey, monthLabel, normalize, type Person } from "./people";
-import { fileSafe, type Report } from "./report-export";
+import { fileSafe, type Report } from "@/shared/reports/report-export";
 
 const MAX_RESULTS = 5;
 

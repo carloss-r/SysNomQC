@@ -3,21 +3,25 @@ import { reportServerIncident } from "@/lib/incidents";
 import {
   employeeNotifications,
   eppNotifications,
+  fuelNotifications,
   purchaseNotifications,
   sortNotifications,
   type AppNotification,
   type EmployeeCheckRow,
   type EppStockRow,
+  type FuelPermitRow,
+  type FuelSemaphoreRow,
   type NotificationSourceStatus,
   type NotificationsResponse,
 } from "@/lib/notifications";
+import { daysBetween, PERMIT_WARNING_DAYS, plantToday } from "@/lib/fuels";
 import { getAuthenticatedClient } from "../employees/_server";
 import { readPurchaseRequests } from "../epp/requests/_read";
 
 const BATCH_SIZE = 1000;
 const MAX_ROWS = 20_000;
 // La tabla aún no existe en este entorno (p. ej. falta ejecutar una migración).
-const MISSING_TABLE_CODES = new Set(["42P01", "PGRST205", "42703"]);
+const MISSING_TABLE_CODES = new Set(["42P01", "PGRST205", "42703", "PGRST202", "42883"]);
 
 type PageResult<T> = { data: T[] | null; error: { code?: string; message: string } | null };
 
@@ -122,11 +126,43 @@ export async function GET(request: NextRequest) {
     }
   };
 
-  const [employees, inventory, purchases] = await Promise.all([readEmployees(), readInventory(), readPurchases()]);
+  // Combustibles alternos: semáforo para quien programa, opera la báscula o es de Ecología;
+  // permisos SEMARNAT por vencer para quien homologa proveedores o programa.
+  const readFuels = async (): Promise<SourceResult> => {
+    const watchesSemaphore = has("fuels.schedule") || has("fuels.ecology") || has("fuels.scale");
+    const watchesPermits = has("fuels.suppliers") || has("fuels.schedule");
+    if (!has("fuels.view") || (!watchesSemaphore && !watchesPermits)) return { status: "no_permission", items: [] };
+    try {
+      const today = plantToday();
+      let semaphore: FuelSemaphoreRow | null = null;
+      if (watchesSemaphore) {
+        const { data, error } = await client.rpc("fuel_month_summary", { p_month: today });
+        if (error) throw error;
+        semaphore = data as FuelSemaphoreRow;
+      }
+      let permits: FuelPermitRow[] = [];
+      if (watchesPermits) {
+        const limit = new Date(Date.parse(`${today}T00:00:00Z`) + PERMIT_WARNING_DAYS * 86_400_000).toISOString().slice(0, 10);
+        const { data, error } = await client
+          .from("fuel_suppliers")
+          .select("id,business_name,permit_valid_until")
+          .eq("status", "aprobado")
+          .lte("permit_valid_until", limit)
+          .limit(500);
+        if (error) throw error;
+        permits = (data as Omit<FuelPermitRow, "days">[]).map((row) => ({ ...row, days: daysBetween(today, row.permit_valid_until) }));
+      }
+      return { status: "ok", items: fuelNotifications(semaphore, permits) };
+    } catch (error) {
+      return failedSource("combustibles alternos", error);
+    }
+  };
+
+  const [employees, inventory, purchases, fuels] = await Promise.all([readEmployees(), readInventory(), readPurchases(), readFuels()]);
 
   const body: NotificationsResponse = {
-    items: sortNotifications([...purchases.items, ...inventory.items, ...employees.items]),
-    sources: { employees: employees.status, inventory: inventory.status, purchases: purchases.status },
+    items: sortNotifications([...purchases.items, ...fuels.items, ...inventory.items, ...employees.items]),
+    sources: { employees: employees.status, inventory: inventory.status, purchases: purchases.status, fuels: fuels.status },
     checked_at: new Date().toISOString(),
   };
   return NextResponse.json(body);

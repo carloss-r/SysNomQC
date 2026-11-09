@@ -10,6 +10,7 @@ Aplicación con Next.js y React para administrar el directorio de empleados usan
    3. `202611050001_seguridad.sql` (políticas por permiso, bitácora de auditoría y cierre de tablas sin RLS)
    4. `202611060001_epp.sql`, `202611060002_epp_historial.sql` y `202611070001_epp_por_sede.sql` (módulo de EPP, ver abajo)
    5. `202611080001_varios_roles.sql` (una cuenta puede tener varios roles; sus permisos se suman)
+   6. `202611090001_epp_controles.sql` y `202611100001_combustibles_alternos.sql` (módulo de combustibles alternos, ver abajo)
 2. En **Authentication > Users**, crea las cuentas autorizadas. El sistema no ofrece registro público.
 3. Por cada cuenta, copia su UUID y correo desde Auth y autorízala ejecutando en SQL Editor:
 
@@ -92,6 +93,28 @@ Ejecuta `202611070001_epp_por_sede.sql` después de las dos anteriores (es segur
 - Una cuenta de compras **con sede asignada** solo recibe y ve las solicitudes de su sede; con *Todas las sedes* ve todas, y cada sede muestra en su pestaña cuántas tiene abiertas. La lista de solicitudes siempre corresponde a la sede elegida arriba.
 - La migración da a `AlmacenistaEPP` los permisos de inventario (`epp.view`, `epp.deliver`, `epp.manage`, `epp.request`). Recuerda asignarle su **sede** a cada cuenta de almacén.
 
+## Módulo de combustibles alternos
+
+Pantalla `/combustibles` (menú **Ecología → Combustibles alternos**). Especificación completa en `Archivos/ModuloCoque.txt`. Ejecuta en Supabase `supabase/migrations/202611100001_combustibles_alternos.sql` (después de la de controles de EPP; es seguro repetirla). Crea las tablas, las funciones con los candados, el bucket privado `fuel-permits` (PDF de hasta 10 MB) y cuatro roles sugeridos: `CombustiblesAlternos`, `OperadorBascula`, `Ecologia` y `ContabilidadCombustibles`.
+
+Arriba de todas las pestañas se ve el **semáforo SEMARNAT** del mes: verde hasta 25.0 %, amarillo de 25.1 a 29.9 % y rojo desde 30.0 %, con la proyección que suma lo programado.
+
+| Pestaña | Qué hace | Candados (los vuelve a exigir la base de datos) |
+| --- | --- | --- |
+| **M1 · Proveedores** | Alta y homologación en dos pestañas (*Datos corporativos* y *Parámetros de calidad*, uno o varios productos con su análisis), **Adjuntar permiso** (PDF de SEMARNAT), **Ver PDF** y la **Ficha de proveedor autorizado** en PDF o Excel. | **Validar y guardar** no guarda si cal/g < 5,000, cloro > 1.80 %, agua > 12.0 % o azufre > 1.0 %. Un permiso vencido deja al proveedor como *Rechazado*. Avisa en la campana 30 días antes de que venza. |
+| **M2 · Programación** | Agenda por día o próximas, con descarga de la **agenda de recepción para báscula**. | Solo muestra proveedores aprobados con permiso vigente en la fecha y sus productos activos. **Bloqueo predictivo**: si con el peso estimado el mes llegaría al 30 %, no se programa. |
+| **M3 · Báscula** | **Capturar entrada (bruto)** con los bloques Generador, Transportista y Datos del vehículo; **Capturar salida (tara)**; **Imprimir certificado PDF**; bitácora del día. | Solo entran unidades de la agenda. El folio del manifiesto queda amarrado al ticket (no se repite). Al capturar la tara, el neto se calcula y el ticket se **cierra de forma irreversible**: no se edita ni se borra. El certificado solo se habilita con el ticket cerrado. |
+| **M4 · Comercial** | Esquema (Cobro / Pago / Valor 0) y tarifa por tonelada de cada producto; reportes **diario, quincenal y mensual** por producto y por generador (PDF o Excel). | Subtotal = neto (t) × tarifa, **sin IVA**. La tarifa se congela en el ticket al cerrarlo; cambiarla no altera lo ya cerrado. Solo con `fuels.commercial`. |
+| **M5 · Ecología** | Consumo mensual de coque, memoria de cálculo por mes y **reporte semestral SEMARNAT** (acumulados de masa y energía por producto y por generador para la COA, cloro fuera de especificación y marca de auditoría roja). | Coque a 7,500 cal/g. El reporte oficial solo usa el coque capturado de cada mes; la proyección diaria usa el último capturado si falta el del mes. |
+
+**Memoria de cálculo:** energía de alternos (Gcal) = Σ [neto (t) × poder calorífico (cal/g)] / 1000; energía del coque (Gcal) = [coque (t) × 7500] / 1000; % sustitución = alternos / (alternos + coque) × 100. Está en `src/lib/fuels.ts` (pantalla y reportes) y en `fuel_month_summary_raw()` (la base, que es la que bloquea).
+
+**Cloro por embarque y corrección cruzada** (caso de referencia del documento): el cloro de cada carga se captura al cerrar la tara o después, una sola vez (**Cloro**). Si pasa de 1.80 %, el proveedor tiene **2 días** para mandar un embarque de compensación con 1.80 % o menos; al cerrarlo se elige *Compensa el embarque* y se muestra el promedio ponderado. Corregido = sin penalización; si vence el plazo queda *penalizado*. Solo **una corrección cruzada por proveedor al mes**.
+
+**Avisos:** el semáforo amarillo o rojo y los permisos por vencer o vencidos aparecen en la campana. Además, la primera vez en el mes que el semáforo pasa a amarillo y la primera que pasa a rojo se envía un correo a Ecología: configura `ECOLOGY_EMAIL_TO` (uno o varios correos separados por coma) junto con `RESEND_API_KEY`.
+
+Permisos (se asignan en *Usuarios y roles*): `fuels.view` (ver el módulo y el semáforo), `fuels.suppliers` (M1), `fuels.schedule` (M2), `fuels.scale` (M3), `fuels.commercial` (M4) y `fuels.ecology` (M5). Los cambios se hacen solo con funciones `fuel_*` de la base, que validan el permiso y las reglas; las tablas solo se leen con `fuels.view`.
+
 ## Arquitectura
 
 ```
@@ -103,8 +126,8 @@ src/
     (app)/admin/            Usuarios y roles        ->  /admin
     api/                    API del servidor (valida sesión, permisos y datos)
   features/                 Una carpeta por módulo, con su propia lógica y componentes
-    auth/  employees/  admin/
-  shared/                   Piezas reutilizables: ui/, layout/ (marco, menú), config/navigation.ts
+    auth/  employees/  admin/  epp/  fuels/
+  shared/                   Piezas reutilizables: ui/, layout/ (marco, menú), reports/ (PDF y Excel con membrete), config/navigation.ts
   lib/                      Utilidades sin interfaz (Supabase, API, permisos, seguridad, fotos)
 ```
 

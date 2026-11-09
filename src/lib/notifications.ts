@@ -8,10 +8,14 @@ export type NotificationKind =
   | "low_stock"
   | "reorder_soon"
   | "employee_data"
-  | "employee_contact";
+  | "employee_contact"
+  | "fuel_semaphore"
+  | "fuel_permit";
 
 /** Lo emite la pantalla de EPP al registrar un movimiento, para revisar los avisos sin esperar. */
 export const EPP_CHANGED_EVENT = "epp:changed";
+/** Cualquier pantalla que cambie datos con avisos (EPP, combustibles…) lo emite para revisar la campana. */
+export const DATA_CHANGED_EVENT = EPP_CHANGED_EVENT;
 
 export type AppNotification = {
   /** Estable mientras dure el problema; incluye el tipo para que un agravamiento vuelva a avisar. */
@@ -28,7 +32,12 @@ export type NotificationSourceStatus = "ok" | "no_permission" | "unavailable";
 
 export type NotificationsResponse = {
   items: AppNotification[];
-  sources: { employees: NotificationSourceStatus; inventory: NotificationSourceStatus; purchases: NotificationSourceStatus };
+  sources: {
+    employees: NotificationSourceStatus;
+    inventory: NotificationSourceStatus;
+    purchases: NotificationSourceStatus;
+    fuels: NotificationSourceStatus;
+  };
   checked_at: string;
 };
 
@@ -45,6 +54,8 @@ export const KIND_LABELS: Record<NotificationKind, string> = {
   reorder_soon: "Compra anticipada",
   employee_data: "Expediente incompleto",
   employee_contact: "Datos de contacto",
+  fuel_semaphore: "Semáforo SEMARNAT",
+  fuel_permit: "Permiso SEMARNAT",
 };
 
 const SEVERITY_ORDER: Record<NotificationSeverity, number> = { critical: 0, important: 1, minor: 2 };
@@ -190,4 +201,53 @@ export function employeeNotifications(rows: EmployeeCheckRow[]): AppNotification
     }
     return result;
   });
+}
+
+// ---------------------------------------------------------------------------
+// Combustibles alternos: semáforo SEMARNAT del mes y vigencia de permisos de proveedores
+// ---------------------------------------------------------------------------
+export type FuelSemaphoreRow = { month: string; pct: number | null; level: string; projected_pct: number | null; projected_level: string };
+export type FuelPermitRow = { id: number; business_name: string; permit_valid_until: string; days: number };
+
+const pctText = (value: number | null) => (value === null ? "—" : `${value.toFixed(1)} %`);
+
+export function fuelNotifications(semaphore: FuelSemaphoreRow | null, permits: FuelPermitRow[]): AppNotification[] {
+  const items: AppNotification[] = [];
+  if (semaphore && (semaphore.level === "rojo" || semaphore.level === "amarillo")) {
+    const red = semaphore.level === "rojo";
+    items.push({
+      id: `fuel_semaphore:${semaphore.month}:${semaphore.level}`,
+      kind: "fuel_semaphore",
+      severity: red ? "critical" : "important",
+      title: red ? `Sustitución térmica en rojo: ${pctText(semaphore.pct)}` : `Sustitución térmica en amarillo: ${pctText(semaphore.pct)}`,
+      detail: red
+        ? `${semaphore.month} · Se alcanzó el límite SEMARNAT del 30 %. La agenda bloquea nuevas cargas del mes.`
+        : `${semaphore.month} · Dosifica la logística semanal. Proyección con lo programado: ${pctText(semaphore.projected_pct)}.`,
+      href: "/combustibles",
+    });
+  } else if (semaphore && semaphore.projected_level === "rojo") {
+    items.push({
+      id: `fuel_semaphore:${semaphore.month}:proyeccion`,
+      kind: "fuel_semaphore",
+      severity: "important",
+      title: `La agenda proyecta rebasar el 30 %: ${pctText(semaphore.projected_pct)}`,
+      detail: `${semaphore.month} · Hoy va en ${pctText(semaphore.pct)}; revisa las recepciones programadas.`,
+      href: "/combustibles",
+    });
+  }
+  for (const row of permits) {
+    const expired = row.days < 0;
+    const day = row.permit_valid_until.split("-").reverse().join("/");
+    items.push({
+      id: `fuel_permit:${row.id}:${row.permit_valid_until}:${expired ? "vencido" : "por_vencer"}`,
+      kind: "fuel_permit",
+      severity: expired ? "critical" : "important",
+      title: expired ? `Permiso SEMARNAT vencido: ${row.business_name}` : `Permiso SEMARNAT por vencer: ${row.business_name}`,
+      detail: expired
+        ? `Venció el ${day}. No se le puede programar ni recibir material hasta renovarlo.`
+        : `Vence el ${day} (en ${row.days} día${row.days === 1 ? "" : "s"}). Solicita la renovación.`,
+      href: "/combustibles",
+    });
+  }
+  return items;
 }

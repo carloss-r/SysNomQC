@@ -146,6 +146,9 @@ export function NotificationsView() {
         {sources?.inventory === "unavailable" && (
           <div className="error-banner" role="status">No se pudo revisar el inventario de EPP, así que aquí pueden faltar avisos de existencias. Revisa que se hayan ejecutado las migraciones de EPP en Supabase.</div>
         )}
+        {sources?.fuels === "unavailable" && (
+          <div className="error-banner" role="status">No se pudo revisar combustibles alternos (semáforo SEMARNAT y permisos). Revisa que se haya ejecutado su migración en Supabase.</div>
+        )}
         {sources?.employees === "unavailable" && (
           <div className="error-banner" role="status">No se pudieron revisar los expedientes, así que aquí pueden faltar avisos.</div>
         )}

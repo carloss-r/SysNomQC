@@ -5,6 +5,10 @@ const KNOWN: Record<string, string> = {
   RecursosHumanos: "Recursos humanos",
   AlmacenistaEPP: "Almacenista de EPP",
   EncargadoCompras: "Encargado de compras",
+  CombustiblesAlternos: "Combustibles alternos",
+  OperadorBascula: "Operador de báscula",
+  Ecologia: "Ecología",
+  ContabilidadCombustibles: "Contabilidad de combustibles",
 };
 
 /** "EncargadoCompras" → "Encargado de compras"; un nombre ya escrito con espacios se deja igual. */

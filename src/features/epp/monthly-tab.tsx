@@ -3,9 +3,9 @@
 import { useMemo } from "react";
 import type { EppMovement } from "@/lib/permissions";
 import { KIND_LABELS, formatDay } from "./format";
-import { ExportButtons } from "./export-buttons";
+import { ExportButtons } from "@/shared/reports/export-buttons";
 import { monthKey, monthLabel, normalize } from "./people";
-import { fileSafe, type Report } from "./report-export";
+import { fileSafe, type Report } from "@/shared/reports/report-export";
 
 export function MonthlyTab({
   site,

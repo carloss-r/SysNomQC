@@ -1,7 +1,8 @@
-import { formatDateTime } from "./format";
+const formatDateTime = (value: string) =>
+  new Date(value).toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 /**
- * Reportes descargables de EPP en PDF o Excel (.xlsx), con el mismo membrete:
+ * Reportes descargables (EPP, combustibles alternos…) en PDF o Excel (.xlsx), con el mismo membrete:
  * logotipo, nombre de la cooperativa, título del reporte y datos (sede, periodo, trabajador…).
  * jsPDF y ExcelJS se cargan solo al pulsar el botón, para no hacer más pesada la pantalla.
  */
@@ -10,6 +11,8 @@ export type ReportCell = string | number;
 export type ReportColumn = { header: string; width: number; align?: "left" | "right" | "center" };
 export type ReportSection = { title: string; columns: ReportColumn[]; rows: ReportCell[][]; empty?: string };
 export type Report = {
+  /** Área bajo el nombre de la cooperativa; por omisión, la de EPP. */
+  subtitle?: string;
   /** Título grande, p. ej. "Control mensual de EPP". */
   title: string;
   /** Datos que identifican el reporte: [["Sede", "Lagunas"], ["Periodo", "noviembre 2026"]]. */
@@ -24,6 +27,7 @@ export type Report = {
 
 const ORG = "COOPERATIVA QUINTA GENERACIÓN";
 const ORG_SUB = "S.C. DE R.L. DE C.V.  ·  Seguridad e higiene · Equipo de protección personal";
+const orgSub = (report: Report) => (report.subtitle ? `S.C. DE R.L. DE C.V.  ·  ${report.subtitle}` : ORG_SUB);
 
 const GREEN: [number, number, number] = [11, 93, 42];
 const GOLD: [number, number, number] = [197, 155, 39];
@@ -42,7 +46,7 @@ export function fileSafe(value: string) {
     .replace(/^_+|_+$/g, "");
 }
 
-async function loadLogo(): Promise<string | null> {
+export async function loadLogo(): Promise<string | null> {
   try {
     const response = await fetch("/logo-cooperativa.jpg");
     if (!response.ok) return null;
@@ -99,7 +103,7 @@ export async function downloadReportPdf(report: Report) {
   y += 5;
   text(ORG, left, 13, "bold", GREEN);
   y += 4.5;
-  text(ORG_SUB, left, 8, "bold", GOLD);
+  text(orgSub(report), left, 8, "bold", GOLD);
   y += 8;
   text(report.title.toUpperCase(), left, 16, "bold", INK);
   text(`Generado: ${generatedAt}`, pageW - margin, 8, "normal", MUTED, "right");
@@ -282,7 +286,7 @@ export async function downloadReportXlsx(report: Report) {
       cell.alignment = { vertical: "middle" };
     };
     band(1, ORG, 15, hex(GREEN));
-    band(2, ORG_SUB, 9, hex(GOLD));
+    band(2, orgSub(report), 9, hex(GOLD));
     band(3, report.title.toUpperCase(), 16, hex(INK));
     band(4, `${section.title}  ·  Generado el ${generatedAt} por ${report.generatedBy}`, 9, hex(MUTED), false);
     sheet.getRow(1).height = 22;

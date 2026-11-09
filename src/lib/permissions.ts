@@ -9,6 +9,12 @@ export const PERMISSIONS = [
   { key: "epp.manage", label: "Administrar catálogo, ingresos y ajustes de EPP" },
   { key: "epp.request", label: "Solicitar compra de EPP cuando falta material" },
   { key: "epp.purchase", label: "Atender solicitudes de compra de EPP (encargado de compras)" },
+  { key: "fuels.view", label: "Ver combustibles alternos y semáforo SEMARNAT" },
+  { key: "fuels.suppliers", label: "Homologar proveedores de combustibles alternos (M1)" },
+  { key: "fuels.schedule", label: "Programar recepciones de combustibles alternos (M2)" },
+  { key: "fuels.scale", label: "Operar báscula y manifiestos (M3)" },
+  { key: "fuels.commercial", label: "Tarifas y reportes contables de combustibles (M4)" },
+  { key: "fuels.ecology", label: "Capturar consumo de coque y reporte SEMARNAT (M5)" },
   { key: "users.manage", label: "Administrar usuarios y roles" },
 ] as const;
 
