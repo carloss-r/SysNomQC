@@ -12,9 +12,10 @@ export async function GET(request: NextRequest) {
 
   // Si la migración de "usuario" aún no se aplicó (columna inexistente), se lista sin ese campo.
   const columns = "user_id,email,full_name,active,role_id,created_at,role:roles(nombre)";
-  let result = await auth.admin.from("authorized_users").select(`${columns},username`).order("email");
+  const listUsers = (select: string) => auth.admin.from("authorized_users").select(select).order("email");
+  let result = await listUsers(`${columns},username`);
   if (result.error?.code === "42703") {
-    result = await auth.admin.from("authorized_users").select(columns).order("email");
+    result = await listUsers(columns);
   }
   const { data, error } = result;
   if (error) return adminDbError(error);
