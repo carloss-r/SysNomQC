@@ -679,9 +679,9 @@ export default function Home() {
               <Link className="button button-outline" href="/admin"><Settings size={16} /> Usuarios y roles</Link>
             )}
             <span className="connection-status"><span /> Sistema de Control Operativo</span>
-            <span className="signed-user" title={session.user.email ?? ""}>
+            <span className="signed-user" title={access?.full_name ?? ""}>
               <CircleUserRound size={18} />
-              <span>{session.user.email}</span>
+              <span>{access?.full_name || "Mi cuenta"}</span>
             </span>
             <button className="icon-button logout-button" onClick={handleLogout} disabled={signingOut} aria-label="Cerrar sesión" title="Cerrar sesión">
               <LogOut size={18} />
