@@ -3,12 +3,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { BadJsonError, readJson } from "../../../employees/_server";
 import { adminDbError, badRequest, requireAdmin } from "../../_admin";
+import { usernameSchema } from "../../_schemas";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 const userPatchSchema = z
   .object({
     full_name: z.string().trim().min(1).max(150),
+    username: usernameSchema.nullable(),
     role_id: z.number().int().positive(),
     active: z.boolean(),
     password: z.string().min(8).max(72),

@@ -32,6 +32,7 @@ export type AdminRole = {
 export type AdminUser = {
   user_id: string;
   email: string;
+  username?: string | null;
   full_name: string | null;
   active: boolean;
   role_id: number | null;

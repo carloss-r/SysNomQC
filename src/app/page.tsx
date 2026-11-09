@@ -317,13 +317,41 @@ export default function Home() {
     setAuthError("");
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      const identifier = email.trim();
+      let data: { session: Session | null };
+      let error: { name?: string; status?: number } | null = null;
+
+      if (identifier.includes("@")) {
+        ({ data, error } = await supabase.auth.signInWithPassword({ email: identifier, password }));
+      } else {
+        // Con nombre de usuario, el servidor lo resuelve y devuelve la sesión.
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier, password }),
+        });
+        const result = (await response.json().catch(() => null)) as
+          | { access_token?: string; refresh_token?: string; error?: string }
+          | null;
+        if (response.ok && result?.access_token && result.refresh_token) {
+          const setResult = await supabase.auth.setSession({
+            access_token: result.access_token,
+            refresh_token: result.refresh_token,
+          });
+          data = { session: setResult.data.session };
+          error = setResult.error;
+        } else {
+          data = { session: null };
+          error = { name: response.status >= 500 ? "AuthRetryableFetchError" : "AuthApiError", status: response.status };
+        }
+      }
+
       if (error) {
         console.error("No se pudo iniciar sesión:", error);
         const unreachable = error.name === "AuthRetryableFetchError" || (error.status ?? 0) >= 500;
         const message = unreachable
           ? "No se pudo conectar para iniciar sesión. Inténtalo de nuevo."
-          : "No se pudo iniciar sesión. Revisa tu correo y contraseña.";
+          : "No se pudo iniciar sesión. Revisa tu usuario o correo y tu contraseña.";
         setAuthError(message);
         notify("error", unreachable ? "Sin conexión" : "No se pudo iniciar sesión", message);
         if (unreachable) reportClientIncident("auth.login", error);
@@ -596,14 +624,17 @@ export default function Home() {
           <p className="login-copy">Ingresa con tu cuenta autorizada para consultar los expedientes de la cooperativa.</p>
 
           <form onSubmit={handleLogin} className="login-form">
-            <Field label="Correo electrónico" required>
+            <Field label="Usuario o correo electrónico" required>
               <span className="input-icon"><Mail size={17} /></span>
               <input
-                type="email"
+                type="text"
                 autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                maxLength={150}
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="nombre@cooperativa.com"
+                placeholder="usuario o nombre@cooperativa.com"
                 required
               />
             </Field>

@@ -10,20 +10,24 @@ export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
   if ("response" in auth) return auth.response;
 
-  const { data, error } = await auth.admin
-    .from("authorized_users")
-    .select("user_id,email,full_name,active,role_id,created_at,role:roles(nombre)")
-    .order("email");
+  // Si la migración de "usuario" aún no se aplicó (columna inexistente), se lista sin ese campo.
+  const columns = "user_id,email,full_name,active,role_id,created_at,role:roles(nombre)";
+  let result = await auth.admin.from("authorized_users").select(`${columns},username`).order("email");
+  if (result.error?.code === "42703") {
+    result = await auth.admin.from("authorized_users").select(columns).order("email");
+  }
+  const { data, error } = result;
   if (error) return adminDbError(error);
 
-  const users: AdminUser[] = (data ?? []).map((row) => ({
-    user_id: row.user_id,
-    email: row.email,
-    full_name: row.full_name,
-    active: row.active,
-    role_id: row.role_id,
-    role_name: (row.role as unknown as { nombre: string } | null)?.nombre ?? null,
-    created_at: row.created_at,
+  const users: AdminUser[] = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((row) => ({
+    user_id: row.user_id as string,
+    email: row.email as string,
+    username: (row.username as string | null | undefined) ?? null,
+    full_name: row.full_name as string | null,
+    active: row.active as boolean,
+    role_id: row.role_id as number | null,
+    role_name: (row.role as { nombre: string } | null)?.nombre ?? null,
+    created_at: row.created_at as string | null,
   }));
   return NextResponse.json(users);
 }
@@ -37,7 +41,7 @@ export async function POST(request: NextRequest) {
     if (!input.success) {
       return badRequest("Revisa nombre, correo, rol y contraseña (mínimo 8 caracteres).");
     }
-    const { email, full_name, password, role_id, active } = input.data;
+    const { email, username, full_name, password, role_id, active } = input.data;
 
     const { data: created, error: createError } = await auth.admin.auth.admin.createUser({
       email,
@@ -55,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     const { error } = await auth.admin
       .from("authorized_users")
-      .insert({ user_id: created.user.id, email, full_name, role_id, active });
+      .insert({ user_id: created.user.id, email, full_name, role_id, active, ...(username ? { username } : {}) });
     if (error) {
       // Sin transacciones: se elimina la cuenta de Auth para no dejarla sin rol.
       await auth.admin.auth.admin.deleteUser(created.user.id);
