@@ -16,6 +16,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { ExportButtons } from "@/shared/reports/export-buttons";
 import type { Report } from "@/shared/reports/report-export";
 import { useNotify } from "@/shared/ui/notice-provider";
+import { useDialog } from "@/shared/ui/dialog-provider";
 import { downloadCertificatePdf } from "./certificate-pdf";
 import { formatDay, formatTime, parseNumber } from "./format";
 import { FUELS_SUBTITLE } from "./suppliers-tab";
@@ -37,6 +38,7 @@ export function ScaleTab({
 }) {
   const { session, access } = useAuth();
   const notify = useNotify();
+  const systemDialog = useDialog();
   const [day, setDay] = useState(today);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<number | null>(null);
@@ -78,20 +80,39 @@ export function ScaleTab({
     }
   }
 
-  function cancel(row: FuelReception) {
-    const reason = window.prompt(`Motivo para cancelar el ticket ${row.id} (la unidad sale sin descargar):`);
-    if (reason?.trim()) void patch(row, { action: "cancel", reason }, "Ticket cancelado");
+  async function cancel(row: FuelReception) {
+    const reason = await systemDialog.prompt({
+      title: `Cancelar ticket ${row.id}`,
+      message: "La unidad sale sin descargar.",
+      label: "Motivo de la cancelación",
+      required: true,
+      multiline: true,
+      maxLength: 300,
+      validate: (value) => (value.length < 3 ? "Escribe al menos 3 caracteres." : null),
+      confirmLabel: "Cancelar ticket",
+      cancelLabel: "Volver",
+      tone: "danger",
+    });
+    if (reason) void patch(row, { action: "cancel", reason }, "Ticket cancelado");
   }
 
-  function lab(row: FuelReception) {
-    const value = window.prompt(`Cloro del embarque del ticket ${row.id} (%), según laboratorio. Solo se captura una vez:`);
+  async function lab(row: FuelReception) {
+    const value = await systemDialog.prompt({
+      title: `Cloro del ticket ${row.id}`,
+      message: "Porcentaje de cloro del embarque según laboratorio. Solo se captura una vez.",
+      label: "Cloro (%)",
+      placeholder: "0.57",
+      inputMode: "decimal",
+      required: true,
+      maxLength: 10,
+      validate: (text) => {
+        const pct = parseNumber(text);
+        return pct === null || pct < 0 || pct > 100 ? "Escribe el porcentaje de cloro, por ejemplo 0.57." : null;
+      },
+      confirmLabel: "Guardar análisis",
+    });
     if (value === null) return;
-    const pct = parseNumber(value);
-    if (pct === null || pct < 0 || pct > 100) {
-      notify("error", "Valor no válido", "Escribe el porcentaje de cloro, por ejemplo 0.57.");
-      return;
-    }
-    void patch(row, { action: "chlorine", chlorine_pct: pct }, "Análisis de cloro capturado");
+    void patch(row, { action: "chlorine", chlorine_pct: parseNumber(value)! }, "Análisis de cloro capturado");
   }
 
   function buildReport(generatedBy: string): Report {
@@ -142,7 +163,7 @@ export function ScaleTab({
                 {canOperate && (
                   <div className="epp-actions">
                     <button className="button button-gold" onClick={() => onExit(row)} disabled={busy === row.id}><Lock size={14} /> Capturar salida (tara)</button>
-                    <button className="button button-danger-outline" onClick={() => cancel(row)} disabled={busy === row.id}><Ban size={14} /> Cancelar</button>
+                    <button className="button button-danger-outline" onClick={() => void cancel(row)} disabled={busy === row.id}><Ban size={14} /> Cancelar</button>
                   </div>
                 )}
               </li>
@@ -193,7 +214,7 @@ export function ScaleTab({
                   <td className="row-actions">
                     <div className="epp-actions">
                       {row.status === "en_planta" && canOperate && <button className="button button-gold" onClick={() => onExit(row)}><Lock size={14} /> Tara</button>}
-                      {cl === "sin_analisis" && canLab && <button className="button button-outline" onClick={() => lab(row)} disabled={busy === row.id} title="Capturar cloro de laboratorio"><FlaskConical size={14} /> Cloro</button>}
+                      {cl === "sin_analisis" && canLab && <button className="button button-outline" onClick={() => void lab(row)} disabled={busy === row.id} title="Capturar cloro de laboratorio"><FlaskConical size={14} /> Cloro</button>}
                       <button className="button button-outline" onClick={() => void certificate(row)} disabled={row.status !== "cerrado"} title={row.status === "cerrado" ? "Imprimir certificado de recepción" : "Se habilita al cerrar la tara"}>
                         <Printer size={14} /> Certificado PDF
                       </button>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DM_Sans, Manrope } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/features/auth/auth-provider";
+import { DialogProvider } from "@/shared/ui/dialog-provider";
 import { NoticeProvider } from "@/shared/ui/notice-provider";
 import { THEME_INIT_SCRIPT } from "@/shared/ui/theme-init";
 import { ClientErrorMonitor } from "./client-error-monitor";
@@ -26,7 +27,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <ClientErrorMonitor />
         <NoticeProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <DialogProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </DialogProvider>
         </NoticeProvider>
       </body>
     </html>

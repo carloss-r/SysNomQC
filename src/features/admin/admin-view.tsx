@@ -8,6 +8,7 @@ import { describeError, requestApi } from "@/lib/api-client";
 import { SITES } from "@/lib/employees";
 import { PERMISSIONS, type AdminRole, type AdminUser, type Permission } from "@/lib/permissions";
 import { roleLabel, roleLabels } from "@/lib/roles";
+import { useDialog } from "@/shared/ui/dialog-provider";
 import { RequirePermission } from "@/shared/layout/require-permission";
 import { Field } from "@/shared/ui/field";
 import { PageHeader } from "@/shared/ui/page-header";
@@ -31,6 +32,7 @@ export function AdminView() {
 
 function AdminDashboard() {
   const { session } = useAuth();
+  const systemDialog = useDialog();
   const sessionRef = useRef(session);
   const [tab, setTab] = useState<Tab>("users");
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -164,7 +166,14 @@ function AdminDashboard() {
   }
 
   async function remove(kind: "users" | "roles", id: string | number, label: string) {
-    if (!session || !window.confirm(`¿Eliminar "${label}"? Esta acción no se puede deshacer.`)) return;
+    if (!session) return;
+    const ok = await systemDialog.confirm({
+      title: kind === "users" ? "Eliminar usuario" : "Eliminar rol",
+      message: `¿Eliminar "${label}"? Esta acción no se puede deshacer.`,
+      confirmLabel: "Eliminar",
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       await requestApi<void>(session, `/api/admin/${kind}/${id}`, { method: "DELETE" });
       setMessage({ tone: "success", text: "Eliminado correctamente." });

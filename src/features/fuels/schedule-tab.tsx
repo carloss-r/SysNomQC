@@ -8,6 +8,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { ExportButtons } from "@/shared/reports/export-buttons";
 import type { Report } from "@/shared/reports/report-export";
 import { useNotify } from "@/shared/ui/notice-provider";
+import { useDialog } from "@/shared/ui/dialog-provider";
 import { formatDay } from "./format";
 import { FUELS_SUBTITLE } from "./suppliers-tab";
 
@@ -28,6 +29,7 @@ export function ScheduleTab({
 }) {
   const { session } = useAuth();
   const notify = useNotify();
+  const systemDialog = useDialog();
   const [day, setDay] = useState(today);
   const [upcoming, setUpcoming] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
@@ -44,8 +46,19 @@ export function ScheduleTab({
 
   async function cancel(row: FuelSchedule) {
     if (!session) return;
-    const reason = window.prompt(`Motivo para cancelar la recepción de ${supplierName.get(row.supplier_id)} del ${formatDay(row.scheduled_on)}:`);
-    if (!reason?.trim()) return;
+    const reason = await systemDialog.prompt({
+      title: "Cancelar recepción",
+      message: `${supplierName.get(row.supplier_id) ?? "Proveedor"} · ${formatDay(row.scheduled_on)}`,
+      label: "Motivo de la cancelación",
+      required: true,
+      multiline: true,
+      maxLength: 300,
+      validate: (value) => (value.length < 3 ? "Escribe al menos 3 caracteres." : null),
+      confirmLabel: "Cancelar recepción",
+      cancelLabel: "Volver",
+      tone: "danger",
+    });
+    if (!reason) return;
     setBusy(row.id);
     try {
       await requestApi(session, `/api/fuels/schedule/${row.id}`, { method: "PATCH", body: JSON.stringify({ action: "cancel", reason }) });

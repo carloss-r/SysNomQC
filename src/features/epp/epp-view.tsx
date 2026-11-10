@@ -11,6 +11,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { RequirePermission } from "@/shared/layout/require-permission";
 import { StatCard } from "@/shared/ui/badges";
 import { useNotify } from "@/shared/ui/notice-provider";
+import { useDialog } from "@/shared/ui/dialog-provider";
 import { PageHeader } from "@/shared/ui/page-header";
 import { ArticleModal } from "./article-modal";
 import { HistoryTab } from "./history-tab";
@@ -43,6 +44,7 @@ export function EppView() {
 function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | null; requestedTab: string | null }) {
   const { session, can, access } = useAuth();
   const notify = useNotify();
+  const systemDialog = useDialog();
   const sessionRef = useRef(session);
   const canDeliver = can("epp.deliver");
   const canManage = can("epp.manage");
@@ -168,7 +170,16 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
 
   async function changeStatus(request: EppPurchaseRequest, status: "en_compra" | "recibida" | "cancelada") {
     if (!session) return;
-    if (status === "cancelada" && !window.confirm(`¿Cancelar la solicitud folio ${request.id} de ${request.site}?`)) return;
+    if (
+      status === "cancelada" &&
+      !(await systemDialog.confirm({
+        title: "Cancelar solicitud de compra",
+        message: `¿Cancelar la solicitud folio ${request.id} de ${request.site}?`,
+        confirmLabel: "Cancelar solicitud",
+        cancelLabel: "Volver",
+        tone: "danger",
+      }))
+    ) return;
     setBusyRequest(request.id);
     try {
       await requestApi(session, `/api/epp/requests/${request.id}`, { method: "PATCH", body: JSON.stringify({ status }) });

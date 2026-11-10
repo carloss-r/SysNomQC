@@ -15,6 +15,7 @@ import { deleteEmployeePhoto } from "@/lib/photos";
 import { RequirePermission } from "@/shared/layout/require-permission";
 import { Avatar, SiteBadge, StatCard, StatusBadge } from "@/shared/ui/badges";
 import { useNotify } from "@/shared/ui/notice-provider";
+import { useDialog } from "@/shared/ui/dialog-provider";
 import { PageHeader } from "@/shared/ui/page-header";
 import { EmployeeFormModal } from "./components/employee-form-modal";
 import { EmployeeProfileModal } from "./components/employee-profile-modal";
@@ -40,6 +41,7 @@ export function EmployeesView() {
 function EmployeesDashboard() {
   const { session, can } = useAuth();
   const notify = useNotify();
+  const systemDialog = useDialog();
   const [employees, setEmployees] = useState<EmployeeSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
@@ -194,9 +196,14 @@ function EmployeesDashboard() {
   }
 
   async function handleDelete(employee: Employee) {
-    if (!session || !window.confirm(`¿Eliminar el expediente de ${employee.full_name}? Esta acción no se puede deshacer.`)) {
-      return;
-    }
+    if (!session) return;
+    const ok = await systemDialog.confirm({
+      title: "Eliminar expediente",
+      message: `¿Eliminar el expediente de ${employee.full_name}? Esta acción no se puede deshacer.`,
+      confirmLabel: "Eliminar",
+      tone: "danger",
+    });
+    if (!ok) return;
 
     try {
       await requestApi<void>(session, `/api/employees/${employee.id}`, { method: "DELETE" });

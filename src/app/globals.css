@@ -877,3 +877,14 @@ td.row-actions > * { vertical-align: middle; }
 @media (max-width: 700px) {
   .invoice-review-grid { grid-template-columns: 1fr; }
 }
+
+/* Diálogos del sistema (reemplazan confirm/prompt del navegador) */
+.system-dialog-backdrop { z-index: 70; }
+.system-dialog { width: min(100%, 460px); }
+.system-dialog .modal-header h2 { flex: 1; }
+.system-dialog-danger { background: var(--red-accent); }
+.system-dialog-body { display: flex; flex-direction: column; gap: 14px; padding: 18px 21px 20px; }
+.system-dialog-message { color: var(--ink-soft); font-size: 14px; line-height: 1.5; }
+.system-dialog-body textarea { width: 100%; resize: vertical; }
+.button-danger { color: #fff; border-color: var(--red-accent); background: var(--red-accent); }
+.button-danger:hover:not(:disabled) { filter: brightness(.93); }

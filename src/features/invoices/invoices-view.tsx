@@ -22,6 +22,7 @@ import type { Report } from "@/shared/reports/report-export";
 import { StatCard } from "@/shared/ui/badges";
 import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
+import { useDialog } from "@/shared/ui/dialog-provider";
 import { PageHeader } from "@/shared/ui/page-header";
 import { openInvoiceFile } from "./files";
 import { InvoiceModal } from "./invoice-modal";
@@ -57,6 +58,7 @@ function StatusBadge({ invoice, today }: { invoice: Invoice; today: string }) {
 function InvoicesScreen() {
   const { session, can } = useAuth();
   const notify = useNotify();
+  const systemDialog = useDialog();
   const sessionRef = useRef(session);
   const canManage = can("invoices.manage");
 
@@ -133,7 +135,13 @@ function InvoicesScreen() {
 
   async function remove(invoice: Invoice) {
     if (!session) return;
-    if (!window.confirm(`¿Eliminar la factura ${invoice.folio ?? invoice.file_name}? Se borra también el PDF.`)) return;
+    const ok = await systemDialog.confirm({
+      title: "Eliminar factura",
+      message: `¿Eliminar la factura ${invoice.folio ?? invoice.file_name}? Se borra también el PDF y no se puede deshacer.`,
+      confirmLabel: "Eliminar",
+      tone: "danger",
+    });
+    if (!ok) return;
     setBusyId(invoice.id);
     try {
       await requestApi(session, `/api/invoices/${invoice.id}`, { method: "DELETE" });
