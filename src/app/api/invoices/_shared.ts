@@ -41,6 +41,11 @@ export const statusSchema = z.object({
   paid_on: day.nullable().optional(),
 });
 
+/** Datos que el usuario puede corregir (y que se registran en la bitácora de correcciones). */
+export const EDITABLE_FIELDS = [
+  "invoice_date", "due_date", "folio", "uuid", "supplier_name", "supplier_rfc", "subtotal", "tax", "total", "currency", "notes",
+] as const;
+
 export const patchSchema = z.discriminatedUnion("action", [editSchema, statusSchema]);
 
 export const parseId = (raw: string) => {

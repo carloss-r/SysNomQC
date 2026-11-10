@@ -23,6 +23,8 @@ const contentSecurityPolicy = [
   `img-src 'self' data: blob: ${supabase}`.trim(),
   "font-src 'self' data:",
   `connect-src 'self' ${supabase}${isDev ? " ws: wss:" : ""}`.trim(),
+  // Vista previa de facturas: el PDF se descarga del bucket privado y se muestra como blob: local.
+  "frame-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

@@ -36,6 +36,13 @@ export async function openInvoiceFile(path: string): Promise<boolean> {
   return true;
 }
 
+/** Descarga el PDF y devuelve una URL local (blob:) para mostrarlo dentro de la pantalla. Revocarla al cerrar. */
+export async function loadInvoicePreview(path: string): Promise<string> {
+  const { data, error } = await supabase.storage.from(INVOICE_BUCKET).download(path);
+  if (error || !data) throw error ?? new Error("Sin archivo");
+  return URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
+}
+
 /** Descarga el texto digitalizado como .txt. */
 export function downloadText(fileName: string, text: string) {
   const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));

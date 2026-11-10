@@ -3,7 +3,7 @@ import { recordAudit } from "@/lib/audit";
 import { plantToday } from "@/lib/fuels";
 import { reportServerIncident } from "@/lib/incidents";
 import { BadJsonError, getAuthenticatedClient, readJson } from "../../employees/_server";
-import { actorName, INVOICE_BUCKET, invoiceDatabaseError, LIST_COLUMNS, parseId, patchSchema, toInvoice } from "../_shared";
+import { actorName, EDITABLE_FIELDS, INVOICE_BUCKET, invoiceDatabaseError, LIST_COLUMNS, parseId, patchSchema, toInvoice } from "../_shared";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -16,7 +16,15 @@ export async function GET(request: NextRequest, context: Context) {
   const { data, error } = await auth.client.from("invoices").select(`${LIST_COLUMNS},text_content`).eq("id", id).maybeSingle();
   if (error) return invoiceDatabaseError(error, "leer una");
   if (!data) return NextResponse.json({ error: "La factura no existe." }, { status: 404 });
-  return NextResponse.json(toInvoice(data as unknown as Record<string, unknown>));
+  // Bitácora de correcciones (si aún no existe la tabla, la factura se muestra sin historial).
+  const edits = await auth.client
+    .from("invoice_edits")
+    .select("id,edited_at,edited_by_name,changes")
+    .eq("invoice_id", id)
+    .order("edited_at", { ascending: false })
+    .limit(200);
+  if (edits.error && !["42P01", "PGRST205"].includes(edits.error.code ?? "")) return invoiceDatabaseError(edits.error, "leer correcciones");
+  return NextResponse.json({ ...toInvoice(data as unknown as Record<string, unknown>), edits: edits.data ?? [] });
 }
 
 /** Corrige los datos de la factura o cambia su estatus de pago. */
@@ -32,6 +40,7 @@ export async function PATCH(request: NextRequest, context: Context) {
     const today = plantToday();
 
     let changes: Record<string, unknown>;
+    let diff: Record<string, { from: unknown; to: unknown }> | null = null;
     if (input.data.action === "status") {
       const paid = input.data.status === "pagada";
       const paidOn = input.data.paid_on ?? today;
@@ -44,6 +53,17 @@ export async function PATCH(request: NextRequest, context: Context) {
         return NextResponse.json({ error: "El vencimiento no puede ser anterior a la fecha de la factura." }, { status: 400 });
       }
       changes = fields;
+      const current = await auth.client.from("invoices").select(EDITABLE_FIELDS.join(",")).eq("id", id).maybeSingle();
+      if (current.error) return invoiceDatabaseError(current.error, "leer antes de editar");
+      if (!current.data) return NextResponse.json({ error: "La factura no existe." }, { status: 404 });
+      const before = toInvoice(current.data as unknown as Record<string, unknown>) as unknown as Record<string, unknown>;
+      diff = {};
+      for (const key of EDITABLE_FIELDS) {
+        const from = before[key] ?? null;
+        const to = (fields as Record<string, unknown>)[key] ?? null;
+        if (from !== to) diff[key] = { from, to };
+      }
+      if (Object.keys(diff).length === 0) return NextResponse.json({ error: "No hay cambios que guardar." }, { status: 400 });
     }
 
     const { data, error } = await auth.client
@@ -54,8 +74,16 @@ export async function PATCH(request: NextRequest, context: Context) {
       .maybeSingle();
     if (error) return invoiceDatabaseError(error, "actualizar");
     if (!data) return NextResponse.json({ error: "La factura no existe." }, { status: 404 });
+    if (diff) {
+      // Quién corrigió qué dato y cuál era el valor anterior.
+      const logged = await auth.client.from("invoice_edits").insert({ invoice_id: id, edited_by: auth.access.user_id, edited_by_name: actor, changes: diff });
+      if (logged.error) {
+        console.error("No se pudo guardar la corrección de la factura:", logged.error);
+        reportServerIncident("api · facturas · bitácora de correcciones", logged.error);
+      }
+    }
     await recordAudit(request, auth.access, input.data.action === "status" ? "invoices.status" : "invoices.update", id, {
-      ...(input.data.action === "status" ? { status: input.data.status } : { fields: Object.keys(changes) }),
+      ...(input.data.action === "status" ? { status: input.data.status } : { fields: Object.keys(diff ?? {}) }),
     });
     return NextResponse.json(toInvoice(data as unknown as Record<string, unknown>));
   } catch (error) {

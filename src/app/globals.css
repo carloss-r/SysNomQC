@@ -850,3 +850,30 @@ td.row-actions > * { vertical-align: middle; }
   .invoice-span-2 { grid-column: 1 / -1; }
   .invoice-month { width: 100%; }
 }
+
+/* Repaso de factura: PDF real junto a lo capturado */
+.invoice-review-modal { width: min(100%, 1320px); }
+.invoice-review { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; }
+.invoice-review-pdf { display: flex; min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.invoice-review-pdf-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.invoice-review-pdf-bar .text-button { display: inline-flex; align-items: center; gap: 4px; }
+.invoice-review-pdf iframe { width: 100%; height: min(72vh, 900px); border: 0; background: #fff; }
+.invoice-review-data { min-width: 0; }
+.invoice-review-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.invoice-field-dirty { border-color: var(--gold-line) !important; background: var(--gold-bg) !important; }
+.invoice-field-corrected { border-color: var(--blue-line) !important; }
+.invoice-legend { display: inline-block; width: 10px; height: 10px; border: 1px solid; border-radius: 3px; vertical-align: -1px; }
+.invoice-legend-dirty { border-color: var(--gold-line); background: var(--gold-bg); }
+.invoice-legend-corrected { border-color: var(--blue-line); background: var(--surface); }
+.invoice-edits { display: flex; max-height: 60vh; flex-direction: column; gap: 10px; margin: 0; padding: 0; overflow: auto; list-style: none; }
+.invoice-edits > li { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.invoice-edits p { margin: 0 0 6px; }
+.invoice-edits ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.invoice-edits del { color: var(--red-text); }
+@media (max-width: 1060px) {
+  .invoice-review { grid-template-columns: 1fr; }
+  .invoice-review-pdf iframe { height: 55vh; }
+}
+@media (max-width: 700px) {
+  .invoice-review-grid { grid-template-columns: 1fr; }
+}

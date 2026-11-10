@@ -17,6 +17,7 @@ Postgres de Supabase. Todo el esquema vive en `supabase/migrations/` y las migra
 | 9 | `202611100001_combustibles_alternos.sql` | Tablas `fuel_*`, funciones con candados, bucket `fuel-permits`, roles de combustibles |
 | 10 | `202611110001_normalizar_roles.sql` | Renombra los roles a nombres legibles (`EncargadoCompras` → `Encargado de compras`) |
 | 11 | `202611110002_facturas.sql` | Tabla `invoices`, bucket privado `invoices`, permisos `invoices.*`, rol `Cuentas por pagar` |
+| 12 | `202611110003_facturas_ediciones.sql` | `invoice_edits`: bitácora de correcciones de facturas (quién, cuándo, antes → después) |
 
 ## Tablas
 

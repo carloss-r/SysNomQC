@@ -30,11 +30,34 @@ export type Invoice = {
   text_pages: number;
   /** Solo viene al pedir una factura (no en la lista). */
   text_content?: string;
+  edits?: InvoiceEdit[];
   has_text: boolean;
   created_at: string;
   created_by_name: string | null;
   updated_at: string;
   updated_by_name: string | null;
+};
+
+/** Corrección de datos: quién la hizo y qué cambió. */
+export type InvoiceEdit = {
+  id: number;
+  edited_at: string;
+  edited_by_name: string;
+  changes: Record<string, { from: string | number | null; to: string | number | null }>;
+};
+
+export const INVOICE_FIELD_LABELS: Record<string, string> = {
+  invoice_date: "Fecha de la factura",
+  due_date: "Vencimiento",
+  folio: "Folio",
+  uuid: "Folio fiscal (UUID)",
+  supplier_name: "Emisor",
+  supplier_rfc: "RFC del emisor",
+  subtotal: "Subtotal",
+  tax: "IVA / impuestos",
+  total: "Total",
+  currency: "Moneda",
+  notes: "Notas",
 };
 
 /** Datos que se detectan del texto de la factura. */

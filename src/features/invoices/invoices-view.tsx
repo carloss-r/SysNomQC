@@ -292,7 +292,7 @@ function InvoicesScreen() {
                           {canManage && row.status === "pagada" && (
                             <button className="button button-outline" onClick={() => void setStatus(row, "pendiente")} disabled={busyId === row.id}><RotateCcw size={14} /> Pendiente</button>
                           )}
-                          <button className="button button-outline" onClick={() => setDialog({ type: "detail", invoice: row })}>{canManage ? <Pencil size={14} /> : <Receipt size={14} />} {canManage ? "Datos" : "Ver"}</button>
+                          <button className="button button-outline" onClick={() => setDialog({ type: "detail", invoice: row })}>{canManage ? <Pencil size={14} /> : <Receipt size={14} />} {canManage ? "Repasar" : "Ver"}</button>
                           <button className="button button-outline" onClick={() => void viewPdf(row)}><FileText size={14} /> PDF</button>
                           {canManage && (
                             <button className="icon-button row-edit" onClick={() => void remove(row)} disabled={busyId === row.id} aria-label="Eliminar factura" title="Eliminar"><Trash2 size={16} /></button>
