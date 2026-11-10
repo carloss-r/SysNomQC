@@ -27,7 +27,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       .maybeSingle();
     if (readError) return adminDbError(readError);
     if (!role) return NextResponse.json({ error: "No se encontró el rol." }, { status: 404 });
-    if (role.es_sistema) return badRequest("El rol SuperAdmin no se puede modificar.");
+    if (role.es_sistema) return badRequest("El rol Super administrador no se puede modificar.");
 
     const { error } = await auth.admin
       .from("roles")
@@ -60,7 +60,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     .maybeSingle();
   if (readError) return adminDbError(readError);
   if (!role) return NextResponse.json({ error: "No se encontró el rol." }, { status: 404 });
-  if (role.es_sistema) return badRequest("El rol SuperAdmin no se puede eliminar.");
+  if (role.es_sistema) return badRequest("El rol Super administrador no se puede eliminar.");
 
   const { error: countError, map } = await readUserRoleIds(auth.admin);
   if (countError) return adminDbError(countError);

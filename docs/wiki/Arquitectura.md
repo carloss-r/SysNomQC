@@ -11,10 +11,11 @@ src/
     (app)/admin/            Usuarios y roles     ->  /admin
     (app)/epp/              EPP                  ->  /epp
     (app)/combustibles/     Combustibles         ->  /combustibles
+    (app)/facturas/         Facturas             ->  /facturas
     (app)/notificaciones/   Notificaciones       ->  /notificaciones
     api/                    API del servidor (valida sesión, permisos y datos)
   features/                 Un módulo por carpeta, con su lógica y componentes
-    auth/  employees/  admin/  epp/  fuels/  notifications/
+    auth/  employees/  admin/  epp/  fuels/  invoices/  notifications/
   shared/                   Piezas reutilizables
     ui/  layout/  reports/ (PDF y Excel con membrete)  config/navigation.ts
   lib/                      Utilidades sin interfaz
@@ -42,6 +43,7 @@ Archivos/                   Material de referencia (SQL inicial, especificación
 | `incidents.ts` / `report-incident.ts` / `email.ts` | Reporte de incidencias por correo (servidor y navegador) |
 | `notifications.ts` | Tipos y reglas de avisos |
 | `fuels.ts` | Memoria de cálculo de sustitución térmica |
+| `invoices.ts` | Lectura de datos de facturas desde su texto y resúmenes semanales/mensuales |
 | `photos.ts` | Compresión y manejo de fotos |
 
 ## Aislamiento por pantalla

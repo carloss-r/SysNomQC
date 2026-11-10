@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     }
     // Los ajustes cambian la existencia sin respaldo físico: solo un SuperAdmin los autoriza.
     if (body.kind === "ajuste" && !auth.access.is_super_admin) {
-      return NextResponse.json({ error: "Solo un SuperAdmin puede ajustar el inventario." }, { status: 403 });
+      return NextResponse.json({ error: "Solo un Super administrador puede ajustar el inventario." }, { status: 403 });
     }
     const resolved = resolveSite(auth.access, body.site);
     if ("response" in resolved) return resolved.response;

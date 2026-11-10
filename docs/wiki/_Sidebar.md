@@ -9,6 +9,7 @@
 - [Empleados](Modulo-Empleados)
 - [EPP](Modulo-EPP)
 - [Combustibles alternos](Modulo-Combustibles-Alternos)
+- [Facturas](Modulo-Facturas)
 - [Notificaciones e incidencias](Notificaciones-e-incidencias)
 
 **Referencia**

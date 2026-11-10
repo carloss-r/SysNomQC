@@ -1,13 +1,15 @@
 import { z } from "zod";
 import { SITES } from "@/lib/employees";
 import { ALL_PERMISSIONS, type Permission } from "@/lib/permissions";
+import { roleLabel } from "@/lib/roles";
 
 /** null = todas las sedes. */
 export const userSiteSchema = z.enum(SITES).nullable();
 
 export const roleSchema = z
   .object({
-    name: z.string().trim().min(2).max(60),
+    // Nombre legible: "EncargadoCompras" se guarda como "Encargado de compras".
+    name: z.string().trim().min(2).max(60).transform((value) => roleLabel(value.replace(/\s+/g, " "))),
     description: z.string().trim().max(200).nullable(),
     permissions: z.array(z.enum(ALL_PERMISSIONS as [Permission, ...Permission[]])).max(60),
   })

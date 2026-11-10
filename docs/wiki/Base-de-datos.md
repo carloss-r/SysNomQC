@@ -11,10 +11,12 @@ Postgres de Supabase. Todo el esquema vive en `supabase/migrations/` y las migra
 | 3 | `202611050001_seguridad.sql` | `has_app_permission`, políticas RLS por permiso, `audit_log` |
 | 4 | `202611060001_epp.sql` | `epp_articles`, `epp_movements`, `epp_apply` |
 | 5 | `202611060002_epp_historial.sql` | Historial de muestra (28 entregas de 4 trabajadores), sin alterar existencias |
-| 6 | `202611070001_epp_por_sede.sql` | `epp_stock`, solicitudes de compra, rol `EncargadoCompras`, `epp_apply_site` |
+| 6 | `202611070001_epp_por_sede.sql` | `epp_stock`, solicitudes de compra, rol `Encargado de compras`, `epp_apply_site` |
 | 7 | `202611080001_varios_roles.sql` | `authorized_user_roles` (varios roles por cuenta) |
 | 8 | `202611090001_epp_controles.sql` | Controles de EPP, `is_super_admin`, `epp_apply_site` actualizada |
 | 9 | `202611100001_combustibles_alternos.sql` | Tablas `fuel_*`, funciones con candados, bucket `fuel-permits`, roles de combustibles |
+| 10 | `202611110001_normalizar_roles.sql` | Renombra los roles a nombres legibles (`EncargadoCompras` → `Encargado de compras`) |
+| 11 | `202611110002_facturas.sql` | Tabla `invoices`, bucket privado `invoices`, permisos `invoices.*`, rol `Cuentas por pagar` |
 
 ## Tablas
 
@@ -31,6 +33,8 @@ Postgres de Supabase. Todo el esquema vive en `supabase/migrations/` y las migra
 **EPP**: `epp_articles` (catálogo común), `epp_stock` (existencia y mínimo por sede), `epp_movements` (ingresos, entregas y ajustes; no editables), `epp_purchase_requests`, `epp_purchase_request_items`.
 
 **Combustibles alternos**: `fuel_suppliers`, `fuel_products`, `fuel_schedule`, `fuel_receptions`, `fuel_coke_consumption`, `fuel_alerts_sent`.
+
+**Facturas**: `invoices` (PDF en el bucket privado `invoices`, texto digitalizado en `text_content`, estatus `pendiente`/`pagada`).
 
 ## Funciones principales
 

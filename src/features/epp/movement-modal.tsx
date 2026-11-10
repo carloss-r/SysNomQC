@@ -144,7 +144,7 @@ export function MovementModal({
     if (!session) return;
     setError("");
 
-    if (kind === "ajuste" && !access?.is_super_admin) return setError("Solo un SuperAdmin puede ajustar el inventario.");
+    if (kind === "ajuste" && !access?.is_super_admin) return setError("Solo un Super administrador puede ajustar el inventario.");
     if (kind === "entrega" && !employee) return setError("Selecciona al trabajador que recibe el EPP.");
     if (kind === "entrega" && employee && employee.site !== site) return setError(`${employee.full_name} es de ${employee.site}; solo se le puede entregar EPP del inventario de su sede.`);
     const items = lines.map((line) => ({ article_id: Number(line.article_id), quantity: Math.trunc(Number(line.quantity)) }));

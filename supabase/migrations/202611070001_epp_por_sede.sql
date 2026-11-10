@@ -271,8 +271,8 @@ grant execute on function public.epp_update_purchase(bigint, text, text) to auth
 -- ---------------------------------------------------------------------------
 update public.roles
 set permisos = array(select distinct unnest(coalesce(permisos, '{}') || array['epp.view', 'epp.deliver', 'epp.manage', 'epp.request']))
-where nombre = 'AlmacenistaEPP';
+where nombre = 'Almacenista de EPP';
 
 insert into public.roles (nombre, descripcion, permisos)
-values ('EncargadoCompras', 'Recibe las solicitudes de compra de EPP de todas las sedes', array['epp.view', 'epp.purchase'])
+values ('Encargado de compras', 'Recibe las solicitudes de compra de EPP de todas las sedes', array['epp.view', 'epp.purchase'])
 on conflict (nombre) do nothing;

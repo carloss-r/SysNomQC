@@ -644,8 +644,8 @@ using (bucket_id = 'fuel-permits' and public.has_app_permission('fuels.suppliers
 -- 10. Roles sugeridos (se ajustan después en Usuarios y roles)
 -- ---------------------------------------------------------------------------
 insert into public.roles (nombre, descripcion, permisos) values
-  ('CombustiblesAlternos', 'Homologación de proveedores y programación logística de combustibles alternos', array['fuels.view','fuels.suppliers','fuels.schedule']),
-  ('OperadorBascula', 'Captura de manifiestos, pesos de entrada y salida y certificados de recepción', array['fuels.view','fuels.scale']),
-  ('Ecologia', 'Consumo de coque, semáforo SEMARNAT y reporte semestral', array['fuels.view','fuels.ecology']),
-  ('ContabilidadCombustibles', 'Esquemas, tarifas y reportes contables de combustibles alternos', array['fuels.view','fuels.commercial'])
+  ('Combustibles alternos', 'Homologación de proveedores y programación logística de combustibles alternos', array['fuels.view','fuels.suppliers','fuels.schedule']),
+  ('Operador de báscula', 'Captura de manifiestos, pesos de entrada y salida y certificados de recepción', array['fuels.view','fuels.scale']),
+  ('Ecología', 'Consumo de coque, semáforo SEMARNAT y reporte semestral', array['fuels.view','fuels.ecology']),
+  ('Contabilidad de combustibles', 'Esquemas, tarifas y reportes contables de combustibles alternos', array['fuels.view','fuels.commercial'])
 on conflict (nombre) do nothing;

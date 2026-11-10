@@ -11,6 +11,7 @@ Aplicación con Next.js y React para administrar el directorio de empleados usan
    4. `202611060001_epp.sql`, `202611060002_epp_historial.sql` y `202611070001_epp_por_sede.sql` (módulo de EPP, ver abajo)
    5. `202611080001_varios_roles.sql` (una cuenta puede tener varios roles; sus permisos se suman)
    6. `202611090001_epp_controles.sql` y `202611100001_combustibles_alternos.sql` (módulo de combustibles alternos, ver abajo)
+   7. `202611110001_normalizar_roles.sql` (nombres de rol legibles) y `202611110002_facturas.sql` (módulo de facturas)
 2. En **Authentication > Users**, crea las cuentas autorizadas. El sistema no ofrece registro público.
 3. Por cada cuenta, copia su UUID y correo desde Auth y autorízala ejecutando en SQL Editor:
 
@@ -95,7 +96,7 @@ Ejecuta `202611070001_epp_por_sede.sql` después de las dos anteriores (es segur
 
 ## Módulo de combustibles alternos
 
-Pantalla `/combustibles` (menú **Ecología → Combustibles alternos**). Especificación completa en `Archivos/ModuloCoque.txt`. Ejecuta en Supabase `supabase/migrations/202611100001_combustibles_alternos.sql` (después de la de controles de EPP; es seguro repetirla). Crea las tablas, las funciones con los candados, el bucket privado `fuel-permits` (PDF de hasta 10 MB) y cuatro roles sugeridos: `CombustiblesAlternos`, `OperadorBascula`, `Ecologia` y `ContabilidadCombustibles`.
+Pantalla `/combustibles` (menú **Ecología → Combustibles alternos**). Especificación completa en `Archivos/ModuloCoque.txt`. Ejecuta en Supabase `supabase/migrations/202611100001_combustibles_alternos.sql` (después de la de controles de EPP; es seguro repetirla). Crea las tablas, las funciones con los candados, el bucket privado `fuel-permits` (PDF de hasta 10 MB) y cuatro roles sugeridos: `Combustibles alternos`, `Operador de báscula`, `Ecología` y `Contabilidad de combustibles`.
 
 Arriba de todas las pestañas se ve el **semáforo SEMARNAT** del mes: verde hasta 25.0 %, amarillo de 25.1 a 29.9 % y rojo desde 30.0 %, con la proyección que suma lo programado.
 

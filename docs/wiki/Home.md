@@ -9,6 +9,7 @@ Sistema de gestión de personal de la cooperativa. Aplicación **Next.js + React
 | Empleados (pantalla principal) | `/` | `employees.view` | [Módulo Empleados](Modulo-Empleados) |
 | EPP (Seguridad e higiene) | `/epp` | `epp.view` | [Módulo EPP](Modulo-EPP) |
 | Combustibles alternos (Ecología) | `/combustibles` | `fuels.view` | [Módulo Combustibles alternos](Modulo-Combustibles-Alternos) |
+| Facturas (Finanzas) | `/facturas` | `invoices.view` | [Módulo Facturas](Modulo-Facturas) |
 | Notificaciones | `/notificaciones` | cuenta autorizada | [Notificaciones e incidencias](Notificaciones-e-incidencias) |
 | Usuarios y roles | `/admin` | `users.manage` | [Roles y permisos](Roles-y-permisos) |
 

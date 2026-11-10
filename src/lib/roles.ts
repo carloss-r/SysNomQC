@@ -1,5 +1,7 @@
-// Los roles se guardan en la base con nombres técnicos (EncargadoCompras); en pantalla se muestran legibles.
-const KNOWN: Record<string, string> = {
+// Los roles se guardan en la base con nombres legibles ("Encargado de compras"; migración
+// 202611110001_normalizar_roles.sql). Este mapa cubre los nombres técnicos anteriores mientras
+// una base aún no tenga esa migración, y roleLabel normaliza cualquier otro nombre en camelCase.
+const LEGACY: Record<string, string> = {
   SuperAdmin: "Super administrador",
   AdminSede: "Administrador de sede",
   RecursosHumanos: "Recursos humanos",
@@ -14,7 +16,7 @@ const KNOWN: Record<string, string> = {
 /** "EncargadoCompras" → "Encargado de compras"; un nombre ya escrito con espacios se deja igual. */
 export function roleLabel(name: string | null | undefined): string {
   if (!name) return "Sin rol";
-  if (KNOWN[name]) return KNOWN[name];
+  if (LEGACY[name]) return LEGACY[name];
   if (/\s/.test(name)) return name;
   const words = name
     .replace(/([a-záéíóúñ])([A-ZÁÉÍÓÚÑ])/g, "$1 $2")

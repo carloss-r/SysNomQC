@@ -86,7 +86,7 @@ function AdminDashboard() {
 
   function openRoleModal(role: AdminRole | null) {
     setRoleForm(
-      role ? { name: role.name, description: role.description ?? "", permissions: role.permissions } : EMPTY_ROLE,
+      role ? { name: roleLabel(role.name), description: role.description ?? "", permissions: role.permissions } : EMPTY_ROLE,
     );
     setFormError("");
     setRoleModal({ editing: role });

@@ -39,7 +39,7 @@ begin
     raise exception 'Tu rol no tiene permiso para esta operación.' using errcode = '42501';
   end if;
   if p_kind = 'ajuste' and not public.is_super_admin() then
-    raise exception 'Solo un SuperAdmin puede ajustar el inventario.' using errcode = '42501';
+    raise exception 'Solo un Super administrador puede ajustar el inventario.' using errcode = '42501';
   end if;
   if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then raise exception 'Agrega al menos un artículo.'; end if;
   if p_kind = 'entrega' then

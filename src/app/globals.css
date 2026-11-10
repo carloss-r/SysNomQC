@@ -837,3 +837,16 @@ td.row-actions > * { vertical-align: middle; }
   .fuel-pad { padding: 0 12px; }
   .field input.fuel-weight-input { font-size: 20px; }
 }
+
+/* Facturas */
+.fuel-status-warn { color: var(--gold-text); border-color: var(--gold-line); background: var(--gold-bg); }
+.invoice-span-2 { grid-column: span 2; }
+.invoice-drop { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 22px; border: 1px dashed var(--line-strong); border-radius: 10px; background: var(--surface-2); }
+.invoice-month { height: 38px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 7px; color: var(--ink); background: var(--surface); font-size: 13px; }
+.invoice-text { display: flex; flex-direction: column; gap: 12px; }
+.invoice-text-content { max-height: 52vh; margin: 0; padding: 14px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--surface-2); font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+.invoice-current td { background: var(--green-bg); }
+@media (max-width: 700px) {
+  .invoice-span-2 { grid-column: 1 / -1; }
+  .invoice-month { width: 100%; }
+}
