@@ -30,8 +30,8 @@ export async function GET(request: NextRequest) {
       auth.client
         .from("invoices")
         .select(LIST_COLUMNS)
-        // Las pendientes se incluyen siempre, aunque sean anteriores a "from".
-        .or(`invoice_date.gte.${from},status.eq.pendiente`)
+        // Las pendientes y las que tienen incidente se incluyen siempre, aunque sean anteriores a "from".
+        .or(`invoice_date.gte.${from},status.in.(pendiente,incidente)`)
         .order("invoice_date", { ascending: false })
         .order("id", { ascending: false })
         .range(a, b),

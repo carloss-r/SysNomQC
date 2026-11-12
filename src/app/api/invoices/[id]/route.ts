@@ -43,9 +43,21 @@ export async function PATCH(request: NextRequest, context: Context) {
     let diff: Record<string, { from: unknown; to: unknown }> | null = null;
     if (input.data.action === "status") {
       const paid = input.data.status === "pagada";
+      const incident = input.data.status === "incidente";
       const paidOn = input.data.paid_on ?? today;
       if (paid && paidOn > today) return NextResponse.json({ error: "La fecha de pago no puede ser futura." }, { status: 400 });
-      changes = { status: input.data.status, paid_on: paid ? paidOn : null, paid_by_name: paid ? actor : null };
+      if (incident && !input.data.incident_description) {
+        return NextResponse.json({ error: "Describe el incidente de la factura." }, { status: 400 });
+      }
+      changes = {
+        status: input.data.status,
+        paid_on: paid ? paidOn : null,
+        paid_by_name: paid ? actor : null,
+        // Al salir de incidente se limpia; la descripción queda en la bitácora de auditoría.
+        incident_description: incident ? input.data.incident_description : null,
+        incident_on: incident ? today : null,
+        incident_by_name: incident ? actor : null,
+      };
     } else {
       const { action: _action, ...fields } = input.data;
       void _action;
@@ -83,7 +95,9 @@ export async function PATCH(request: NextRequest, context: Context) {
       }
     }
     await recordAudit(request, auth.access, input.data.action === "status" ? "invoices.status" : "invoices.update", id, {
-      ...(input.data.action === "status" ? { status: input.data.status } : { fields: Object.keys(diff ?? {}) }),
+      ...(input.data.action === "status"
+        ? { status: input.data.status, ...(input.data.incident_description ? { incident: input.data.incident_description } : {}) }
+        : { fields: Object.keys(diff ?? {}) }),
     });
     return NextResponse.json(toInvoice(data as unknown as Record<string, unknown>));
   } catch (error) {

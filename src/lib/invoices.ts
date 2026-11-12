@@ -1,12 +1,15 @@
 // Facturas: tipos, lectura de datos del texto del PDF y resúmenes semanales y mensuales.
 // Sin dependencias de servidor ni de navegador: lo usan la API y la pantalla.
 
-export type InvoiceStatus = "pendiente" | "pagada";
+export type InvoiceStatus = "pendiente" | "pagada" | "incidente";
 
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   pendiente: "Pendiente de pago",
   pagada: "Pagada",
+  incidente: "Incidente",
 };
+
+export const MAX_INCIDENT_LENGTH = 1000;
 
 export type Invoice = {
   id: number;
@@ -27,6 +30,10 @@ export type Invoice = {
   status: InvoiceStatus;
   paid_on: string | null;
   paid_by_name: string | null;
+  /** Solo en estatus "incidente": qué pasó, cuándo y quién lo marcó. */
+  incident_description: string | null;
+  incident_on: string | null;
+  incident_by_name: string | null;
   text_pages: number;
   /** Solo viene al pedir una factura (no en la lista). */
   text_content?: string;
@@ -232,6 +239,7 @@ export type InvoiceSummary = {
   count: number;
   paidCount: number;
   pendingCount: number;
+  incidentCount: number;
   overdueCount: number;
   total: Totals;
   paid: Totals;
@@ -244,13 +252,16 @@ const add = (totals: Totals, currency: string, value: number | null) => {
 };
 
 export function summarize(key: string, invoices: Invoice[], today: string): InvoiceSummary {
-  const summary: InvoiceSummary = { key, count: 0, paidCount: 0, pendingCount: 0, overdueCount: 0, total: {}, paid: {}, pending: {} };
+  const summary: InvoiceSummary = { key, count: 0, paidCount: 0, pendingCount: 0, incidentCount: 0, overdueCount: 0, total: {}, paid: {}, pending: {} };
   for (const invoice of invoices) {
     summary.count += 1;
     add(summary.total, invoice.currency, invoice.total);
     if (invoice.status === "pagada") {
       summary.paidCount += 1;
       add(summary.paid, invoice.currency, invoice.total);
+    } else if (invoice.status === "incidente") {
+      // Detenida por un problema: no cuenta como pagada ni como pendiente por pagar.
+      summary.incidentCount += 1;
     } else {
       summary.pendingCount += 1;
       add(summary.pending, invoice.currency, invoice.total);

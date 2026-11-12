@@ -506,7 +506,7 @@ h1, h2, h3, p { margin-top: 0; }
 .notification-more { display: flex; justify-content: center; padding: 14px; border-top: 1px solid var(--line); }
 
 @media (max-width: 700px) {
-  .signed-user { display: none; }
+
   .topbar-icon { width: 32px; height: 32px; }
   .notification-bulk { width: 100%; margin-left: 0; }
   .notification-filters, .filter-select { width: 100%; }
@@ -567,6 +567,9 @@ td.row-actions > * { vertical-align: middle; }
 @media (max-width: 700px) {
   .hide-phone { display: none !important; }
   .show-phone { display: block; }
+  /* En teléfono el encabezado muestra solo el nombre (sin ícono) para dejar espacio al logotipo. */
+  .signed-user { max-width: 110px; font-size: 12px; }
+  .signed-user svg { display: none; }
   .sidebar-account.show-phone { display: flex; }
   .show-tablet { display: none; }
 
@@ -618,6 +621,7 @@ td.row-actions > * { vertical-align: middle; }
   .brand-copy { min-width: 0; gap: 2px; }
   .brand-copy strong { max-width: none; font-size: 11px; line-height: 1.2; letter-spacing: .03em; white-space: normal; }
   .brand-copy small { font-size: 8px; letter-spacing: .1em; white-space: nowrap; }
+  .signed-user { max-width: 78px; font-size: 11px; }
 }
 
 @media (max-width: 340px) {
@@ -900,3 +904,6 @@ td.row-actions > * { vertical-align: middle; }
 .system-dialog-body textarea { width: 100%; resize: vertical; }
 .button-danger { color: #fff; border-color: var(--red-accent); background: var(--red-accent); }
 .button-danger:hover:not(:disabled) { filter: brightness(.93); }
+
+/* Facturas: descripción del incidente bajo el estatus (máximo dos renglones; completa al pasar el cursor). */
+.invoice-incident { display: -webkit-box; max-width: 220px; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; }
