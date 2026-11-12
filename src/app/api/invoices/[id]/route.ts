@@ -3,7 +3,7 @@ import { recordAudit } from "@/lib/audit";
 import { plantToday } from "@/lib/fuels";
 import { reportServerIncident } from "@/lib/incidents";
 import { BadJsonError, getAuthenticatedClient, readJson } from "../../employees/_server";
-import { actorName, EDITABLE_FIELDS, INVOICE_BUCKET, invoiceDatabaseError, LIST_COLUMNS, parseId, patchSchema, toInvoice } from "../_shared";
+import { actorName, closedInvoiceResponse, EDITABLE_FIELDS, INVOICE_BUCKET, invoiceDatabaseError, LIST_COLUMNS, parseId, patchSchema, toInvoice } from "../_shared";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -36,6 +36,8 @@ export async function PATCH(request: NextRequest, context: Context) {
   try {
     const input = patchSchema.safeParse(await readJson(request));
     if (!input.success) return NextResponse.json({ error: "Revisa los datos de la factura." }, { status: 400 });
+    const closed = await closedInvoiceResponse(auth.client, id);
+    if (closed) return closed;
     const actor = actorName(auth.access);
     const today = plantToday();
 
@@ -53,7 +55,6 @@ export async function PATCH(request: NextRequest, context: Context) {
         status: input.data.status,
         paid_on: paid ? paidOn : null,
         paid_by_name: paid ? actor : null,
-        // Al salir de incidente se limpia; la descripción queda en la bitácora de auditoría.
         incident_description: incident ? input.data.incident_description : null,
         incident_on: incident ? today : null,
         incident_by_name: incident ? actor : null,
@@ -114,6 +115,8 @@ export async function DELETE(request: NextRequest, context: Context) {
   const id = parseId((await context.params).id);
   if (!id) return NextResponse.json({ error: "Factura no válida." }, { status: 400 });
   try {
+    const closed = await closedInvoiceResponse(auth.client, id);
+    if (closed) return closed;
     const { data, error } = await auth.client.from("invoices").delete().eq("id", id).select("id,file_path,folio").maybeSingle();
     if (error) return invoiceDatabaseError(error, "eliminar");
     if (!data) return NextResponse.json({ error: "La factura no existe." }, { status: 404 });

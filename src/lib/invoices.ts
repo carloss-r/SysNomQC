@@ -11,6 +11,9 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
 
 export const MAX_INCIDENT_LENGTH = 1000;
 
+/** Pagada o con incidente: la factura queda cerrada y ya no se modifica ni se elimina. */
+export const isInvoiceClosed = (invoice: { status: InvoiceStatus }) => invoice.status !== "pendiente";
+
 export type Invoice = {
   id: number;
   file_path: string;

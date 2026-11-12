@@ -1,6 +1,6 @@
 "use client";
 
-import { AlarmClock, CalendarDays, CalendarRange, CheckCircle2, Clock, FileText, FileUp, Pencil, Receipt, RotateCcw, Search, Trash2, TriangleAlert, X } from "lucide-react";
+import { AlarmClock, CalendarDays, CalendarRange, CheckCircle2, Clock, FileText, FileUp, Lock, Pencil, Receipt, Search, Trash2, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { describeError, requestApi } from "@/lib/api-client";
 import { plantToday } from "@/lib/fuels";
@@ -9,6 +9,7 @@ import {
   formatTotals,
   groupSummaries,
   INVOICE_STATUS_LABELS,
+  isInvoiceClosed,
   MAX_INCIDENT_LENGTH,
   summarize,
   weekStart,
@@ -34,7 +35,7 @@ const SUBTITLE = "Finanzas · Facturas";
 type Data = { today: string; invoices: Invoice[] };
 type Tab = "list" | "weekly" | "monthly";
 type Filter = "all" | "pendiente" | "pagada" | "incidente" | "vencida";
-type StatusChange = { status: "pendiente" } | { status: "pagada"; paidOn: string } | { status: "incidente"; description: string };
+type StatusChange = { status: "pagada"; paidOn: string } | { status: "incidente"; description: string };
 type Dialog =
   | { type: "upload" }
   | { type: "detail"; invoice: Invoice; detected?: Detected }
@@ -135,10 +136,7 @@ function InvoicesScreen() {
           incident_description: change.status === "incidente" ? change.description : null,
         }),
       });
-      notify(
-        "success",
-        change.status === "pagada" ? "Factura marcada como pagada" : change.status === "incidente" ? "Incidente registrado en la factura" : "Factura regresada a pendiente de pago",
-      );
+      notify("success", change.status === "pagada" ? "Factura marcada como pagada" : "Incidente registrado en la factura", "La factura quedó cerrada.");
       setDialog(null);
       await load();
     } catch (err) {
@@ -148,19 +146,22 @@ function InvoicesScreen() {
     }
   }
 
-  // El incidente se describe a mano; si la factura ya lo tiene, se puede corregir la descripción.
+  // El incidente se describe a mano y cierra la factura: después ya no se puede cambiar.
   async function markIncident(invoice: Invoice) {
-    const editing = invoice.status === "incidente";
     const description = await systemDialog.prompt({
-      title: editing ? "Editar incidente" : "Marcar factura con incidente",
-      message: `${invoice.supplier_name ?? invoice.file_name}${invoice.folio ? ` · folio ${invoice.folio}` : ""} · ${formatMoney(invoice.total, invoice.currency)}`,
+      title: "Marcar factura con incidente",
+      message: (
+        <>
+          {invoice.supplier_name ?? invoice.file_name}{invoice.folio ? ` · folio ${invoice.folio}` : ""} · {formatMoney(invoice.total, invoice.currency)}
+          <br /><strong>La factura quedará cerrada:</strong> ya no se podrá cambiar su estatus, corregir sus datos ni eliminarla.
+        </>
+      ),
       label: "Descripción del incidente",
       placeholder: "Ej. El monto no coincide con la orden de compra; se pidió nota de crédito al proveedor.",
-      defaultValue: invoice.incident_description ?? "",
       required: true,
       multiline: true,
       maxLength: MAX_INCIDENT_LENGTH,
-      confirmLabel: editing ? "Guardar" : "Marcar incidente",
+      confirmLabel: "Marcar incidente y cerrar",
       tone: "danger",
       validate: (value) => (value.trim().length < 5 ? "Describe el incidente (al menos 5 caracteres)." : null),
     });
@@ -335,20 +336,18 @@ function InvoicesScreen() {
                       </td>
                       <td className="row-actions">
                         <div className="epp-actions">
-                          {canManage && row.status !== "pagada" && (
-                            <button className="button button-gold" onClick={() => setDialog({ type: "pay", invoice: row })} disabled={busyId === row.id}><CheckCircle2 size={14} /> Marcar pagada</button>
+                          {canManage && !isInvoiceClosed(row) && (
+                            <>
+                              <button className="button button-gold" onClick={() => setDialog({ type: "pay", invoice: row })} disabled={busyId === row.id}><CheckCircle2 size={14} /> Marcar pagada</button>
+                              <button className="button button-outline" onClick={() => void markIncident(row)} disabled={busyId === row.id}><TriangleAlert size={14} /> Incidente</button>
+                            </>
                           )}
-                          {canManage && row.status !== "pendiente" && (
-                            <button className="button button-outline" onClick={() => void setStatus(row, { status: "pendiente" })} disabled={busyId === row.id}><RotateCcw size={14} /> Pendiente</button>
-                          )}
-                          {canManage && (
-                            <button className="button button-outline" onClick={() => void markIncident(row)} disabled={busyId === row.id}>
-                              <TriangleAlert size={14} /> {row.status === "incidente" ? "Editar incidente" : "Incidente"}
-                            </button>
-                          )}
-                          <button className="button button-outline" onClick={() => setDialog({ type: "detail", invoice: row })}>{canManage ? <Pencil size={14} /> : <Receipt size={14} />} {canManage ? "Repasar" : "Ver"}</button>
+                          <button className="button button-outline" onClick={() => setDialog({ type: "detail", invoice: row })}>
+                            {canManage && !isInvoiceClosed(row) ? <><Pencil size={14} /> Repasar</> : <><Receipt size={14} /> Ver</>}
+                          </button>
                           <button className="button button-outline" onClick={() => void viewPdf(row)}><FileText size={14} /> PDF</button>
-                          {canManage && (
+                          {isInvoiceClosed(row) && <span className="epp-muted" title="Factura cerrada: ya no se puede modificar"><Lock size={14} /></span>}
+                          {canManage && !isInvoiceClosed(row) && (
                             <button className="icon-button row-edit" onClick={() => void remove(row)} disabled={busyId === row.id} aria-label="Eliminar factura" title="Eliminar"><Trash2 size={16} /></button>
                           )}
                         </div>
@@ -390,7 +389,7 @@ function InvoicesScreen() {
         />
       )}
       {dialog?.type === "detail" && (
-        <InvoiceModal invoice={dialog.invoice} detected={dialog.detected} canEdit={canManage} onClose={() => setDialog(null)} onSaved={load} />
+        <InvoiceModal invoice={dialog.invoice} detected={dialog.detected} canEdit={canManage && !isInvoiceClosed(dialog.invoice)} onClose={() => setDialog(null)} onSaved={load} />
       )}
       {dialog?.type === "pay" && (
         <PayModal invoice={dialog.invoice} today={today} busy={busyId === dialog.invoice.id} onClose={() => setDialog(null)} onConfirm={(paidOn) => void setStatus(dialog.invoice, { status: "pagada", paidOn })} />
@@ -469,9 +468,10 @@ function PayModal({ invoice, today, busy, onClose, onConfirm }: { invoice: Invoi
         <form className="employee-form" onSubmit={(event) => { event.preventDefault(); if (!invalid) onConfirm(paidOn); }}>
           <Field label="Fecha de pago" required><input type="date" value={paidOn} max={today} onChange={(event) => setPaidOn(event.target.value)} /></Field>
           {paidOn > today && <p className="inline-error" role="alert">La fecha de pago no puede ser futura.</p>}
+          <p className="field-hint">Al confirmar, la factura queda cerrada: ya no se podrá cambiar su estatus, corregir sus datos ni eliminarla.</p>
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button type="submit" className="button button-gold" disabled={busy || invalid}><CheckCircle2 size={17} /> {busy ? "Guardando…" : "Confirmar pago"}</button>
+            <button type="submit" className="button button-gold" disabled={busy || invalid}><CheckCircle2 size={17} /> {busy ? "Guardando…" : "Confirmar pago y cerrar"}</button>
           </div>
         </form>
       </section>
