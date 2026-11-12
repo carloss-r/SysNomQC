@@ -28,14 +28,17 @@ export function LoginScreen() {
         <p className="login-copy">Ingresa con tu cuenta autorizada para consultar los expedientes de la cooperativa.</p>
 
         <form onSubmit={handleSubmit} className="login-form">
-          <Field label="Correo electrónico" required>
+          <Field label="Usuario o correo electrónico" required>
             <span className="input-icon"><Mail size={17} /></span>
             <input
-              type="email"
+              type="text"
               autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              maxLength={150}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="nombre@cooperativa.com"
+              placeholder="usuario o nombre@cooperativa.com"
               required
             />
           </Field>

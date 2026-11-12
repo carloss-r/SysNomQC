@@ -14,10 +14,10 @@ import { Field } from "@/shared/ui/field";
 import { PageHeader } from "@/shared/ui/page-header";
 
 type Tab = "users" | "roles";
-type UserForm = { email: string; full_name: string; password: string; role_ids: number[]; active: boolean; site: string };
+type UserForm = { email: string; username: string; full_name: string; password: string; role_ids: number[]; active: boolean; site: string };
 type RoleForm = { name: string; description: string; permissions: Permission[] };
 
-const EMPTY_USER: UserForm = { email: "", full_name: "", password: "", role_ids: [], active: true, site: "" };
+const EMPTY_USER: UserForm = { email: "", username: "", full_name: "", password: "", role_ids: [], active: true, site: "" };
 const EMPTY_ROLE: RoleForm = { name: "", description: "", permissions: [] };
 export const MIN_PASSWORD_LENGTH = 12;
 
@@ -79,7 +79,7 @@ function AdminDashboard() {
   function openUserModal(user: AdminUser | null) {
     setUserForm(
       user
-        ? { email: user.email, full_name: user.full_name ?? "", password: "", role_ids: user.role_ids, active: user.active, site: user.site ?? "" }
+        ? { email: user.email, username: user.username ?? "", full_name: user.full_name ?? "", password: "", role_ids: user.role_ids, active: user.active, site: user.site ?? "" }
         : { ...EMPTY_USER, role_ids: [] },
     );
     setFormError("");
@@ -124,6 +124,10 @@ function AdminDashboard() {
               method: "PATCH",
               body: JSON.stringify({
                 full_name: userForm.full_name.trim(),
+                // Solo se envía si cambió, para no tocar la columna cuando no hace falta.
+                ...(userForm.username.trim() !== (editing.username ?? "")
+                  ? { username: userForm.username.trim() || null }
+                  : {}),
                 role_ids: userForm.role_ids,
                 active: userForm.active,
                 site: userForm.site || null,
@@ -134,6 +138,7 @@ function AdminDashboard() {
               method: "POST",
               body: JSON.stringify({
                 email: userForm.email.trim(),
+                ...(userForm.username.trim() ? { username: userForm.username.trim() } : {}),
                 full_name: userForm.full_name.trim(),
                 password: userForm.password,
                 role_ids: userForm.role_ids,
@@ -219,12 +224,13 @@ function AdminDashboard() {
           {tab === "users" ? (
             <table className="employee-table">
               <thead>
-                <tr><th>Nombre</th><th className="hide-tablet">Correo</th><th className="hide-phone">Roles</th><th className="hide-tablet">Sede</th><th className="hide-phone">Estatus</th><th><span className="sr-only">Acciones</span></th></tr>
+                <tr><th>Nombre</th><th className="hide-tablet">Usuario</th><th className="hide-tablet">Correo</th><th className="hide-phone">Roles</th><th className="hide-tablet">Sede</th><th className="hide-phone">Estatus</th><th><span className="sr-only">Acciones</span></th></tr>
               </thead>
               <tbody>
                 {users.map((user) => (
                   <tr key={user.user_id}>
                     <td>{user.full_name || "—"}<small className="epp-muted show-phone">{roleLabels(user.role_names)} · {user.site ?? "Todas las sedes"}{user.active ? "" : " · Inactivo"}</small><small className="epp-muted show-tablet">{user.email}</small></td>
+                    <td className="hide-tablet">{user.username || "—"}</td>
                     <td className="hide-tablet">{user.email}</td>
                     <td className="hide-phone"><span className="role-list">{user.role_names.length ? user.role_names.map((name) => <span key={name} className="role-pill">{roleLabel(name)}</span>) : "Sin rol"}</span></td>
                     <td className="hide-tablet">{user.site ?? "Todas"}</td>
@@ -281,6 +287,7 @@ function AdminDashboard() {
               <div className="form-grid">
                 <Field label="Nombre completo" required><input value={userForm.full_name} onChange={(event) => setUserForm({ ...userForm, full_name: event.target.value })} maxLength={150} required /></Field>
                 <Field label="Correo electrónico" required><input type="email" value={userForm.email} onChange={(event) => setUserForm({ ...userForm, email: event.target.value })} disabled={Boolean(userModal.editing)} required /></Field>
+                <Field label="Usuario (opcional)"><input value={userForm.username} onChange={(event) => setUserForm({ ...userForm, username: event.target.value })} pattern="[A-Za-z0-9._\-]{3,30}" title="3 a 30 caracteres: letras, números, punto, guion y guion bajo" maxLength={30} autoCapitalize="none" spellCheck={false} placeholder="Para iniciar sesión sin correo" /></Field>
                 <Field label={userModal.editing ? "Nueva contraseña" : `Contraseña (mín. ${MIN_PASSWORD_LENGTH})`} required={!userModal.editing}>
                   <input type="password" autoComplete="new-password" value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} minLength={MIN_PASSWORD_LENGTH} maxLength={72} required={!userModal.editing} />
                 </Field>

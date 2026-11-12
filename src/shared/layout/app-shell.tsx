@@ -88,9 +88,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="topbar-actions">
             <span className="connection-status"><span /> Sistema de Control Operativo</span>
-            <span className="signed-user" title={session?.user.email ?? ""}>
+            <span className="signed-user" title={access?.full_name ?? ""}>
               <CircleUserRound size={18} />
-              <span>{access?.full_name || session?.user.email}</span>
+              <span>{access?.full_name || "Mi cuenta"}</span>
               {access && <small className="role-chip" title={roleLabels(access.role_names)}>{roleLabels(access.role_names)}</small>}
             </span>
             <NotificationsBell />

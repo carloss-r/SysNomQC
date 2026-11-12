@@ -169,7 +169,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSigningIn(true);
       setAuthError("");
       try {
-        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        const identifier = email.trim();
+        let error: { name?: string; status?: number } | null = null;
+        if (identifier.includes("@")) {
+          ({ error } = await supabase.auth.signInWithPassword({ email: identifier, password }));
+        } else {
+          // Con nombre de usuario, el servidor lo resuelve y devuelve la sesión.
+          const response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ identifier, password }),
+          });
+          const result = (await response.json().catch(() => null)) as
+            | { access_token?: string; refresh_token?: string }
+            | null;
+          if (response.ok && result?.access_token && result.refresh_token) {
+            ({ error } = await supabase.auth.setSession({
+              access_token: result.access_token,
+              refresh_token: result.refresh_token,
+            }));
+          } else {
+            error = { name: response.status >= 500 ? "AuthRetryableFetchError" : "AuthApiError", status: response.status };
+          }
+        }
         if (error) {
           console.error("No se pudo iniciar sesión:", error);
           const unreachable = error.name === "AuthRetryableFetchError" || (error.status ?? 0) >= 500;
@@ -181,7 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           const message = unreachable
             ? "No se pudo conectar para iniciar sesión. Inténtalo de nuevo."
-            : "No se pudo iniciar sesión. Revisa tu correo y contraseña.";
+            : "No se pudo iniciar sesión. Revisa tu usuario o correo y tu contraseña.";
           setAuthError(message);
           notify("error", unreachable ? "Sin conexión" : "No se pudo iniciar sesión", message);
           if (unreachable) reportClientIncident("auth.login", error);

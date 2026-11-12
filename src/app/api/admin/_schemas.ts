@@ -22,9 +22,13 @@ export const roleIdsSchema = z
   .max(10)
   .transform((ids) => Array.from(new Set(ids)));
 
+/** Nombre de usuario para iniciar sesión (opcional): 3-30 caracteres, sin "@". */
+export const usernameSchema = z.string().trim().regex(/^[A-Za-z0-9._-]{3,30}$/);
+
 export const userCreateSchema = z
   .object({
     email: z.email().max(150),
+    username: usernameSchema.optional(),
     full_name: z.string().trim().min(1).max(150),
     password: z.string().min(12).max(72),
     role_ids: roleIdsSchema,

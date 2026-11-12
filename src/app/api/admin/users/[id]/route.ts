@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { recordAudit } from "@/lib/audit";
 import { z } from "zod";
 import { BadJsonError, readJson } from "../../../employees/_server";
-import { roleIdsSchema, userSiteSchema } from "../../_schemas";
+import { roleIdsSchema, userSiteSchema, usernameSchema } from "../../_schemas";
 import { adminDbError, badRequest, requireAdmin } from "../../_admin";
 import { MIGRATION_MISSING, otherActiveSuperAdmins, readUserRoleIds, saveUserRoles, superAdminRoleIds } from "../../_user-roles";
 
@@ -11,6 +11,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 const userPatchSchema = z
   .object({
     full_name: z.string().trim().min(1).max(150),
+    username: usernameSchema.nullable(),
     role_ids: roleIdsSchema,
     active: z.boolean(),
     password: z.string().min(12).max(72),

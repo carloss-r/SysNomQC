@@ -12,7 +12,7 @@ import { ThemeToggle } from "@/shared/ui/theme-toggle";
 // Menú lateral desplegable: permanece cerrado y se abre con el botón de tres rayas.
 export function Sidebar({ open, onClose, onSignOut }: { open: boolean; onClose: () => void; onSignOut: () => void }) {
   const pathname = usePathname();
-  const { can, access, session } = useAuth();
+  const { can, access } = useAuth();
   const { active } = useNotifications();
   const urgent = active.filter((item) => item.severity !== "minor").length;
   const tabIndex = open ? 0 : -1;
@@ -76,7 +76,7 @@ export function Sidebar({ open, onClose, onSignOut }: { open: boolean; onClose: 
           <p className="sidebar-user">
             <CircleUserRound size={18} />
             <span>
-              {access?.full_name || session?.user.email}
+              {access?.full_name || "Mi cuenta"}
               {access && <small>{roleLabels(access.role_names)}</small>}
             </span>
           </p>
