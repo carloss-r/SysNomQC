@@ -13,18 +13,22 @@ function supabaseOrigin(): string {
 
 const supabase = supabaseOrigin();
 
+// Barra de comentarios de Vercel: solo en despliegues de vista previa (ramas), nunca en producción.
+const vercelPreview = process.env.VERCEL_ENV === "preview";
+const toolbar = (sources: string) => (vercelPreview ? ` ${sources}` : "");
+
 // Next.js inyecta scripts y estilos en línea, por eso 'unsafe-inline'. Todo lo demás es estricto:
 // sin plugins, sin iframes, sin formularios hacia otros sitios y solo conexiones a este
 // dominio y a Supabase. ('unsafe-eval' y ws: solo en desarrollo para el recargado en caliente.)
 const contentSecurityPolicy = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: ${supabase}`.trim(),
-  "font-src 'self' data:",
-  `connect-src 'self' ${supabase}${isDev ? " ws: wss:" : ""}`.trim(),
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}${toolbar("https://vercel.live")}`,
+  `style-src 'self' 'unsafe-inline'${toolbar("https://vercel.live")}`,
+  `img-src 'self' data: blob: ${supabase}${toolbar("https://vercel.live https://vercel.com")}`.trim(),
+  `font-src 'self' data:${toolbar("https://vercel.live https://assets.vercel.com")}`,
+  `connect-src 'self' ${supabase}${isDev ? " ws: wss:" : ""}${toolbar("https://vercel.live wss://ws-us3.pusher.com")}`.trim(),
   // Vista previa de facturas: el PDF se descarga del bucket privado y se muestra como blob: local.
-  "frame-src 'self' blob:",
+  `frame-src 'self' blob:${toolbar("https://vercel.live")}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

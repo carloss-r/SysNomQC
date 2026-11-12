@@ -43,7 +43,11 @@ export function NoticeProvider({ children }: { children: ReactNode }) {
     (tone, title, message) => {
       counter.current += 1;
       const id = counter.current;
-      setNotices((current) => [...current.slice(-3), { id, tone, title, message }]);
+      setNotices((current) => {
+        // Un aviso idéntico que sigue en pantalla no se repite.
+        if (current.some((notice) => notice.tone === tone && notice.title === title && notice.message === message)) return current;
+        return [...current.slice(-3), { id, tone, title, message }];
+      });
       window.setTimeout(() => dismiss(id), NOTICE_DURATION[tone]);
     },
     [dismiss],
