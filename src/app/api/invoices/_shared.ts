@@ -64,15 +64,18 @@ export function toInvoice(row: Record<string, unknown>): Invoice {
   return copy as unknown as Invoice;
 }
 
-/** Si la factura ya está cerrada (pagada o con incidente), la respuesta de error; si no, null. */
-export async function closedInvoiceResponse(client: SupabaseClient, id: number) {
+/**
+ * Si la factura ya está cerrada (pagada o con incidente), la respuesta de error; si no, null.
+ * Con allowSuperAdmin (solo al eliminar) el Super administrador sí puede continuar.
+ */
+export async function closedInvoiceResponse(client: SupabaseClient, id: number, allowSuperAdmin = false) {
   const { data, error } = await client.from("invoices").select("status").eq("id", id).maybeSingle();
   if (error) return invoiceDatabaseError(error, "leer estatus");
   if (!data) return NextResponse.json({ error: "La factura no existe." }, { status: 404 });
   const status = (data as { status: string }).status;
-  if (status === "pagada" || status === "incidente") {
+  if ((status === "pagada" || status === "incidente") && !allowSuperAdmin) {
     const label = status === "pagada" ? "pagada" : "con incidente";
-    return NextResponse.json({ error: `La factura ya está cerrada (${label}) y no se puede modificar ni eliminar.` }, { status: 409 });
+    return NextResponse.json({ error: `La factura ya está cerrada (${label}) y no se puede modificar. Solo el Super administrador puede eliminarla.` }, { status: 409 });
   }
   return null;
 }

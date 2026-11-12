@@ -60,11 +60,13 @@ function StatusBadge({ invoice, today }: { invoice: Invoice; today: string }) {
 }
 
 function InvoicesScreen() {
-  const { session, can } = useAuth();
+  const { session, can, access } = useAuth();
   const notify = useNotify();
   const systemDialog = useDialog();
   const sessionRef = useRef(session);
   const canManage = can("invoices.manage");
+  // Eliminar: cualquiera con permiso mientras está pendiente; una factura cerrada, solo el Super administrador.
+  const canDelete = (invoice: Invoice) => canManage && (!isInvoiceClosed(invoice) || access?.is_super_admin === true);
 
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
@@ -173,7 +175,7 @@ function InvoicesScreen() {
     if (!session) return;
     const ok = await systemDialog.confirm({
       title: "Eliminar factura",
-      message: `¿Eliminar la factura ${invoice.folio ?? invoice.file_name}? Se borra también el PDF y no se puede deshacer.`,
+      message: `¿Eliminar la factura ${invoice.folio ?? invoice.file_name}?${isInvoiceClosed(invoice) ? ` Está cerrada (${INVOICE_STATUS_LABELS[invoice.status].toLowerCase()}).` : ""} Se borra también el PDF y no se puede deshacer.`,
       confirmLabel: "Eliminar",
       tone: "danger",
     });
@@ -347,7 +349,7 @@ function InvoicesScreen() {
                           </button>
                           <button className="button button-outline" onClick={() => void viewPdf(row)}><FileText size={14} /> PDF</button>
                           {isInvoiceClosed(row) && <span className="epp-muted" title="Factura cerrada: ya no se puede modificar"><Lock size={14} /></span>}
-                          {canManage && !isInvoiceClosed(row) && (
+                          {canDelete(row) && (
                             <button className="icon-button row-edit" onClick={() => void remove(row)} disabled={busyId === row.id} aria-label="Eliminar factura" title="Eliminar"><Trash2 size={16} /></button>
                           )}
                         </div>

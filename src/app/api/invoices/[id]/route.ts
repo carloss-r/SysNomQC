@@ -115,14 +115,15 @@ export async function DELETE(request: NextRequest, context: Context) {
   const id = parseId((await context.params).id);
   if (!id) return NextResponse.json({ error: "Factura no válida." }, { status: 400 });
   try {
-    const closed = await closedInvoiceResponse(auth.client, id);
+    // Una factura cerrada solo la puede eliminar el Super administrador.
+    const closed = await closedInvoiceResponse(auth.client, id, auth.access.is_super_admin);
     if (closed) return closed;
-    const { data, error } = await auth.client.from("invoices").delete().eq("id", id).select("id,file_path,folio").maybeSingle();
+    const { data, error } = await auth.client.from("invoices").delete().eq("id", id).select("id,file_path,folio,status").maybeSingle();
     if (error) return invoiceDatabaseError(error, "eliminar");
     if (!data) return NextResponse.json({ error: "La factura no existe." }, { status: 404 });
     const removed = await auth.client.storage.from(INVOICE_BUCKET).remove([data.file_path as string]);
     if (removed.error) console.error("No se pudo eliminar el PDF de la factura:", removed.error);
-    await recordAudit(request, auth.access, "invoices.delete", id, { folio: data.folio });
+    await recordAudit(request, auth.access, "invoices.delete", id, { folio: data.folio, status: data.status });
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     reportServerIncident("api · facturas · eliminar", error);
