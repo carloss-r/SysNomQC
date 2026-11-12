@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { recordAudit } from "@/lib/audit";
 import { reportServerIncident } from "@/lib/incidents";
 import { EMPLOYEE_LIST_COLUMNS, SITES } from "@/lib/employees";
 import { BadJsonError, databaseErrorResponse, getAuthenticatedClient, readJson } from "./_server";
@@ -106,6 +107,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) return databaseErrorResponse(error);
+    await recordAudit(request, auth.access, "employee.create", data.id, { code: data.employee_code });
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     console.error("Error inesperado al crear empleado:", error);

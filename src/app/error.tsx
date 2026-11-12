@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { reportClientIncident } from "@/lib/report-incident";
 
+// Falla del marco de la aplicación (las pantallas tienen su propio error.tsx).
 export default function ErrorPage({
   error,
   reset,

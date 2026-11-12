@@ -1,0 +1,87 @@
+
+# Especificación Técnica: Módulos del Sistema de Combustibles Alternos y Sustitución Térmica
+
+## 1. Módulo Técnico: Memoria de Cálculo de Sustitución Energética
+
+Este documento establece el estándar lógico y matemático para el cálculo de sustitución térmica del horno utilizando combustibles alternos frente al Coque de Petróleo base, integrando el límite regulatorio mandatado por SEMARNAT.
+
+### Límite Regulatorio Crítico (SEMARNAT)
+
+* El horno tiene autorizado un **máximo del 30.0%** de sustitución térmica con combustibles alternos.
+* El sistema implementará **bloqueos visuales y alertas preventivas automáticas** cuando el cálculo diario o mensual proyectado se acerque o intente rebasar este umbral.
+
+### Fórmulas Matemáticas del Sistema
+
+El porcentaje de sustitución se calcula dividiendo la energía total aportada por los combustibles alternos entre la energía térmica total requerida por el proceso en el mismo periodo:
+
+* **Energía Combustibles Alternos (Gcal)** = $\sum$ [ Peso Neto Recibido (t) $\times$ Poder Calorífico del Producto (cal/g) ] / 1,000
+* **Energía Coque de Petróleo (Gcal)** = [ Peso Consumido de Coque (t) $\times$ 7,500 cal/g ] / 1,000
+* **% Sustitución Térmica** = [ Energía Combustibles Alternos / (Energía Combustibles Alternos + Energía Coque) ] $\times$ 100
+
+---
+
+## 2. Lógica del Semáforo Ambiental (Límite SEMARNAT 30%)
+
+El sistema ejecutará un monitoreo continuo del porcentaje de sustitución térmica acumulado en el mes, activando alertas visuales y de bloqueo según los siguientes rangos:
+
+* **0.0% a 25.0% - Verde:** Operación normal y holgada.
+* **25.1% a 29.9% - Amarillo:** Alerta preventiva en pantalla y correo automático a Ecología para dosificar la logística semanal.
+* **$\ge$ 30.0% - Rojo:** Alerta crítica. Bloqueo predictivo en la agenda si el peso estimado satura el horno, o marca de auditoría roja en reportes.
+
+---
+
+## 3. Diseño Estructural de Interfaces (Botones y Tablas)
+
+### Pantalla M1: Alta y Homologación de Proveedores
+
+* **Estructura Visual:** Formulario de captura dividido en dos pestañas ("Datos Corporativos" y "Parámetros de Calidad"). En la parte inferior, una tabla con los registros históricos.
+* **Botones Clave:**
+* `[ Validar y Guardar ]`: Ejecuta el análisis químico. Si no pasa los mínimos/máximos, el sistema arroja una alerta emergente y no guarda.
+* `[ Adjuntar Permiso ]`: Abre el explorador de archivos para subir el PDF de SEMARNAT.
+
+
+* **Columnas de la Tabla Base:** Razón Social | RFC | Estatus Técnico (Aprobado/Rechazado) | Vigencia de Permiso | Acciones (Editar/Ver PDF).
+
+### Pantalla M3: Operación de Báscula y Manifiestos
+
+* **Estructura Visual:** Interfaz dividida en tres bloques superiores de captura (Generador, Transportista, Datos del Vehículo). Bloque central numérico para pesos. Parte inferior con la bitácora del día.
+* **Botones Clave:**
+* `[ Capturar Entrada (Bruto) ]`: Registra el peso inicial de la unidad.
+* `[ Capturar Salida (Tara) ]`: Registra el peso vacío, calcula el Neto y cierra el folio de viaje de forma irreversible.
+* `[ Imprimir Certificado PDF ]`: Se habilita únicamente al cerrar la Tara. Genera el documento con los datos del Generador, Transportista, Destino y Toneladas recibidas.
+
+
+* **Columnas de la Tabla Base:** Ticket Báscula | Folio Manifiesto | Empresa Generadora | Producto | Peso Neto (t) | Hora Cierre | Estatus.
+
+---
+
+## 4. Mapa General de Arquitectura Funcional
+
+| Módulo | Entradas (Captura Manual) | Lógica y Candados | Salidas y Reportes (PDF) |
+| --- | --- | --- | --- |
+| **M1. Proveedores y Expedientes** | Razón Social, RFC, Dirección, Permisos SEMARNAT (PDF y vigencia), Análisis (Calorífico, Cloro, Agua, Azufre). | Bloqueo si: Cal/g < 5,000; Cloro > 1.80%; Agua > 12.0%; Azufre > 1.0%. Alerta de vigencia a -30 días. | Ficha de Proveedor Autorizado, Alertas en Pantalla. |
+| **M2. Programación Logística** | Fecha, Proveedor, Producto autorizado, Transportista. | Filtro exclusivo: solo despliega proveedores y productos aprobados vigentes en M1. | Agenda de recepción diaria para báscula. |
+| **M3. Manifiestos y Báscula** | Manifiesto (Generador, Transportista, Chofer, Placas), Nombre Producto, Peso Bruto y Tara. | Cálculo automático de Peso Neto. Amarre irreversible de folios de manifiesto con el ticket de báscula. | Certificado de Recepción oficial para el cliente. |
+| **M4. Comercial y Contabilidad** | Esquema (Cobro / Pago / Valor 0), Tarifa por tonelada. | Cálculo de importe puro: Subtotal = Neto $\times$ Tarifa. Excluye IVA por el momento. | Reportes Contables y Subtotales (Diario, Quencenal, Mensual) por Producto y Generador. |
+| **M5. Ecología y Sustitución** | Consumo mensual de Coque de Petróleo (t). | Línea base Coque: 7,500 cal/g. Conversión a Gcal de alternos. Candado estricto del 30% máx. de sustitución térmica. | Reporte Semestral SEMARNAT y acumulados de masa/energía para la COA. |
+
+---
+
+## 5. Caso de Referencia / Historial de Control de Calidad
+
+* **Institución:** Cooperativa La Cruz Azul, SCL — Planta en Cd. Coop. Cruz Azul, Hgo. Gerencia de Control de Calidad (Combustibles Alternos). Fecha: 08 de abril de 2020.
+* **De:** Quím. Victoria Mera Hdez. (Combustibles Alternos)
+* **Para:** Q.I. Alejandra Viveros Ortega (Gerente de Control de Calidad)
+* **Asunto:** Notificación de corrección de embarque fuera de especificación.
+
+### Bitácora del Caso:
+
+1. **02 de Marzo, 2020:** La empresa *Procesos Ambientales Alfa, S.A. de C.V.* envió un embarque de *Basura Industrial Peligrosa* (Manifiesto 04/2020) de 11,170 kg con un contenido de Cloro de 3.02% (fuera de norma). De acuerdo al procedimiento, se aplicó la opción de corrección mediante un segundo embarque en un lapso no mayor a 2 días.
+2. **04 de Marzo, 2020:** Se recibió el segundo embarque de compensación (Manifiesto 05/2020) de 10,580 kg con un contenido de Cloro de 0.57%.
+
+### Tabla Resumen del Caso:
+
+* **02 Mar 2020** | B. Industrial Peligrosa | Manifiesto 04/2020 | 11,170 Kg | % Cloro = 3.20* *(Nota en texto descriptivo indica 3.02%)*
+* **04 Mar 2020** | B. Industrial Peligrosa | Manifiesto 05/2020 | 10,580 Kg | % Cloro = 0.57
+* **04 Mar 2020** | B. Industrial Peligrosa | Manifiestos 04 y 05/2020 | 21,750 Kg | % Cloro = 1.92 *(Promedio ponderado)*
+* **Observaciones:** El último renglón muestra el resultado del promedio ponderado de ambos embarques. **No hay penalización**, ya que el embarque fue corregido exitosamente. Esta práctica de corrección cruzada solo se puede realizar una vez al mes.

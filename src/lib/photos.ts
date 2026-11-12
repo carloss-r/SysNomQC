@@ -10,7 +10,7 @@ export const MAX_ORIGINAL_PHOTO_BYTES = 15 * 1024 * 1024;
 const MAX_SIDE_PX = 800;
 const TARGET_BYTES = 250 * 1024;
 const QUALITIES = [0.82, 0.7, 0.55];
-const SIGNED_URL_SECONDS = 6 * 60 * 60;
+const SIGNED_URL_SECONDS = 60 * 60;
 
 function loadImage(file: File): Promise<HTMLImageElement> {
   const url = URL.createObjectURL(file);
@@ -77,12 +77,30 @@ export async function uploadEmployeePhoto(photo: Blob): Promise<string> {
   return path;
 }
 
+// Enlaces firmados en memoria: se reutilizan mientras sigan vigentes y se borran al cerrar sesión.
+const urlCache = new Map<string, string>();
+
+export function getCachedPhotoUrl(path: string): string | undefined {
+  return urlCache.get(path);
+}
+
+export function clearPhotoUrlCache() {
+  urlCache.clear();
+}
+
 /** Enlace temporal para mostrar la foto (el bucket es privado). */
 export async function getEmployeePhotoUrl(path: string): Promise<string | null> {
+  const cached = urlCache.get(path);
+  if (cached) return cached;
+
   const { data, error } = await supabase.storage
     .from(PHOTO_BUCKET)
     .createSignedUrl(path, SIGNED_URL_SECONDS);
   if (error) return null;
+
+  urlCache.set(path, data.signedUrl);
+  // Se descarta antes de que el enlace expire para no reutilizar uno vencido.
+  window.setTimeout(() => urlCache.delete(path), (SIGNED_URL_SECONDS - 600) * 1000);
   return data.signedUrl;
 }
 

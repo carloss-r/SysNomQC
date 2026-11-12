@@ -28,19 +28,19 @@ alter table public.roles add column if not exists es_sistema boolean not null de
 
 insert into public.roles (nombre, descripcion)
 values
-  ('SuperAdmin', 'Control total y global de todas las sedes'),
-  ('AdminSede', 'Administración específica para su sede asignada'),
-  ('RecursosHumanos', 'Altas, bajas y gestión de expedientes'),
-  ('AlmacenistaEPP', 'Control de stock y entregas de equipo de protección')
+  ('Super administrador', 'Control total y global de todas las sedes'),
+  ('Administrador de sede', 'Administración específica para su sede asignada'),
+  ('Recursos humanos', 'Altas, bajas y gestión de expedientes'),
+  ('Almacenista de EPP', 'Control de stock y entregas de equipo de protección')
 on conflict (nombre) do nothing;
 
 update public.roles set es_sistema = true,
   permisos = array['employees.view','employees.create','employees.edit','employees.delete','employees.download','users.manage']
-where nombre = 'SuperAdmin';
+where nombre = 'Super administrador';
 update public.roles set permisos = array['employees.view','employees.create','employees.edit','employees.delete','employees.download']
-where nombre in ('AdminSede', 'RecursosHumanos') and permisos = '{}';
+where nombre in ('Administrador de sede', 'Recursos humanos') and permisos = '{}';
 update public.roles set permisos = array['employees.view']
-where nombre = 'AlmacenistaEPP' and permisos = '{}';
+where nombre = 'Almacenista de EPP' and permisos = '{}';
 
 alter table public.authorized_users add column if not exists full_name text;
 alter table public.authorized_users
@@ -49,11 +49,11 @@ alter table public.authorized_users
 -- Cuentas ya autorizadas: el dueño queda como SuperAdmin; las demás como RecursosHumanos
 -- (solo expedientes). Cámbialo después desde /admin.
 update public.authorized_users
-set role_id = (select id_rol from public.roles where nombre = 'SuperAdmin')
+set role_id = (select id_rol from public.roles where nombre = 'Super administrador')
 where role_id is null and lower(email) = 'crlos.trabajo.dev@gmail.com';
 
 update public.authorized_users
-set role_id = (select id_rol from public.roles where nombre = 'RecursosHumanos')
+set role_id = (select id_rol from public.roles where nombre = 'Recursos humanos')
 where role_id is null;
 
 -- Seguridad: la app lee roles con la sesión del usuario; todo cambio va por el servidor.

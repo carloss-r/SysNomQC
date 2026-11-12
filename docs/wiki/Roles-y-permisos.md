@@ -1,0 +1,52 @@
+# Roles y permisos
+
+Se administran en la pantalla **Usuarios y roles** (`/admin`, permiso `users.manage`).
+
+## Catálogo de permisos (`src/lib/permissions.ts`)
+
+| Permiso | Descripción |
+| --- | --- |
+| `employees.view` | Ver directorio y expedientes |
+| `employees.create` | Registrar empleados |
+| `employees.edit` | Editar expedientes |
+| `employees.delete` | Eliminar expedientes |
+| `employees.download` | Descargar expedientes |
+| `epp.view` | Ver inventario y entregas de EPP |
+| `epp.deliver` | Registrar entregas de EPP |
+| `epp.manage` | Administrar catálogo, ingresos y ajustes |
+| `epp.request` | Solicitar compra cuando falta material |
+| `epp.purchase` | Atender solicitudes de compra (encargado de compras) |
+| `fuels.view` | Ver combustibles alternos y semáforo SEMARNAT |
+| `fuels.suppliers` | Homologar proveedores (M1) |
+| `fuels.schedule` | Programar recepciones (M2) |
+| `fuels.scale` | Operar báscula y manifiestos (M3) |
+| `fuels.commercial` | Tarifas y reportes contables (M4) |
+| `fuels.ecology` | Capturar consumo de coque y reporte SEMARNAT (M5) |
+| `invoices.view` | Ver facturas, su PDF y los resúmenes de pago |
+| `invoices.manage` | Cargar facturas, corregir sus datos y marcarlas pagadas o pendientes |
+| `users.manage` | Administrar usuarios y roles |
+
+## Roles
+
+Los nombres se guardan legibles en la base (`202611110001_normalizar_roles.sql` renombró los nombres técnicos en camelCase). Al crear o editar un rol, un nombre escrito como `EncargadoCompras` se guarda como `Encargado de compras`. La app no busca roles por nombre: el SuperAdmin se reconoce por `es_sistema` y el acceso por `permisos`, así que renombrar un rol no cambia ningún acceso. `src/lib/roles.ts` sigue mostrando legibles los nombres anteriores si una base aún no tiene la migración.
+
+| Rol | Antes | Origen |
+| --- | --- | --- |
+| `Super administrador` | `SuperAdmin` | Rol de sistema (`es_sistema`): todos los permisos y todas las sedes |
+| `Administrador de sede` | `AdminSede` | Migración de roles |
+| `Recursos humanos` | `RecursosHumanos` | Migración de roles (altas, bajas y expedientes) |
+| `Almacenista de EPP` | `AlmacenistaEPP` | Permisos de inventario: `epp.view`, `epp.deliver`, `epp.manage`, `epp.request` |
+| `Encargado de compras` | `EncargadoCompras` | Migración de EPP por sede; recibe el aviso de solicitudes nuevas |
+| `Combustibles alternos` | `CombustiblesAlternos` | Migración de combustibles |
+| `Operador de báscula` | `OperadorBascula` | Migración de combustibles |
+| `Ecología` | `Ecologia` | Migración de combustibles |
+| `Contabilidad de combustibles` | `ContabilidadCombustibles` | Migración de combustibles |
+| `Cuentas por pagar` | — | Migración de facturas: `invoices.view`, `invoices.manage` |
+
+## Reglas
+
+- **Varios roles por cuenta**: los permisos son la suma de todos; el primero marcado es el rol principal (`authorized_users.role_id`). Requiere `202611080001_varios_roles.sql`.
+- **Sede**: cada cuenta puede tener una sede asignada (`Campeche`, `Lagunas`, `Cruz Azul`). Con sede, solo ve y mueve el inventario de esa sede; sin sede (*Todas las sedes*) y el SuperAdmin eligen la sede en pantalla.
+- **Pantalla de inicio**: si la cuenta abre una pantalla sin permiso, la app la lleva a la primera pantalla del menú que sí puede usar.
+- **Protecciones**: no puedes borrar ni desactivar tu cuenta y siempre queda un SuperAdmin activo.
+- Un permiso nuevo agregado en `permissions.ts` aparece solo en el editor de roles.
