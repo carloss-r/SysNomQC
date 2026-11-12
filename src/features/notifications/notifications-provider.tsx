@@ -6,9 +6,10 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { ApiError, describeError, requestApi } from "@/lib/api-client";
 import { EPP_CHANGED_EVENT, type AppNotification, type NotificationsResponse } from "@/lib/notifications";
 import { reportClientIncident } from "@/lib/report-incident";
+import { supabase } from "@/lib/supabase";
 import { useNotify } from "@/shared/ui/notice-provider";
 
-const STOCK_TOAST_FLAG = "epp-alert-toast";
+const STOCK_TOAST_FLAG = "sysnomqc.notifications.stock-toast";
 
 /** Tiempo que una alerta descartada queda oculta; si el problema sigue, vuelve a mostrarse. */
 export const SNOOZE_MS = 24 * 60 * 60_000;
@@ -52,6 +53,15 @@ function readSnoozes(key: string): SnoozeMap {
   }
 }
 
+/**
+ * Token vigente al momento de la consulta. Se pide a Supabase (no al estado de React) porque,
+ * tras suspender la pestaña o cerrar sesión, el token guardado en el estado puede estar vencido o revocado.
+ */
+async function currentSession() {
+  const { data } = await supabase.auth.getSession();
+  return data.session;
+}
+
 // Solo se monta con la sesión ya iniciada, por eso puede leer localStorage al crearse.
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
@@ -65,11 +75,12 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [snoozes, setSnoozes] = useState<SnoozeMap>(() => readSnoozes(storageKey));
   const [now, setNow] = useState(() => Date.now());
 
-  const sessionRef = useRef(session);
   const lastRefresh = useRef(0);
-  useEffect(() => {
-    sessionRef.current = session;
-  }, [session]);
+  // Una sola consulta a la vez: el inicio, el foco de la ventana, el intervalo y los cambios de EPP
+  // pueden coincidir, y dos respuestas simultáneas mostraban los mismos avisos dos veces.
+  const inFlight = useRef<Promise<void> | null>(null);
+  // Avisos emergentes ya mostrados en esta sesión (respaldo por si falla el almacenamiento).
+  const shownToasts = useRef(new Set<string>());
 
   useEffect(() => {
     try {
@@ -79,13 +90,23 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     }
   }, [storageKey, snoozes]);
 
-  const refresh = useCallback(async () => {
-    const current = sessionRef.current;
-    if (!current) return;
+  const load = useCallback(async () => {
+    const current = await currentSession();
+    // Sin sesión (p. ej. justo al cerrar sesión): no hay nada que consultar.
+    if (!current || current.user.id !== userId) return;
     lastRefresh.current = Date.now();
     setLoading(true);
     try {
-      const result = await requestApi<NotificationsResponse>(current, "/api/notifications");
+      let result: NotificationsResponse;
+      try {
+        result = await requestApi<NotificationsResponse>(current, "/api/notifications");
+      } catch (firstError) {
+        // Token vencido: se renueva una vez y se reintenta antes de dar el error.
+        if (!(firstError instanceof ApiError) || firstError.status !== 401) throw firstError;
+        const { data: renewed } = await supabase.auth.refreshSession();
+        if (!renewed.session || renewed.session.user.id !== userId) return;
+        result = await requestApi<NotificationsResponse>(renewed.session, "/api/notifications");
+      }
       const checkedAt = Date.now();
       setData(result);
       setError("");
@@ -115,7 +136,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         } catch {
           seen = [];
         }
-        const fresh = purchases.filter((item) => !seen.includes(item.id));
+        const fresh = purchases.filter((item) => !seen.includes(item.id) && !shownToasts.current.has(item.id));
+        fresh.forEach((item) => shownToasts.current.add(item.id));
         if (fresh.length === 1) notify("info", "Nueva solicitud de compra de EPP", `${fresh[0]?.title}. ${fresh[0]?.detail}`);
         else if (fresh.length > 1) notify("info", "Nuevas solicitudes de compra de EPP", `Tienes ${fresh.length} solicitudes nuevas por atender. Revisa la campana.`);
         try {
@@ -129,18 +151,25 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       const out = urgentStock.filter((item) => item.kind === "out_of_stock").length;
       const low = urgentStock.filter((item) => item.kind === "low_stock").length;
       if (out + low > 0) {
-        let alreadyShown = false;
+        const flag = `${STOCK_TOAST_FLAG}.${userId}`;
+        let alreadyShown = shownToasts.current.has(flag);
+        shownToasts.current.add(flag);
         try {
-          alreadyShown = window.sessionStorage.getItem(STOCK_TOAST_FLAG) !== null;
-          window.sessionStorage.setItem(STOCK_TOAST_FLAG, "1");
+          alreadyShown ||= window.sessionStorage.getItem(flag) !== null;
+          window.sessionStorage.setItem(flag, "1");
         } catch {
-          // Sin sessionStorage: se avisa igualmente.
+          // Sin sessionStorage: basta con el registro en memoria.
         }
         if (!alreadyShown) {
           notify("warning", "Alertas de inventario de EPP", `${out} agotado(s) y ${low} por reponer. Revisa la campana.`);
         }
       }
     } catch (requestError) {
+      // Sesión inválida aun después de renovarla: el inicio de sesión se encarga; no es un fallo del sistema.
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        setError(requestError.message);
+        return;
+      }
       console.error("No se pudieron cargar las notificaciones:", requestError);
       setError(describeError(requestError, "No se pudieron cargar las notificaciones."));
       if (!(requestError instanceof ApiError)) reportClientIncident("notificaciones · carga", requestError);
@@ -148,6 +177,13 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, [notify, storageKey, userId]);
+
+  const refresh = useCallback(() => {
+    inFlight.current ??= load().finally(() => {
+      inFlight.current = null;
+    });
+    return inFlight.current;
+  }, [load]);
 
   useEffect(() => {
     const first = window.setTimeout(() => void refresh(), 0);

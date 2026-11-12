@@ -23,7 +23,7 @@ export function Sidebar({ open, onClose, onSignOut }: { open: boolean; onClose: 
   })).filter((section) => section.items.length > 0);
 
   return (
-    <aside id="main-menu" className={`sidebar${open ? " open" : ""}`} aria-label="Menú principal" aria-hidden={!open}>
+    <aside id="main-menu" className={`sidebar${open ? " open" : ""}`} aria-label="Menú principal" inert={!open}>
       <div className="sidebar-header">
         <span>MENÚ</span>
         <button type="button" className="icon-button sidebar-close" onClick={onClose} aria-label="Cerrar menú" tabIndex={tabIndex}>

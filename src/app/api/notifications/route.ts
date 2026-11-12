@@ -56,10 +56,14 @@ export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedClient(request);
   if ("response" in auth) return auth.response;
   const { client, access } = auth;
+  // Cada aviso va al rol que lo atiende. El Super administrador tiene todos los permisos, por eso
+  // se excluye explícitamente de las alertas operativas y solo recibe las de expedientes.
   const has = (key: string) => access.permissions.includes(key as never);
+  const operator = (key: string) => !access.is_super_admin && has(key);
 
   const readEmployees = async (): Promise<SourceResult> => {
-    if (!has("employees.view")) return { status: "no_permission", items: [] };
+    // Avisos de expedientes incompletos: solo para el Super administrador.
+    if (!access.is_super_admin || !has("employees.view")) return { status: "no_permission", items: [] };
     try {
       const rows = await readAll<EmployeeCheckRow>((from, to) =>
         client
@@ -75,11 +79,10 @@ export async function GET(request: NextRequest) {
     }
   };
 
-  // Faltantes por sede: solo para quien opera el inventario (no para compras, que recibe solicitudes).
+  // Faltantes por sede: solo para quien administra el inventario de EPP (no para compras, que recibe solicitudes).
   // Las políticas RLS ya devuelven únicamente las sedes a las que la cuenta tiene acceso.
   const readInventory = async (): Promise<SourceResult> => {
-    const operates = has("epp.view") && (has("epp.request") || has("epp.manage") || has("epp.deliver"));
-    if (!operates) return { status: "no_permission", items: [] };
+    if (!operator("epp.view") || !operator("epp.manage")) return { status: "no_permission", items: [] };
     try {
       const [stock, open] = await Promise.all([
         readAll<StockJoin>((from, to) =>
@@ -115,7 +118,7 @@ export async function GET(request: NextRequest) {
 
   // Aviso especial: solo el rol que atiende compras (SuperAdmin las consulta en la pantalla de EPP).
   const readPurchases = async (): Promise<SourceResult> => {
-    if (!has("epp.purchase") || access.is_super_admin) return { status: "no_permission", items: [] };
+    if (!operator("epp.purchase")) return { status: "no_permission", items: [] };
     try {
       // Con sede asignada, solo las solicitudes de esa sede.
       const { error, requests } = await readPurchaseRequests(client, { open: true, limit: 500, site: access.site });
@@ -129,9 +132,9 @@ export async function GET(request: NextRequest) {
   // Combustibles alternos: semáforo para quien programa, opera la báscula o es de Ecología;
   // permisos SEMARNAT por vencer para quien homologa proveedores o programa.
   const readFuels = async (): Promise<SourceResult> => {
-    const watchesSemaphore = has("fuels.schedule") || has("fuels.ecology") || has("fuels.scale");
-    const watchesPermits = has("fuels.suppliers") || has("fuels.schedule");
-    if (!has("fuels.view") || (!watchesSemaphore && !watchesPermits)) return { status: "no_permission", items: [] };
+    const watchesSemaphore = operator("fuels.schedule") || operator("fuels.ecology") || operator("fuels.scale");
+    const watchesPermits = operator("fuels.suppliers") || operator("fuels.schedule");
+    if (!operator("fuels.view") || (!watchesSemaphore && !watchesPermits)) return { status: "no_permission", items: [] };
     try {
       const today = plantToday();
       let semaphore: FuelSemaphoreRow | null = null;

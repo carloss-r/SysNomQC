@@ -4,7 +4,7 @@ import { CircleUserRound, LogOut, Menu } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LoginScreen } from "@/features/auth/login-screen";
 import { useAuth } from "@/features/auth/auth-provider";
 import { NotificationsBell } from "@/features/notifications/notifications-bell";
@@ -29,6 +29,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { status, access, authError, session, signOut, retry } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const wasMenuOpen = useRef(false);
+
+  // Al cerrar el menú, el foco regresa al botón de tres rayas (el menú cerrado queda inerte).
+  useEffect(() => {
+    if (wasMenuOpen.current && !menuOpen) menuButtonRef.current?.focus();
+    wasMenuOpen.current = menuOpen;
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -69,6 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="topbar-inner">
           <div className="topbar-left">
             <button
+              ref={menuButtonRef}
               type="button"
               className="icon-button menu-button"
               onClick={() => setMenuOpen((value) => !value)}
