@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getCachedAccess, setCachedAccess } from "@/lib/access-cache";
 import { createAuthenticatedSupabaseClient } from "@/lib/database";
 import { reportServerIncident } from "@/lib/incidents";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
@@ -48,8 +49,19 @@ export async function getAuthenticatedClient(
     return { response: NextResponse.json({ error: "Inicia sesión para continuar." }, { status: 401 }) };
   }
 
+  const denied = (access: Access) =>
+    permission && !access.permissions.includes(permission)
+      ? { response: NextResponse.json({ error: "Tu rol no tiene permiso para realizar esta acción." }, { status: 403 }) }
+      : null;
+
   try {
     const client = createAuthenticatedSupabaseClient(token);
+
+    // Acceso ya verificado hace unos segundos con este mismo token: no se vuelve a consultar.
+    // Las acciones de administración siempre se verifican contra la base.
+    const cached = permission === "users.manage" ? null : getCachedAccess(token);
+    if (cached) return denied(cached) ?? { client, access: cached };
+
     const { data: userData, error } = await client.auth.getUser(token);
 
     if (error) {
@@ -58,9 +70,13 @@ export async function getAuthenticatedClient(
 
     const lookup = (columns: string) =>
       client.from("authorized_users").select(columns).eq("user_id", userData.user.id).eq("active", true).maybeSingle();
-    let { data: authorizedUser, error: authorizationError } = await lookup(
-      "user_id,full_name,site,role:roles(nombre,permisos,es_sistema)",
-    );
+    // Cuenta y roles adicionales se piden al mismo tiempo (antes, uno después del otro).
+    // Roles adicionales: migración 202611080001; si la tabla aún no existe, queda solo el rol principal.
+    const [primary, extra] = await Promise.all([
+      lookup("user_id,full_name,site,role:roles(nombre,permisos,es_sistema)"),
+      client.from("authorized_user_roles").select("role:roles(nombre,permisos,es_sistema)").eq("user_id", userData.user.id),
+    ]);
+    let { data: authorizedUser, error: authorizationError } = primary;
     // Antes de ejecutar la migración de sedes la columna "site" no existe: se sigue entrando (todas las sedes).
     if (authorizationError?.code === "42703") {
       ({ data: authorizedUser, error: authorizationError } = await lookup("user_id,full_name,role:roles(nombre,permisos,es_sistema)"));
@@ -88,8 +104,6 @@ export async function getAuthenticatedClient(
 
     const row = authorizedUser as unknown as { full_name: string | null; site?: string | null; role: RoleRow | null };
 
-    // Roles adicionales (migración 202611080001). Si la tabla aún no existe, queda solo el rol principal.
-    const extra = await client.from("authorized_user_roles").select("role:roles(nombre,permisos,es_sistema)").eq("user_id", userData.user.id);
     if (extra.error && !["42P01", "PGRST205"].includes(extra.error.code ?? "")) {
       console.error("No se pudieron leer los roles adicionales:", extra.error);
     }
@@ -114,16 +128,8 @@ export async function getAuthenticatedClient(
       site: isSuperAdmin ? null : (row.site ?? null),
     };
 
-    if (permission && !permissions.includes(permission)) {
-      return {
-        response: NextResponse.json(
-          { error: "Tu rol no tiene permiso para realizar esta acción." },
-          { status: 403 },
-        ),
-      };
-    }
-
-    return { client, access };
+    setCachedAccess(token, access);
+    return denied(access) ?? { client, access };
   } catch (error) {
     console.error("No se pudo inicializar la conexión autenticada de Supabase:", error);
     reportServerIncident("api · conexión Supabase", error);

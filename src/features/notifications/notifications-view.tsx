@@ -47,7 +47,7 @@ export function NotificationsView() {
 
   // Al abrir la pantalla se revisa de nuevo, por si acaban de corregir algo.
   useEffect(() => {
-    const timer = window.setTimeout(() => void refresh(), 0);
+    const timer = window.setTimeout(() => void refresh(false), 0);
     return () => window.clearTimeout(timer);
   }, [refresh]);
 
