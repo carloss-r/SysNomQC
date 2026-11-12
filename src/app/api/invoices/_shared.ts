@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { reportServerIncident } from "@/lib/incidents";
-import type { Invoice } from "@/lib/invoices";
+import { MAX_INCIDENT_LENGTH, type Invoice } from "@/lib/invoices";
 
 export const INVOICE_BUCKET = "invoices";
 export const MAX_INVOICE_BYTES = 10 * 1024 * 1024;
 
 /** Columnas de la lista (sin el texto completo, que solo se pide al abrir una factura). */
 export const LIST_COLUMNS =
-  "id,file_path,file_name,file_size,invoice_date,due_date,folio,uuid,supplier_name,supplier_rfc,subtotal,tax,total,currency,notes,status,paid_on,paid_by_name,text_pages,has_text,created_at,created_by_name,updated_at,updated_by_name";
+  "id,file_path,file_name,file_size,invoice_date,due_date,folio,uuid,supplier_name,supplier_rfc,subtotal,tax,total,currency,notes,status,paid_on,paid_by_name,incident_description,incident_on,incident_by_name,text_pages,has_text,created_at,created_by_name,updated_at,updated_by_name";
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida.");
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional().transform((value) => value || null);
@@ -35,10 +36,13 @@ export const editSchema = z.object({
   notes: optionalText(500),
 });
 
+// Solo se sale de "pendiente": pagada e incidente cierran la factura.
 export const statusSchema = z.object({
   action: z.literal("status"),
-  status: z.enum(["pendiente", "pagada"]),
+  status: z.enum(["pagada", "incidente"]),
   paid_on: day.nullable().optional(),
+  // Obligatoria al marcar incidente; se escribe a mano.
+  incident_description: z.string().trim().max(MAX_INCIDENT_LENGTH).nullable().optional().transform((value) => value || null),
 });
 
 /** Datos que el usuario puede corregir (y que se registran en la bitácora de correcciones). */
@@ -60,6 +64,22 @@ export function toInvoice(row: Record<string, unknown>): Invoice {
   return copy as unknown as Invoice;
 }
 
+/**
+ * Si la factura ya está cerrada (pagada o con incidente), la respuesta de error; si no, null.
+ * Con allowSuperAdmin (solo al eliminar) el Super administrador sí puede continuar.
+ */
+export async function closedInvoiceResponse(client: SupabaseClient, id: number, allowSuperAdmin = false) {
+  const { data, error } = await client.from("invoices").select("status").eq("id", id).maybeSingle();
+  if (error) return invoiceDatabaseError(error, "leer estatus");
+  if (!data) return NextResponse.json({ error: "La factura no existe." }, { status: 404 });
+  const status = (data as { status: string }).status;
+  if ((status === "pagada" || status === "incidente") && !allowSuperAdmin) {
+    const label = status === "pagada" ? "pagada" : "con incidente";
+    return NextResponse.json({ error: `La factura ya está cerrada (${label}) y no se puede modificar. Solo el Super administrador puede eliminarla.` }, { status: 409 });
+  }
+  return null;
+}
+
 export function actorName(access: { full_name: string | null; email: string }) {
   return access.full_name || access.email || "Usuario";
 }
@@ -67,9 +87,14 @@ export function actorName(access: { full_name: string | null; email: string }) {
 export function invoiceDatabaseError(error: { code?: string; message: string }, context: string) {
   if (error.code === "23505") return NextResponse.json({ error: "Ese archivo ya está registrado." }, { status: 409 });
   if (error.code === "23514") return NextResponse.json({ error: "Los datos de la factura no son válidos." }, { status: 409 });
+  // Bloqueo de la base (migración 202611120002): la factura se cerró mientras tanto.
+  if (error.code === "42501" && error.message.includes("cerrada")) return NextResponse.json({ error: error.message }, { status: 409 });
   if (error.code === "42501") return NextResponse.json({ error: "Tu rol no tiene permiso para realizar esta acción." }, { status: 403 });
   if (["42P01", "PGRST205", "42703", "PGRST204"].includes(error.code ?? "")) {
-    return NextResponse.json({ error: "Falta ejecutar en Supabase la migración 202611110002_facturas.sql." }, { status: 503 });
+    return NextResponse.json(
+      { error: "Faltan migraciones de facturas en Supabase (202611110002_facturas.sql y 202611120001_facturas_incidente.sql)." },
+      { status: 503 },
+    );
   }
   console.error(`Error de facturas (${context}):`, error);
   reportServerIncident(`api · facturas · ${context}`, error);

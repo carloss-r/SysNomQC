@@ -3,7 +3,7 @@ import { recordAudit } from "@/lib/audit";
 import { plantToday } from "@/lib/fuels";
 import { reportServerIncident } from "@/lib/incidents";
 import { BadJsonError, getAuthenticatedClient, readJson } from "../../employees/_server";
-import { actorName, EDITABLE_FIELDS, INVOICE_BUCKET, invoiceDatabaseError, LIST_COLUMNS, parseId, patchSchema, toInvoice } from "../_shared";
+import { actorName, closedInvoiceResponse, EDITABLE_FIELDS, INVOICE_BUCKET, invoiceDatabaseError, LIST_COLUMNS, parseId, patchSchema, toInvoice } from "../_shared";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -36,6 +36,8 @@ export async function PATCH(request: NextRequest, context: Context) {
   try {
     const input = patchSchema.safeParse(await readJson(request));
     if (!input.success) return NextResponse.json({ error: "Revisa los datos de la factura." }, { status: 400 });
+    const closed = await closedInvoiceResponse(auth.client, id);
+    if (closed) return closed;
     const actor = actorName(auth.access);
     const today = plantToday();
 
@@ -43,9 +45,20 @@ export async function PATCH(request: NextRequest, context: Context) {
     let diff: Record<string, { from: unknown; to: unknown }> | null = null;
     if (input.data.action === "status") {
       const paid = input.data.status === "pagada";
+      const incident = input.data.status === "incidente";
       const paidOn = input.data.paid_on ?? today;
       if (paid && paidOn > today) return NextResponse.json({ error: "La fecha de pago no puede ser futura." }, { status: 400 });
-      changes = { status: input.data.status, paid_on: paid ? paidOn : null, paid_by_name: paid ? actor : null };
+      if (incident && !input.data.incident_description) {
+        return NextResponse.json({ error: "Describe el incidente de la factura." }, { status: 400 });
+      }
+      changes = {
+        status: input.data.status,
+        paid_on: paid ? paidOn : null,
+        paid_by_name: paid ? actor : null,
+        incident_description: incident ? input.data.incident_description : null,
+        incident_on: incident ? today : null,
+        incident_by_name: incident ? actor : null,
+      };
     } else {
       const { action: _action, ...fields } = input.data;
       void _action;
@@ -83,7 +96,9 @@ export async function PATCH(request: NextRequest, context: Context) {
       }
     }
     await recordAudit(request, auth.access, input.data.action === "status" ? "invoices.status" : "invoices.update", id, {
-      ...(input.data.action === "status" ? { status: input.data.status } : { fields: Object.keys(diff ?? {}) }),
+      ...(input.data.action === "status"
+        ? { status: input.data.status, ...(input.data.incident_description ? { incident: input.data.incident_description } : {}) }
+        : { fields: Object.keys(diff ?? {}) }),
     });
     return NextResponse.json(toInvoice(data as unknown as Record<string, unknown>));
   } catch (error) {
@@ -100,12 +115,15 @@ export async function DELETE(request: NextRequest, context: Context) {
   const id = parseId((await context.params).id);
   if (!id) return NextResponse.json({ error: "Factura no válida." }, { status: 400 });
   try {
-    const { data, error } = await auth.client.from("invoices").delete().eq("id", id).select("id,file_path,folio").maybeSingle();
+    // Una factura cerrada solo la puede eliminar el Super administrador.
+    const closed = await closedInvoiceResponse(auth.client, id, auth.access.is_super_admin);
+    if (closed) return closed;
+    const { data, error } = await auth.client.from("invoices").delete().eq("id", id).select("id,file_path,folio,status").maybeSingle();
     if (error) return invoiceDatabaseError(error, "eliminar");
     if (!data) return NextResponse.json({ error: "La factura no existe." }, { status: 404 });
     const removed = await auth.client.storage.from(INVOICE_BUCKET).remove([data.file_path as string]);
     if (removed.error) console.error("No se pudo eliminar el PDF de la factura:", removed.error);
-    await recordAudit(request, auth.access, "invoices.delete", id, { folio: data.folio });
+    await recordAudit(request, auth.access, "invoices.delete", id, { folio: data.folio, status: data.status });
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     reportServerIncident("api · facturas · eliminar", error);

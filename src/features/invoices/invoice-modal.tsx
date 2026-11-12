@@ -181,8 +181,16 @@ export function InvoiceModal({
             <h2 id="invoice-title">{detected ? "Repaso de la factura cargada" : `Factura ${invoice.folio ?? `#${invoice.id}`}`}</h2>
             <p>
               Compara el PDF con lo capturado y corrige lo que esté mal · {invoice.file_name} ·{" "}
-              <span className={`fuel-status fuel-status-${invoice.status === "pagada" ? "ok" : "warn"}`}>{INVOICE_STATUS_LABELS[invoice.status]}</span>
+              <span className={`fuel-status fuel-status-${invoice.status === "pagada" ? "ok" : invoice.status === "incidente" ? "bad" : "warn"}`}>{INVOICE_STATUS_LABELS[invoice.status]}</span>
               {invoice.status === "pagada" && invoice.paid_on && <> el {formatDay(invoice.paid_on)}{invoice.paid_by_name ? ` · ${invoice.paid_by_name}` : ""}</>}
+              {invoice.status !== "pendiente" && <> · <strong>factura cerrada, solo consulta</strong></>}
+              {invoice.status === "incidente" && (
+                <>
+                  {invoice.incident_on && <> desde el {formatDay(invoice.incident_on)}</>}
+                  {invoice.incident_by_name && <> · {invoice.incident_by_name}</>}
+                  {invoice.incident_description && <><br /><strong>Incidente:</strong> {invoice.incident_description}</>}
+                </>
+              )}
             </p>
           </div>
           <button className="icon-button close-modal" onClick={onClose} disabled={busy} aria-label="Cerrar"><X size={20} /></button>

@@ -10,7 +10,6 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { NotificationsBell } from "@/features/notifications/notifications-bell";
 import { NotificationsProvider } from "@/features/notifications/notifications-provider";
 import { ThemeToggle } from "@/shared/ui/theme-toggle";
-import { roleLabels } from "@/lib/roles";
 import { Sidebar } from "./sidebar";
 
 function Splash({ message }: { message: string }) {
@@ -96,11 +95,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
           </div>
           <div className="topbar-actions">
-            <span className="connection-status"><span /> Sistema de Control Operativo</span>
             <span className="signed-user" title={access?.full_name ?? ""}>
               <CircleUserRound size={18} />
               <span>{access?.full_name || "Mi cuenta"}</span>
-              {access && <small className="role-chip" title={roleLabels(access.role_names)}>{roleLabels(access.role_names)}</small>}
             </span>
             <NotificationsBell />
             <ThemeToggle />
