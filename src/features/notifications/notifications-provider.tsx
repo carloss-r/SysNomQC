@@ -14,7 +14,7 @@ const STOCK_TOAST_FLAG = "sysnomqc.notifications.stock-toast";
 /** Tiempo que una alerta descartada queda oculta; si el problema sigue, vuelve a mostrarse. */
 export const SNOOZE_MS = 24 * 60 * 60_000;
 const REFRESH_MS = 5 * 60_000;
-const MIN_FOCUS_GAP_MS = 60_000;
+const MIN_FOCUS_GAP_MS = 2 * 60_000;
 const CLOCK_TICK_MS = 60_000;
 
 type SnoozeMap = Record<string, number>;
@@ -28,7 +28,8 @@ type NotificationsContextValue = {
   error: string;
   now: number;
   snoozedUntil: (id: string) => number;
-  refresh: () => Promise<void>;
+  /** Por omisión pide datos al día; con false acepta la respuesta reciente del servidor (hasta 1 min). */
+  refresh: (fresh?: boolean) => Promise<void>;
   snooze: (ids: string[]) => void;
   restore: (ids: string[]) => void;
 };
@@ -90,7 +91,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     }
   }, [storageKey, snoozes]);
 
-  const load = useCallback(async () => {
+  // fresh = true pide al servidor que no use su respuesta reciente (botón "Actualizar", cambios de EPP).
+  const load = useCallback(async (fresh: boolean) => {
+    const path = fresh ? "/api/notifications?fresh=1" : "/api/notifications";
     const current = await currentSession();
     // Sin sesión (p. ej. justo al cerrar sesión): no hay nada que consultar.
     if (!current || current.user.id !== userId) return;
@@ -99,13 +102,13 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     try {
       let result: NotificationsResponse;
       try {
-        result = await requestApi<NotificationsResponse>(current, "/api/notifications");
+        result = await requestApi<NotificationsResponse>(current, path);
       } catch (firstError) {
         // Token vencido: se renueva una vez y se reintenta antes de dar el error.
         if (!(firstError instanceof ApiError) || firstError.status !== 401) throw firstError;
         const { data: renewed } = await supabase.auth.refreshSession();
         if (!renewed.session || renewed.session.user.id !== userId) return;
-        result = await requestApi<NotificationsResponse>(renewed.session, "/api/notifications");
+        result = await requestApi<NotificationsResponse>(renewed.session, path);
       }
       const checkedAt = Date.now();
       setData(result);
@@ -178,31 +181,41 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     }
   }, [notify, storageKey, userId]);
 
-  const refresh = useCallback(() => {
-    inFlight.current ??= load().finally(() => {
+  const run = useCallback((fresh: boolean) => {
+    inFlight.current ??= load(fresh).finally(() => {
       inFlight.current = null;
     });
     return inFlight.current;
   }, [load]);
+  const refresh = useCallback((fresh = true) => run(fresh), [run]);
 
   useEffect(() => {
-    const first = window.setTimeout(() => void refresh(), 0);
-    const interval = window.setInterval(() => void refresh(), REFRESH_MS);
-    const clock = window.setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
-    const onFocus = () => {
-      if (Date.now() - lastRefresh.current >= MIN_FOCUS_GAP_MS) void refresh();
+    // Con la pestaña oculta (minimizada, otra pestaña al frente) no se consulta: nadie ve la campana.
+    // Al volver, se actualiza si ya pasó un rato desde la última consulta.
+    const hidden = () => document.visibilityState === "hidden";
+    const first = window.setTimeout(() => void run(false), 0);
+    const interval = window.setInterval(() => {
+      if (!hidden()) void run(false);
+    }, REFRESH_MS);
+    const clock = window.setInterval(() => {
+      if (!hidden()) setNow(Date.now());
+    }, CLOCK_TICK_MS);
+    const onReturn = () => {
+      if (!hidden() && Date.now() - lastRefresh.current >= MIN_FOCUS_GAP_MS) void run(false);
     };
-    const onEppChanged = () => void refresh();
-    window.addEventListener("focus", onFocus);
+    const onEppChanged = () => void run(true);
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onReturn);
     window.addEventListener(EPP_CHANGED_EVENT, onEppChanged);
     return () => {
       window.removeEventListener(EPP_CHANGED_EVENT, onEppChanged);
       window.clearTimeout(first);
       window.clearInterval(interval);
       window.clearInterval(clock);
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onReturn);
     };
-  }, [refresh]);
+  }, [run]);
 
   const snooze = useCallback((ids: string[]) => {
     const until = Date.now() + SNOOZE_MS;

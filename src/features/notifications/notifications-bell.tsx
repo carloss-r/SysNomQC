@@ -45,7 +45,7 @@ export function NotificationsBell() {
   }, [open]);
 
   function toggle() {
-    if (!open) void refresh();
+    if (!open) void refresh(false);
     setOpen(!open);
   }
 

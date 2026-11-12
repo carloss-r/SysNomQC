@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { clearAccessCache } from "@/lib/access-cache";
 import type { Access } from "@/lib/permissions";
 import { clientIp } from "@/lib/rate-limit";
 import { createServiceClient } from "@/lib/supabase-admin";
@@ -16,6 +17,8 @@ export async function recordAudit(
   target: string | number | null,
   meta?: Record<string, unknown>,
 ): Promise<void> {
+  // Cambió una cuenta o un rol: los permisos guardados en caché ya no son confiables.
+  if (action.startsWith("user.") || action.startsWith("role.")) clearAccessCache();
   try {
     const admin = createServiceClient();
     if (!admin) {

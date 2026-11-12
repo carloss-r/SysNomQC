@@ -19,6 +19,12 @@ import { getAuthenticatedClient } from "../employees/_server";
 import { readPurchaseRequests } from "../epp/requests/_read";
 
 const BATCH_SIZE = 1000;
+
+// Respuesta reciente por usuario: varias pestañas abiertas, el foco de la ventana o volver a la
+// pantalla no repiten las ~6 consultas a Supabase. "?fresh=1" la ignora (botón Actualizar, cambios de EPP).
+const CACHE_TTL_MS = 60_000;
+const MAX_CACHED_USERS = 500;
+const recent = new Map<string, { body: NotificationsResponse; expires: number }>();
 const MAX_ROWS = 20_000;
 // La tabla aún no existe en este entorno (p. ej. falta ejecutar una migración).
 const MISSING_TABLE_CODES = new Set(["42P01", "PGRST205", "42703", "PGRST202", "42883"]);
@@ -56,6 +62,12 @@ export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedClient(request);
   if ("response" in auth) return auth.response;
   const { client, access } = auth;
+
+  const cacheKey = `${access.user_id}:${access.permissions.join(",")}:${access.site ?? ""}`;
+  if (request.nextUrl.searchParams.get("fresh") !== "1") {
+    const hit = recent.get(cacheKey);
+    if (hit && hit.expires > Date.now()) return NextResponse.json(hit.body);
+  }
   // Cada aviso va al rol que lo atiende. El Super administrador tiene todos los permisos, por eso
   // se excluye explícitamente de las alertas operativas y solo recibe las de expedientes.
   const has = (key: string) => access.permissions.includes(key as never);
@@ -168,5 +180,10 @@ export async function GET(request: NextRequest) {
     sources: { employees: employees.status, inventory: inventory.status, purchases: purchases.status, fuels: fuels.status },
     checked_at: new Date().toISOString(),
   };
+  // Si alguna fuente falló no se guarda: la siguiente consulta lo vuelve a intentar.
+  if (Object.values(body.sources).every((status) => status !== "unavailable")) {
+    if (recent.size >= MAX_CACHED_USERS) recent.clear();
+    recent.set(cacheKey, { body, expires: Date.now() + CACHE_TTL_MS });
+  }
   return NextResponse.json(body);
 }

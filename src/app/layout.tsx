@@ -6,6 +6,7 @@ import { DialogProvider } from "@/shared/ui/dialog-provider";
 import { NoticeProvider } from "@/shared/ui/notice-provider";
 import { THEME_INIT_SCRIPT } from "@/shared/ui/theme-init";
 import { ClientErrorMonitor } from "./client-error-monitor";
+import { VercelAnalytics } from "./vercel-analytics";
 
 // next/font las sirve desde este mismo dominio, compatible con la política CSP.
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans", display: "swap" });
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <AuthProvider>{children}</AuthProvider>
           </DialogProvider>
         </NoticeProvider>
+        <VercelAnalytics />
       </body>
     </html>
   );
