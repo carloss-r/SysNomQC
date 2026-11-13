@@ -246,11 +246,12 @@ function EmployeesDashboard() {
           )
         }
       >
-        <div className="stats-grid">
+        <div className="stats-grid stats-grid-5">
           <StatCard label="Empleados activos" count={stats?.total ?? 0} tone="green" icon={<UsersRound size={18} />} />
           <StatCard label="Campeche" count={stats?.bySite["Campeche"] ?? 0} tone="blue" icon={<Building2 size={18} />} />
           <StatCard label="Lagunas" count={stats?.bySite["Lagunas"] ?? 0} tone="gold" icon={<Building2 size={18} />} />
           <StatCard label="Cruz Azul" count={stats?.bySite["Cruz Azul"] ?? 0} tone="purple" icon={<Building2 size={18} />} />
+          <StatCard label="El Carmen" count={stats?.bySite["El Carmen"] ?? 0} tone="teal" icon={<Building2 size={18} />} />
         </div>
       </PageHeader>
 

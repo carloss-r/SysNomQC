@@ -11,8 +11,10 @@ export const articleSchema = z.object({
   unit: z.string().trim().min(1).max(20).default("PIEZAS"),
   min_stock: z.number().int().min(0).max(100000),
   active: z.boolean().default(true),
-  /** Al editar: sede a la que se aplica el mínimo. */
+  /** Sede del artículo (al crear) o del mínimo (al editar). */
   site: z.enum(SITES).optional(),
+  /** Al crear, solo para quien supervisa todas las sedes: crearlo también en las otras sedes. */
+  all_sites: z.boolean().optional(),
 });
 
 const itemsSchema = z

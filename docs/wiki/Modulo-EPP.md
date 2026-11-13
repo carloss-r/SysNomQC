@@ -16,11 +16,11 @@ Equipo de protección personal. Pantalla `/epp` (menú **Seguridad e higiene →
 
 ## Inventario por sede
 
-- Cada sede tiene su propio inventario: existencias, mínimos, entregas, solicitudes, compras y conteos.
-- La sede va ligada a la cuenta (**Usuarios y roles → Sede**). Con sede asignada solo se ve y opera esa sede, también en Compras; con *Todas las sedes* (supervisión) y el Super administrador se elige la sede en pantalla. La base lo valida (`can_access_site`), no solo la pantalla.
-- El **catálogo** (nombre, categoría, talla, estatus) es común; solo lo cambia una cuenta sin sede o el Super administrador. Una cuenta de sede ajusta el mínimo de su sede.
-- El inventario muestra solo lo que maneja la sede. **Ver catálogo que la sede no maneja** permite **Agregar a la sede**; **Quitar de la sede** (en el artículo) lo saca si no tiene existencia ni solicitudes abiertas.
-- Cada talla es un artículo propio. Catálogo inicial: `202611130008_epp_catalogo_inicial.sql`; reglas por sede: `202611130009_epp_inventario_por_sede.sql`.
+- **Cada sede tiene su propio inventario y sus propios artículos** (`epp_articles.site`): nombre, talla, categoría, unidad, estatus, mínimo y existencia. Nada se comparte: desactivar o renombrar un artículo en Lagunas no cambia Campeche ni Cruz Azul.
+- La base impide mezclar sedes: existencias, movimientos y solicitudes solo aceptan artículos de su sede, y un artículo no cambia de sede.
+- La sede va ligada a la cuenta (**Usuarios y roles → Sede**). Con sede asignada solo se ve y opera esa sede, también en Compras; con *Todas las sedes* (supervisión) y el Super administrador se elige la sede en pantalla. Lo valida la base (`can_access_site`).
+- **Nuevo artículo** lo crea en la sede elegida; quien supervisa todas las sedes puede marcar *Crearlo también en las otras sedes* (quedan como artículos independientes).
+- Cada talla es un artículo propio. El catálogo inicial (`202611130008`) es solo de Campeche; Lagunas, Cruz Azul y El Carmen crean sus propios artículos. Migraciones: compras por sede `202611130009`, artículos por sede `202611130010`, catálogo inicial solo en Campeche `202611130011`, sede El Carmen `202611130012`.
 
 ## Reglas de negocio
 

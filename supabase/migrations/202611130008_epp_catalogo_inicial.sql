@@ -1,8 +1,10 @@
 -- Catálogo inicial de EPP (lista oficial del 13/11/2026). Ejecutar DESPUÉS de 202611130007_epp_reinicio_con_tallas.sql.
--- Es seguro repetirla: no duplica artículos ni toca existencias que ya se hayan cargado.
+-- Ejecútala UNA sola vez y antes de 202611130010_epp_articulos_por_sede.sql (esa reparte este catálogo
+-- en un juego de artículos propio para cada sede; después de ella esta carga ya no aplica).
 --
 -- * 43 productos; los que tienen talla se separan en un artículo por talla (68 artículos en total).
--- * Todos empiezan con existencia 0 en Campeche, Lagunas y Cruz Azul, con mínimo 5 por sede.
+-- * Es el inventario de CAMPECHE: todos empiezan con existencia 0 y mínimo 5 solo en Campeche.
+--   Lagunas y Cruz Azul crean sus propios artículos (si ya corriste la versión anterior, la 011 lo corrige).
 --   Así aparecen como "Agotado" y se pueden pedir a Compras; la existencia real entra con el conteo
 --   de lo que llegue (o con "Ingreso de material").
 
@@ -77,15 +79,15 @@ where not exists (
   where upper(btrim(e.name)) = upper(a.nombre) and upper(coalesce(btrim(e.size), '')) = upper(coalesce(a.talla, ''))
 );
 
--- Cada artículo queda registrado en las tres sedes con existencia 0 y mínimo 5.
+-- Cada artículo queda registrado solo en Campeche con existencia 0 y mínimo 5.
 insert into public.epp_stock (article_id, site, stock, min_stock, updated_at, updated_by_name)
 select a.id, s.site, 0, 5, now(), 'Carga inicial'
 from public.epp_articles a
-cross join (values ('Campeche'), ('Lagunas'), ('Cruz Azul')) as s(site)
+cross join (values ('Campeche')) as s(site)
 on conflict (article_id, site) do nothing;
 
 commit;
 
--- Verificación (opcional): debe dar 68 artículos y 204 registros de existencia.
+-- Verificación (opcional): debe dar 68 artículos y 68 registros de existencia (Campeche).
 -- select count(*) from public.epp_articles;
 -- select count(*) from public.epp_stock;

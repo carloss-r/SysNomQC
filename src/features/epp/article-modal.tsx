@@ -1,12 +1,11 @@
 "use client";
 
-import { Check, HardHat, MapPinOff, X } from "lucide-react";
+import { Check, HardHat, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { eppArticleLabel, type EppArticle } from "@/lib/permissions";
+import type { EppArticle } from "@/lib/permissions";
 import { describeError, requestApi } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-provider";
 import { Field } from "@/shared/ui/field";
-import { useDialog } from "@/shared/ui/dialog-provider";
 import { useNotify } from "@/shared/ui/notice-provider";
 
 export const EPP_CATEGORIES = [
@@ -36,10 +35,10 @@ export function ArticleModal({
 }) {
   const { session, access } = useAuth();
   const notify = useNotify();
-  const dialog = useDialog();
-  // El catálogo es común a las tres sedes: una cuenta de sede solo cambia el mínimo de la suya.
-  const catalogLocked = Boolean(article) && Boolean(access?.site) && !access?.is_super_admin;
-  const canRemove = Boolean(article?.tracked) && article?.stock === 0 && !article?.pending_count;
+  // Cada artículo es de una sede. Quien supervisa todas puede crearlo en todas de una vez
+  // (quedan como artículos independientes).
+  const canCreateEverywhere = !article && (!access?.site || access?.is_super_admin === true);
+  const [allSites, setAllSites] = useState(false);
   const [form, setForm] = useState({
     name: article?.name ?? "",
     category: article?.category ?? EPP_CATEGORIES[0],
@@ -66,6 +65,7 @@ export function ArticleModal({
         min_stock: Number(form.min_stock) || 0,
         active: form.active,
         site,
+        all_sites: canCreateEverywhere && allSites ? true : undefined,
       });
       await requestApi(session, article ? `/api/epp/articles/${article.id}` : "/api/epp/articles", {
         method: article ? "PATCH" : "POST",
@@ -74,36 +74,15 @@ export function ArticleModal({
       notify(
         "success",
         article ? "Artículo actualizado" : "Artículo creado",
-        article ? `Se guardaron los cambios de ${form.name.trim()}.` : `${form.name.trim()} ya está en el catálogo. Registra su primer ingreso para tener existencias.`,
+        article
+          ? `Se guardaron los cambios de ${form.name.trim()} en ${site}.`
+          : `${form.name.trim()} se creó en ${canCreateEverywhere && allSites ? "todas las sedes" : site}. Registra su primer ingreso para tener existencias.`,
       );
       await onSaved();
       onClose();
     } catch (err) {
       setError(describeError(err, "No se pudo guardar el artículo."));
     } finally {
-      setBusy(false);
-    }
-  }
-
-  async function removeFromSite() {
-    if (!session || !article) return;
-    const ok = await dialog.confirm({
-      title: `Quitar de ${site}`,
-      message: `${eppArticleLabel(article.name, article.size)} dejará de aparecer en el inventario de ${site}. Las otras sedes no cambian y se puede volver a agregar cuando se necesite.`,
-      confirmLabel: "Quitar de la sede",
-      cancelLabel: "Volver",
-      tone: "danger",
-    });
-    if (!ok) return;
-    setBusy(true);
-    setError("");
-    try {
-      await requestApi(session, `/api/epp/articles/${article.id}/site?site=${encodeURIComponent(site)}`, { method: "DELETE" });
-      notify("success", "Artículo quitado de la sede", `${eppArticleLabel(article.name, article.size)} ya no forma parte del inventario de ${site}.`);
-      await onSaved();
-      onClose();
-    } catch (err) {
-      setError(describeError(err, "No se pudo quitar el artículo de la sede."));
       setBusy(false);
     }
   }
@@ -120,10 +99,11 @@ export function ArticleModal({
           <button className="icon-button close-modal" onClick={onClose} disabled={busy} aria-label="Cerrar"><X size={20} /></button>
         </div>
         <form className="employee-form" onSubmit={submit}>
-          {catalogLocked && (
-            <p className="epp-blind-note">El nombre, la categoría, la talla y el estatus son comunes a las tres sedes; solo los cambia Administración. Aquí ajustas el mínimo de {site}.</p>
-          )}
-          <fieldset className="epp-catalog-fields" disabled={catalogLocked}>
+          <p className="epp-blind-note">
+            {article
+              ? `Este artículo es del inventario de ${site}. Los cambios (incluido desactivarlo) solo afectan a ${site}.`
+              : `El artículo se crea en el inventario de ${site}; las otras sedes no lo verán.`}
+          </p>
           <div className="form-grid">
             <Field label="Nombre del artículo" required><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} minLength={2} maxLength={120} required /></Field>
             <Field label="Categoría" required>
@@ -139,17 +119,15 @@ export function ArticleModal({
                 <option value="0">Desactivado (no se puede entregar)</option>
               </select>
             </Field>
-          </div>
-          </fieldset>
-          <div className="form-grid">
             <Field label={`Mínimo en ${site} antes de reponer`} required><input type="number" min={0} max={100000} value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: e.target.value })} required /></Field>
           </div>
+          {canCreateEverywhere && (
+            <label className="epp-check">
+              <input type="checkbox" checked={allSites} onChange={(e) => setAllSites(e.target.checked)} /> Crearlo también en las otras sedes (cada sede lo maneja por separado)
+            </label>
+          )}
           {error && <p className="inline-error" role="alert">{error}</p>}
           <div className="modal-actions">
-            {canRemove && (
-              <button type="button" className="button button-danger-outline" onClick={() => void removeFromSite()} disabled={busy}><MapPinOff size={16} /> Quitar de {site}</button>
-            )}
-            <span className="actions-spacer" />
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
             <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? "Guardando…" : "Guardar"}</button>
           </div>

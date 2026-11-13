@@ -35,7 +35,7 @@ export function RequestModal({
   const { session } = useAuth();
   const notify = useNotify();
   const byId = useMemo(() => new Map(articles.map((item) => [item.id, item])), [articles]);
-  const selectable = useMemo(() => articles.filter((item) => item.active && item.tracked && !openRequests.has(item.id)), [articles, openRequests]);
+  const selectable = useMemo(() => articles.filter((item) => item.active && !openRequests.has(item.id)), [articles, openRequests]);
   const [lines, setLines] = useState<Line[]>(() => {
     const preset = presetIds.map((id) => byId.get(id)).filter((item): item is EppArticle => Boolean(item) && !openRequests.has(item!.id));
     if (preset.length === 0) return [{ key: ++lineCounter, article_id: "", quantity: "1" }];

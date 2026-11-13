@@ -7,7 +7,7 @@
 -- aquí se cierra lo que faltaba en compras:
 --   * Las solicitudes de compra y las cantidades compradas solo se ven en la sede de la cuenta (también Compras).
 --   * Registrar compra, cancelar y "enterado del faltante" validan la sede.
---   * Una sede puede dejar de manejar un artículo (sale de su inventario, el catálogo sigue igual).
+--   * (Reemplazado por 202611130010: cada sede tiene sus propios artículos y quitar/agregar ya no aplica.)
 
 -- ---------------------------------------------------------------------------
 -- 1. Lectura por sede

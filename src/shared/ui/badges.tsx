@@ -5,7 +5,7 @@ export function StatCard({ label, count, tone, icon }: { label: string; count: n
 }
 
 export function SiteBadge({ site }: { site: string }) {
-  const tone = site === "Campeche" ? "site-blue" : site === "Lagunas" ? "site-gold" : site === "Cruz Azul" ? "site-purple" : "site-neutral";
+  const tone = site === "Campeche" ? "site-blue" : site === "Lagunas" ? "site-gold" : site === "Cruz Azul" ? "site-purple" : site === "El Carmen" ? "site-teal" : "site-neutral";
   return <span className={`site-badge ${tone}`}>{site}</span>;
 }
 

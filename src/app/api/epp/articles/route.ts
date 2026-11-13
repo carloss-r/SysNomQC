@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { recordAudit } from "@/lib/audit";
 import { reportServerIncident } from "@/lib/incidents";
+import { SITES } from "@/lib/employees";
 import type { EppArticle } from "@/lib/permissions";
 import { BadJsonError, getAuthenticatedClient, readJson } from "../../employees/_server";
 import { articleSchema, eppDatabaseError, resolveSite } from "../_shared";
@@ -9,7 +10,8 @@ type CatalogRow = Omit<EppArticle, "stock" | "site" | "tracked" | "pending_count
 type PendingRow = { id: number; items: { article_id: number; received_qty: number | null }[] | null };
 type StockRow = { article_id: number; stock: number; min_stock: number; updated_at: string; updated_by_name: string | null };
 
-// Catálogo común + existencia y mínimo de la sede pedida (?site=). Una cuenta con sede solo ve la suya.
+// Artículos de la sede pedida (?site=) con su existencia y mínimo. Cada sede tiene su propio catálogo;
+// una cuenta con sede solo ve la suya.
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedClient(request, "epp.view");
   if ("response" in auth) return auth.response;
@@ -22,6 +24,7 @@ export async function GET(request: NextRequest) {
       auth.client
         .from("epp_articles")
         .select("id,name,category,size,unit,min_stock,active,updated_at,updated_by_name")
+        .eq("site", site)
         .order("category")
         .order("name")
         .order("size", { nullsFirst: true })
@@ -72,22 +75,33 @@ export async function POST(request: NextRequest) {
   try {
     const input = articleSchema.safeParse(await readJson(request));
     if (!input.success) return NextResponse.json({ error: "Revisa los datos del artículo." }, { status: 400 });
-    const { site: requestedSite, ...fields } = input.data;
-    const { data, error } = await auth.client.from("epp_articles").insert(fields).select("id,name").single();
-    if (error) return eppDatabaseError(error, "crear artículo");
-
-    // El mínimo capturado queda como el de la sede donde se creó.
+    const { site: requestedSite, all_sites: allSites, ...fields } = input.data;
     const resolved = resolveSite(auth.access, requestedSite);
-    if (!("response" in resolved)) {
-      const { error: minError } = await auth.client.rpc("epp_set_min_stock", {
-        p_site: resolved.site,
-        p_article: data.id,
-        p_min: fields.min_stock,
-      });
+    if ("response" in resolved) return resolved.response;
+    // El artículo es de la sede donde se crea. Quien supervisa todas las sedes puede crearlo en todas
+    // a la vez; aun así quedan como artículos independientes (cada sede los edita por su cuenta).
+    const unrestricted = !auth.access.site || auth.access.is_super_admin;
+    const targets = allSites && unrestricted ? [...SITES] : [resolved.site];
+
+    const created: { id: number; name: string; site: string }[] = [];
+    for (const target of targets) {
+      const { data, error } = await auth.client
+        .from("epp_articles")
+        .insert({ ...fields, site: target })
+        .select("id,name,site")
+        .single();
+      if (error) {
+        // En "todas las sedes", una sede que ya lo tiene no detiene a las demás.
+        if (error.code === "23505" && targets.length > 1) continue;
+        return eppDatabaseError(error, "crear artículo");
+      }
+      const { error: minError } = await auth.client.rpc("epp_set_min_stock", { p_site: target, p_article: data.id, p_min: fields.min_stock });
       if (minError) return eppDatabaseError(minError, "mínimo por sede");
+      created.push(data);
     }
-    await recordAudit(request, auth.access, "epp.article.create", data.id, { name: data.name });
-    return NextResponse.json(data, { status: 201 });
+    if (created.length === 0) return NextResponse.json({ error: "Ya existe un artículo con ese nombre y talla en esas sedes." }, { status: 409 });
+    await recordAudit(request, auth.access, "epp.article.create", created[0].id, { name: created[0].name, sites: created.map((row) => row.site) });
+    return NextResponse.json({ id: created[0].id, name: created[0].name, sites: created.map((row) => row.site) }, { status: 201 });
   } catch (error) {
     if (error instanceof BadJsonError) return NextResponse.json({ error: error.message }, { status: 400 });
     reportServerIncident("api · epp · crear artículo", error);

@@ -4,7 +4,7 @@ import { reportServerIncident } from "@/lib/incidents";
 import { BadJsonError, getAuthenticatedClient, readJson } from "../../../employees/_server";
 import { articleSchema, eppDatabaseError, resolveSite } from "../../_shared";
 
-// Edita el catálogo (común a las sedes) y el mínimo de la sede indicada.
+// Edita un artículo de una sede (nombre, talla, categoría, estatus y mínimo). No afecta a las otras sedes.
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const auth = await getAuthenticatedClient(request, "epp.manage");
   if ("response" in auth) return auth.response;
@@ -15,16 +15,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   try {
     const input = articleSchema.safeParse(await readJson(request));
     if (!input.success) return NextResponse.json({ error: "Revisa los datos del artículo." }, { status: 400 });
-    const { site: requestedSite, min_stock, ...catalog } = input.data;
-    const resolved = resolveSite(auth.access, requestedSite);
+    const { name, category, size, unit, active, min_stock } = input.data;
+    const catalog = { name, category, size, unit, active };
+    // Cada artículo pertenece a una sede: se edita en la suya y solo afecta a esa sede.
+    const { data: current, error: readError } = await auth.client.from("epp_articles").select("site").eq("id", id).maybeSingle();
+    if (readError) return eppDatabaseError(readError, "editar artículo");
+    if (!current) return NextResponse.json({ error: "No se encontró el artículo." }, { status: 404 });
+    const resolved = resolveSite(auth.access, current.site as string);
     if ("response" in resolved) return resolved.response;
 
-    // El catálogo (nombre, categoría, talla, unidad, estatus) es común a las tres sedes: solo lo cambia una
-    // cuenta sin sede asignada o el Super administrador. Una cuenta de sede solo ajusta el mínimo de su sede.
-    const siteBound = Boolean(auth.access.site) && !auth.access.is_super_admin;
-    const { data, error } = siteBound
-      ? await auth.client.from("epp_articles").select("id,name").eq("id", id).single()
-      : await auth.client.from("epp_articles").update(catalog).eq("id", id).select("id,name").single();
+    const { data, error } = await auth.client.from("epp_articles").update(catalog).eq("id", id).select("id,name").single();
     if (error) return eppDatabaseError(error, "editar artículo");
     const { error: minError } = await auth.client.rpc("epp_set_min_stock", { p_site: resolved.site, p_article: id, p_min: min_stock });
     if (minError) return eppDatabaseError(minError, "mínimo por sede");

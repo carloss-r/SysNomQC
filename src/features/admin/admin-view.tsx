@@ -306,7 +306,7 @@ function AdminDashboard() {
                   <span className="field-hint">
                     {userForm.site
                       ? `Solo verá y operará el inventario de EPP, las solicitudes y las entregas de ${userForm.site}.`
-                      : "Verá y podrá operar el inventario de las tres sedes. Úsalo solo para supervisión o administración."}
+                      : "Verá y podrá operar el inventario de todas las sedes. Úsalo solo para supervisión o administración."}
                   </span>
                 </Field>
                 <Field label="Estatus">
