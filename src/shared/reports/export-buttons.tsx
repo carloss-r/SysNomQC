@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { downloadReportPdf, downloadReportXlsx, type Report } from "./report-export";
+import { BusyLabel } from "@/shared/ui/loading";
 
 /** Botones "PDF" y "Excel" para descargar el mismo reporte en el formato que se prefiera. */
 export function ExportButtons({
@@ -38,10 +39,10 @@ export function ExportButtons({
     <div className={`epp-export${className ? ` ${className}` : ""}`} role="group" aria-label="Descargar reporte">
       <span className="epp-export-label">Descargar:</span>
       <button type="button" className="button button-outline" onClick={() => void run("pdf")} disabled={disabled || busy !== null} title="Descargar en PDF">
-        <FileText size={16} /> {busy === "pdf" ? "Generando…" : "PDF"}
+        <FileText size={16} /> {busy === "pdf" ? <BusyLabel>Generando…</BusyLabel> : "PDF"}
       </button>
       <button type="button" className="button button-outline" onClick={() => void run("xlsx")} disabled={disabled || busy !== null} title="Descargar en Excel">
-        <FileSpreadsheet size={16} /> {busy === "xlsx" ? "Generando…" : "Excel"}
+        <FileSpreadsheet size={16} /> {busy === "xlsx" ? <BusyLabel>Generando…</BusyLabel> : "Excel"}
       </button>
     </div>
   );

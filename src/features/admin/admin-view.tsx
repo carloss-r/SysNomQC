@@ -12,6 +12,7 @@ import { useDialog } from "@/shared/ui/dialog-provider";
 import { RequirePermission } from "@/shared/layout/require-permission";
 import { Field } from "@/shared/ui/field";
 import { PageHeader } from "@/shared/ui/page-header";
+import { BusyLabel, LoadingState } from "@/shared/ui/loading";
 
 type Tab = "users" | "roles";
 type UserForm = { email: string; username: string; full_name: string; password: string; role_ids: number[]; active: boolean; site: string };
@@ -275,7 +276,7 @@ function AdminDashboard() {
               </tbody>
             </table>
           )}
-          {loading && <div className="table-state"><span className="spinner" /> Cargando…</div>}
+          {loading && <LoadingState label="Cargando…" rows={4} />}
         </div>
       </section>
 
@@ -342,7 +343,7 @@ function AdminDashboard() {
               {formError && <p className="inline-error form-error" role="alert">{formError}</p>}
               <div className="modal-actions">
                 <button type="button" className="button button-neutral" onClick={() => setUserModal(null)} disabled={busy}>Cancelar</button>
-                <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? "Guardando…" : "Guardar"}</button>
+                <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : "Guardar"}</button>
               </div>
             </form>
           </section>
@@ -407,7 +408,7 @@ function AdminDashboard() {
               {formError && <p className="inline-error form-error" role="alert">{formError}</p>}
               <div className="modal-actions">
                 <button type="button" className="button button-neutral" onClick={() => setRoleModal(null)} disabled={busy}>Cancelar</button>
-                <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? "Guardando…" : "Guardar"}</button>
+                <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : "Guardar"}</button>
               </div>
             </form>
           </section>

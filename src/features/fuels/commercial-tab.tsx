@@ -10,6 +10,7 @@ import { fileSafe, type Report, type ReportCell } from "@/shared/reports/report-
 import { useNotify } from "@/shared/ui/notice-provider";
 import { formatDay, monthLabel, parseNumber } from "./format";
 import { FUELS_SUBTITLE } from "./suppliers-tab";
+import { BusyLabel } from "@/shared/ui/loading";
 
 type Period = "diario" | "quincenal" | "mensual";
 
@@ -66,7 +67,7 @@ function TariffRow({ supplier, product, onSaved }: { supplier: FuelSupplier; pro
         <input className="epp-select fuel-rate" inputMode="decimal" value={scheme === "valor_cero" ? "0" : rate} disabled={scheme === "valor_cero"} onChange={(e) => setRate(e.target.value)} aria-label={`Tarifa por tonelada de ${product.name}`} />
       </td>
       <td className="row-actions">
-        <button className="button button-outline" onClick={() => void save()} disabled={!dirty || busy || rateValue === null}><Save size={14} /> {busy ? "Guardando…" : "Guardar"}</button>
+        <button className="button button-outline" onClick={() => void save()} disabled={!dirty || busy || rateValue === null}><Save size={14} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : "Guardar"}</button>
       </td>
     </tr>
   );

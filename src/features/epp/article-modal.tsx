@@ -7,6 +7,7 @@ import { describeError, requestApi } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-provider";
 import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
+import { BusyLabel } from "@/shared/ui/loading";
 
 export const EPP_CATEGORIES = [
   "Protección de cabeza",
@@ -129,7 +130,7 @@ export function ArticleModal({
           {error && <p className="inline-error" role="alert">{error}</p>}
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? "Guardando…" : "Guardar"}</button>
+            <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : "Guardar"}</button>
           </div>
         </form>
       </section>

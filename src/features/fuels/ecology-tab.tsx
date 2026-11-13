@@ -29,6 +29,7 @@ import { useNotify } from "@/shared/ui/notice-provider";
 import { formatDay, monthLabel, parseNumber } from "./format";
 import { LevelBadge } from "./semaphore";
 import { FUELS_SUBTITLE } from "./suppliers-tab";
+import { BusyLabel } from "@/shared/ui/loading";
 
 export function CokeModal({ today, coke, presetMonth, onClose, onSaved }: { today: string; coke: FuelCoke[]; presetMonth?: string; onClose: () => void; onSaved: () => Promise<void> }) {
   const { session } = useAuth();
@@ -94,7 +95,7 @@ export function CokeModal({ today, coke, presetMonth, onClose, onSaved }: { toda
           {error && <p className="inline-error" role="alert">{error}</p>}
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button type="submit" className="button button-gold" disabled={busy}><Fuel size={17} /> {busy ? "Guardando…" : "Guardar"}</button>
+            <button type="submit" className="button button-gold" disabled={busy}><Fuel size={17} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : "Guardar"}</button>
           </div>
         </form>
       </section>

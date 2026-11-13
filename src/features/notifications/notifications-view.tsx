@@ -13,6 +13,7 @@ import {
 import { StatCard } from "@/shared/ui/badges";
 import { PageHeader } from "@/shared/ui/page-header";
 import { SNOOZE_MS, useNotifications } from "./notifications-provider";
+import { BusyLabel, LoadingState } from "@/shared/ui/loading";
 
 const PAGE_SIZE = 50;
 const SNOOZE_HOURS = SNOOZE_MS / 3_600_000;
@@ -87,7 +88,7 @@ export function NotificationsView() {
         description={`Lo resuelto desaparece solo. Lo que descartes vuelve en ${SNOOZE_HOURS} horas si el problema sigue.`}
         actions={
           <button type="button" className="button button-outline" onClick={() => void refresh()} disabled={loading}>
-            <RefreshCw size={16} /> {loading ? "Revisando…" : "Revisar ahora"}
+            <RefreshCw size={16} /> {loading ? <BusyLabel>Revisando…</BusyLabel> : "Revisar ahora"}
           </button>
         }
       >
@@ -190,7 +191,7 @@ export function NotificationsView() {
         )}
 
         {filtered.length === 0 && loading && !checkedAt && (
-          <div className="table-state"><span className="spinner" /> Revisando avisos…</div>
+          <LoadingState label="Revisando avisos…" rows={3} />
         )}
         {filtered.length === 0 && checkedAt && (
           <div className="empty-state">

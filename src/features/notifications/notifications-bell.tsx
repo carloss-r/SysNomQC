@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { NotificationSeverity } from "@/lib/notifications";
 import { useNotifications } from "./notifications-provider";
+import { LoadingState } from "@/shared/ui/loading";
 
 // La lista del panel se desliza por dentro; más allá de esto, "Ver todas".
 const MAX_ITEMS = 50;
@@ -113,7 +114,7 @@ export function NotificationsBell() {
               })}
             </ul>
           ) : (
-            <p className="bell-empty">{loading ? "Revisando…" : filter === "all" ? "Todo en orden." : "Nada en esta categoría."}</p>
+            loading ? <LoadingState label="Revisando…" compact /> : <p className="bell-empty">{filter === "all" ? "Todo en orden." : "Nada en esta categoría."}</p>
           )}
 
           <Link className="bell-link" href="/notificaciones" onClick={() => setOpen(false)}>

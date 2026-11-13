@@ -22,6 +22,7 @@ import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { addDays, formatDay, monthLabel, parseNumber } from "./format";
 import { LevelBadge } from "./semaphore";
+import { BusyLabel } from "@/shared/ui/loading";
 
 export function ScheduleModal({
   today,
@@ -144,7 +145,7 @@ export function ScheduleModal({
           {error && <p className="inline-error" role="alert">{error}</p>}
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button type="submit" className="button button-gold" disabled={busy || blocked}><CalendarPlus size={17} /> {busy ? "Programando…" : blocked ? "Bloqueado (30 %)" : "Programar"}</button>
+            <button type="submit" className="button button-gold" disabled={busy || blocked}><CalendarPlus size={17} /> {busy ? <BusyLabel>Programando…</BusyLabel> : blocked ? "Bloqueado (30 %)" : "Programar"}</button>
           </div>
         </form>
       </section>

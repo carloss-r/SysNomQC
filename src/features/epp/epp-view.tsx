@@ -23,6 +23,7 @@ import { downloadPurchasePdf } from "./purchase-pdf";
 import { RequestModal } from "./request-modal";
 import { RequestsTab } from "./requests-tab";
 import { WorkersTab } from "./workers-tab";
+import { LoadingState } from "@/shared/ui/loading";
 
 type Tab = "inventory" | "workers" | "monthly" | "history" | "requests";
 
@@ -310,7 +311,7 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
             onNew={() => setDialog({ type: "request", articleIds: [] })}
           />
         ) : loading ? (
-          <p className="epp-empty">Cargando inventario de {site}…</p>
+          <LoadingState label={`Cargando inventario de ${site}…`} rows={6} />
         ) : tab === "inventory" ? (
           <InventoryTab
             site={site}

@@ -11,6 +11,7 @@ import { NotificationsBell } from "@/features/notifications/notifications-bell";
 import { NotificationsProvider } from "@/features/notifications/notifications-provider";
 import { ThemeToggle } from "@/shared/ui/theme-toggle";
 import { Sidebar } from "./sidebar";
+import { Spinner } from "@/shared/ui/loading";
 
 function Splash({ message }: { message: string }) {
   return (
@@ -102,7 +103,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <NotificationsBell />
             <ThemeToggle />
             <button className="icon-button logout-button hide-phone" onClick={() => void handleSignOut()} disabled={signingOut} aria-label="Cerrar sesión" title="Cerrar sesión">
-              <LogOut size={18} />
+              {signingOut ? <Spinner /> : <LogOut size={18} />}
             </button>
           </div>
         </div>

@@ -10,6 +10,7 @@ import { SiteBadge } from "@/shared/ui/badges";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { formatDay, todayLocal } from "./format";
 import { normalize } from "./people";
+import { BusyLabel } from "@/shared/ui/loading";
 
 export type MovementKind = "entrega" | "ingreso" | "ajuste";
 type Line = { key: number; article_id: string; quantity: string };
@@ -208,7 +209,7 @@ export function MovementModal({
                   </div>
                   {query.trim() && (
                     <ul className="epp-results epp-dropdown" role="listbox">
-                      {matches.length === 0 && <li className="epp-empty">{employees.length === 0 ? "Cargando trabajadores…" : `Sin coincidencias entre los trabajadores activos de ${site}.`}</li>}
+                      {matches.length === 0 && <li className="epp-empty">{employees.length === 0 ? <span className="busy-label"><span className="spinner" aria-hidden="true" />Cargando trabajadores…</span> : `Sin coincidencias entre los trabajadores activos de ${site}.`}</li>}
                       {matches.map((item, index) => (
                         <li key={item.id}>
                           <button type="button" className={index === highlight ? "active" : ""} onMouseEnter={() => setHighlight(index)} onClick={() => pick(item)}>
@@ -267,7 +268,7 @@ export function MovementModal({
           {error && <p className="inline-error" role="alert">{error}</p>}
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? "Guardando…" : copy.button}</button>
+            <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : copy.button}</button>
           </div>
         </form>
       </section>

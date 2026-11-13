@@ -33,6 +33,7 @@ import { SemaphoreCard } from "./semaphore";
 import { SupplierModal } from "./supplier-modal";
 import { SuppliersTab } from "./suppliers-tab";
 import { useNotify } from "@/shared/ui/notice-provider";
+import { LoadingState } from "@/shared/ui/loading";
 
 type Data = { today: string; suppliers: FuelSupplier[]; schedule: FuelSchedule[]; receptions: FuelReception[]; coke: FuelCoke[] };
 type Tab = "suppliers" | "schedule" | "scale" | "commercial" | "ecology";
@@ -171,7 +172,7 @@ function FuelsScreen() {
           </div>
         </div>
         {!data ? (
-          <p className="epp-empty">{error ? "No hay datos para mostrar." : "Cargando combustibles alternos…"}</p>
+          error ? <p className="epp-empty">No hay datos para mostrar.</p> : <LoadingState label="Cargando combustibles alternos…" rows={6} />
         ) : tab === "suppliers" ? (
           <SuppliersTab suppliers={suppliers} today={today} canEdit={canSuppliers} onEdit={(supplier) => setDialog({ type: "supplier", supplier })} />
         ) : tab === "schedule" ? (

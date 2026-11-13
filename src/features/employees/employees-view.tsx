@@ -20,6 +20,7 @@ import { useDialog } from "@/shared/ui/dialog-provider";
 import { PageHeader } from "@/shared/ui/page-header";
 import { EmployeeFormModal } from "./components/employee-form-modal";
 import { EmployeeProfileModal } from "./components/employee-profile-modal";
+import { LoadingState } from "@/shared/ui/loading";
 
 // Empleados por página: el directorio nunca se descarga completo, solo una página a la vez.
 const PAGE_SIZE = 20;
@@ -362,7 +363,7 @@ function EmployeesDashboard() {
               ))}
             </tbody>
           </table>
-          {loading && <div className="table-state"><span className="spinner" /> Cargando empleados…</div>}
+          {loading && <LoadingState label="Cargando empleados…" rows={employees.length === 0 ? 6 : 0} />}
           {!loading && employees.length === 0 && (
             <div className="empty-state">
               <div className="empty-icon"><UserRound size={25} /></div>
