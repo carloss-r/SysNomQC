@@ -14,6 +14,14 @@ Equipo de protección personal. Pantalla `/epp` (menú **Seguridad e higiene →
 | **Historial** | Todos los movimientos con fecha, trabajador, quién los registró y notas |
 | **Solicitudes** | Solicitudes de compra y su estado |
 
+## Inventario por sede
+
+- **Cada sede tiene su propio inventario y sus propios artículos** (`epp_articles.site`): nombre, talla, categoría, unidad, estatus, mínimo y existencia. Nada se comparte: desactivar o renombrar un artículo en Lagunas no cambia Campeche ni Cruz Azul.
+- La base impide mezclar sedes: existencias, movimientos y solicitudes solo aceptan artículos de su sede, y un artículo no cambia de sede.
+- La sede va ligada a la cuenta (**Usuarios y roles → Sede**). Con sede asignada solo se ve y opera esa sede, también en Compras; con *Todas las sedes* (supervisión) y el Super administrador se elige la sede en pantalla. Lo valida la base (`can_access_site`).
+- **Nuevo artículo** lo crea en la sede elegida; quien supervisa todas las sedes puede marcar *Crearlo también en las otras sedes* (quedan como artículos independientes).
+- Cada talla es un artículo propio. El catálogo inicial (`202611130008`) es solo de Campeche; Lagunas, Cruz Azul y El Carmen crean sus propios artículos. Migraciones: compras por sede `202611130009`, artículos por sede `202611130010`, catálogo inicial solo en Campeche `202611130011`, sede El Carmen `202611130012`.
+
 ## Reglas de negocio
 
 - La existencia solo cambia con la función `epp_apply_site()` (transacción atómica; valida permiso, sede y existencia).

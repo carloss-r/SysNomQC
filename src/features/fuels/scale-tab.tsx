@@ -20,6 +20,7 @@ import { useDialog } from "@/shared/ui/dialog-provider";
 import { downloadCertificatePdf } from "./certificate-pdf";
 import { formatDay, formatTime, parseNumber } from "./format";
 import { FUELS_SUBTITLE } from "./suppliers-tab";
+import { RowBusy } from "@/shared/ui/loading";
 
 export function ScaleTab({
   today,
@@ -162,6 +163,7 @@ export function ScaleTab({
                 </div>
                 {canOperate && (
                   <div className="epp-actions">
+                    {busy === row.id && <RowBusy />}
                     <button className="button button-gold" onClick={() => onExit(row)} disabled={busy === row.id}><Lock size={14} /> Capturar salida (tara)</button>
                     <button className="button button-danger-outline" onClick={() => void cancel(row)} disabled={busy === row.id}><Ban size={14} /> Cancelar</button>
                   </div>
@@ -213,6 +215,7 @@ export function ScaleTab({
                   </td>
                   <td className="row-actions">
                     <div className="epp-actions">
+                      {busy === row.id && <RowBusy />}
                       {row.status === "en_planta" && canOperate && <button className="button button-gold" onClick={() => onExit(row)}><Lock size={14} /> Tara</button>}
                       {cl === "sin_analisis" && canLab && <button className="button button-outline" onClick={() => void lab(row)} disabled={busy === row.id} title="Capturar cloro de laboratorio"><FlaskConical size={14} /> Cloro</button>}
                       <button className="button button-outline" onClick={() => void certificate(row)} disabled={row.status !== "cerrado"} title={row.status === "cerrado" ? "Imprimir certificado de recepción" : "Se habilita al cerrar la tara"}>

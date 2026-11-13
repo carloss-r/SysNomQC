@@ -11,6 +11,7 @@ import { Avatar, StatusBadge } from "@/shared/ui/badges";
 import { usePhotoUrl } from "../hooks/use-photo-url";
 import { ExpedienteSheet } from "./expediente-sheet";
 import { TerminationModal } from "./termination-modal";
+import { BusyLabel } from "@/shared/ui/loading";
 
 function ProfileSection({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
   return <section className="profile-section"><h3>{icon}{title}</h3><div className="profile-grid">{children}</div></section>;
@@ -140,7 +141,7 @@ export function EmployeeProfileModal({
               <button className="button button-danger-outline" onClick={() => setTerminating(true)}><UserMinus size={16} /> Dar de baja</button>
             )}
             {can("employees.edit") && !employee.active && (
-              <button className="button button-outline" onClick={() => void reactivate()} disabled={reactivating}><UserCheck size={16} /> {reactivating ? "Reactivando…" : "Reactivar"}</button>
+              <button className="button button-outline" onClick={() => void reactivate()} disabled={reactivating}><UserCheck size={16} /> {reactivating ? <BusyLabel>Reactivando…</BusyLabel> : "Reactivar"}</button>
             )}
             <span className="actions-spacer" />
             {can("employees.download") && <button className="button button-outline" onClick={() => printExpediente(employee)}><Download size={16} /> Descargar expediente</button>}

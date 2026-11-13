@@ -64,7 +64,7 @@ Al crear o editar un rol, **Solo consulta** limita los permisos a ver **Empleado
 ## Reglas
 
 - **Varios roles por cuenta**: los permisos son la suma de todos; el primero marcado es el rol principal (`authorized_users.role_id`). Requiere `202611080001_varios_roles.sql`.
-- **Sede**: cada cuenta puede tener una sede asignada (`Campeche`, `Lagunas`, `Cruz Azul`). Con sede, solo ve y mueve el inventario de esa sede; sin sede (*Todas las sedes*) y el SuperAdmin eligen la sede en pantalla.
+- **Sede**: cada cuenta puede tener una sede asignada (`Campeche`, `Lagunas`, `Cruz Azul`, `El Carmen`). Con sede, solo ve y mueve el inventario de esa sede; sin sede (*Todas las sedes*) y el SuperAdmin eligen la sede en pantalla.
 - **Pantalla de inicio**: si la cuenta abre una pantalla sin permiso, la app la lleva a la primera pantalla del menú que sí puede usar.
 - **Protecciones**: no puedes borrar ni desactivar tu cuenta y siempre queda un SuperAdmin activo.
 - Un permiso nuevo agregado en `permissions.ts` aparece solo en el editor de roles.

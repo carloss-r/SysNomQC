@@ -1,4 +1,4 @@
-export const SITES = ["Campeche", "Lagunas", "Cruz Azul"] as const;
+export const SITES = ["Campeche", "Lagunas", "Cruz Azul", "El Carmen"] as const;
 
 // Solo son sugerencias para autocompletar; el campo acepta cualquier texto.
 export const POSITIONS = [

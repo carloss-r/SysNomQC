@@ -2,7 +2,7 @@
 
 import { CalendarDays, Check, ClipboardCheck, PackagePlus, Plus, Scale, Search, Trash2, X } from "lucide-react";
 import { useDeferredValue, useId, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
-import type { EppArticle, EppEmployee, EppMovement } from "@/lib/permissions";
+import { eppArticleLabel, type EppArticle, type EppEmployee, type EppMovement } from "@/lib/permissions";
 import { describeError, requestApi } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-provider";
 import { Field } from "@/shared/ui/field";
@@ -10,6 +10,7 @@ import { SiteBadge } from "@/shared/ui/badges";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { formatDay, todayLocal } from "./format";
 import { normalize } from "./people";
+import { BusyLabel } from "@/shared/ui/loading";
 
 export type MovementKind = "entrega" | "ingreso" | "ajuste";
 type Line = { key: number; article_id: string; quantity: string };
@@ -148,10 +149,10 @@ export function MovementModal({
     if (kind !== "ajuste" && items.some((item) => item.quantity < 0)) return setError("Las cantidades deben ser mayores a cero.");
     if (new Set(items.map((item) => item.article_id)).size !== items.length) return setError("Un artículo está repetido; únelo en un solo renglón.");
     const locked = items.map((item) => byId.get(item.article_id)).find((item) => item?.pending_count);
-    if (locked) return setError(`${locked.name} tiene pendiente el conteo de la compra folio ${locked.pending_count}. Haz el conteo antes de moverlo.`);
+    if (locked) return setError(`${eppArticleLabel(locked.name, locked.size)} tiene pendiente el conteo de la compra folio ${locked.pending_count}. Haz el conteo antes de moverlo.`);
     if (kind === "entrega") {
       const short = items.find((item) => item.quantity > (byId.get(item.article_id)?.stock ?? 0));
-      if (short) return setError(`Solo hay ${byId.get(short.article_id)?.stock ?? 0} de ${byId.get(short.article_id)?.name}.`);
+      if (short) return setError(`Solo hay ${byId.get(short.article_id)?.stock ?? 0} de ${eppArticleLabel(byId.get(short.article_id)?.name, byId.get(short.article_id)?.size)}.`);
     }
     if (kind === "ajuste" && !notes.trim()) return setError("Explica el motivo del ajuste.");
 
@@ -208,7 +209,7 @@ export function MovementModal({
                   </div>
                   {query.trim() && (
                     <ul className="epp-results epp-dropdown" role="listbox">
-                      {matches.length === 0 && <li className="epp-empty">{employees.length === 0 ? "Cargando trabajadores…" : `Sin coincidencias entre los trabajadores activos de ${site}.`}</li>}
+                      {matches.length === 0 && <li className="epp-empty">{employees.length === 0 ? <span className="busy-label"><span className="spinner" aria-hidden="true" />Cargando trabajadores…</span> : `Sin coincidencias entre los trabajadores activos de ${site}.`}</li>}
                       {matches.map((item, index) => (
                         <li key={item.id}>
                           <button type="button" className={index === highlight ? "active" : ""} onMouseEnter={() => setHighlight(index)} onClick={() => pick(item)}>
@@ -267,7 +268,7 @@ export function MovementModal({
           {error && <p className="inline-error" role="alert">{error}</p>}
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? "Guardando…" : copy.button}</button>
+            <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : copy.button}</button>
           </div>
         </form>
       </section>
@@ -310,7 +311,7 @@ function ArticlePicker({
     return { matches: found.slice(0, MAX_RESULTS), extra: Math.max(0, found.length - MAX_RESULTS) };
   }, [indexed, query, taken]);
 
-  const label = (item: EppArticle) => `${item.name}${item.size ? ` · ${item.size}` : ""}`;
+  const label = (item: EppArticle) => eppArticleLabel(item.name, item.size);
 
   function choose(item: EppArticle) {
     onChange(String(item.id));

@@ -7,6 +7,7 @@ import { describeError, requestApi } from "@/lib/api-client";
 import { formatDate, type Employee } from "@/lib/employees";
 import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
+import { BusyLabel } from "@/shared/ui/loading";
 
 /** Hoy en hora de Campeche (YYYY-MM-DD), como valor inicial del día de baja. */
 function todayPlant() {
@@ -83,7 +84,7 @@ export function TerminationModal({
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
             <button type="submit" className="button button-danger-outline" disabled={busy}>
-              <Check size={17} /> {busy ? "Guardando…" : "Registrar baja"}
+              <Check size={17} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : "Registrar baja"}
             </button>
           </div>
         </form>

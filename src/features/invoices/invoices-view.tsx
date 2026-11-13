@@ -29,6 +29,7 @@ import { PageHeader } from "@/shared/ui/page-header";
 import { openInvoiceFile } from "./files";
 import { InvoiceModal } from "./invoice-modal";
 import { UploadModal, type Detected } from "./upload-modal";
+import { BusyLabel, LoadingState, RowBusy, Spinner } from "@/shared/ui/loading";
 
 const SUBTITLE = "Finanzas · Facturas";
 
@@ -294,7 +295,7 @@ function InvoicesScreen() {
         </div>
 
         {!data ? (
-          <p className="epp-empty">{error ? "No hay datos para mostrar." : "Cargando facturas…"}</p>
+          error ? <p className="epp-empty">No hay datos para mostrar.</p> : <LoadingState label="Cargando facturas…" rows={6} />
         ) : tab === "list" ? (
           <>
             <div className="directory-toolbar">
@@ -338,6 +339,7 @@ function InvoicesScreen() {
                       </td>
                       <td className="row-actions">
                         <div className="epp-actions">
+                          {busyId === row.id && <RowBusy />}
                           {canManage && !isInvoiceClosed(row) && (
                             <>
                               <button className="button button-gold" onClick={() => setDialog({ type: "pay", invoice: row })} disabled={busyId === row.id}><CheckCircle2 size={14} /> Marcar pagada</button>
@@ -350,7 +352,7 @@ function InvoicesScreen() {
                           <button className="button button-outline" onClick={() => void viewPdf(row)}><FileText size={14} /> PDF</button>
                           {isInvoiceClosed(row) && <span className="epp-muted" title="Factura cerrada: ya no se puede modificar"><Lock size={14} /></span>}
                           {canDelete(row) && (
-                            <button className="icon-button row-edit" onClick={() => void remove(row)} disabled={busyId === row.id} aria-label="Eliminar factura" title="Eliminar"><Trash2 size={16} /></button>
+                            <button className="icon-button row-edit" onClick={() => void remove(row)} disabled={busyId === row.id} aria-label="Eliminar factura" title="Eliminar">{busyId === row.id ? <Spinner /> : <Trash2 size={16} />}</button>
                           )}
                         </div>
                       </td>
@@ -473,7 +475,7 @@ function PayModal({ invoice, today, busy, onClose, onConfirm }: { invoice: Invoi
           <p className="field-hint">Al confirmar, la factura queda cerrada: ya no se podrá cambiar su estatus, corregir sus datos ni eliminarla.</p>
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button type="submit" className="button button-gold" disabled={busy || invalid}><CheckCircle2 size={17} /> {busy ? "Guardando…" : "Confirmar pago y cerrar"}</button>
+            <button type="submit" className="button button-gold" disabled={busy || invalid}><CheckCircle2 size={17} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : "Confirmar pago y cerrar"}</button>
           </div>
         </form>
       </section>

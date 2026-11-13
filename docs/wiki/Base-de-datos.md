@@ -25,7 +25,7 @@ Postgres de Supabase. Todo el esquema vive en `supabase/migrations/` y las migra
 
 | Tabla | Descripción |
 | --- | --- |
-| `employees` | Expedientes. Sedes válidas: `Campeche`, `Lagunas`, `Cruz Azul`. `nss`, `curp` y `rfc` únicos |
+| `employees` | Expedientes. Sedes válidas: `Campeche`, `Lagunas`, `Cruz Azul`, `El Carmen`. `nss`, `curp` y `rfc` únicos |
 | `authorized_users` | Cuentas autorizadas (`user_id` → `auth.users`), con `active`, `full_name`, `role_id` (rol principal) y `site` |
 | `authorized_user_roles` | Roles adicionales por cuenta; los permisos son la suma de todos |
 | `roles` | `nombre`, `descripcion`, `permisos text[]`, `es_sistema` |

@@ -18,6 +18,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { addDays, formatDateTime, formatDay, parseNumber } from "./format";
+import { BusyLabel } from "@/shared/ui/loading";
 
 const DEFAULT_DESTINATION = "Horno de clínker (coprocesamiento)";
 
@@ -148,7 +149,7 @@ export function EntryModal({
           {error && <p className="inline-error" role="alert">{error}</p>}
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button type="submit" className="button button-gold" disabled={busy || !selected}><Scale size={17} /> {busy ? "Registrando…" : "Capturar entrada (bruto)"}</button>
+            <button type="submit" className="button button-gold" disabled={busy || !selected}><Scale size={17} /> {busy ? <BusyLabel>Registrando…</BusyLabel> : "Capturar entrada (bruto)"}</button>
           </div>
         </form>
       </section>
@@ -272,7 +273,7 @@ export function ExitModal({
           {error && <p className="inline-error" role="alert">{error}</p>}
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button type="submit" className="button button-gold" disabled={busy || !confirmed || !net || net <= 0}><Lock size={17} /> {busy ? "Cerrando…" : "Capturar salida (tara)"}</button>
+            <button type="submit" className="button button-gold" disabled={busy || !confirmed || !net || net <= 0}><Lock size={17} /> {busy ? <BusyLabel>Cerrando…</BusyLabel> : "Capturar salida (tara)"}</button>
           </div>
         </form>
       </section>

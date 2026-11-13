@@ -8,6 +8,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { Field } from "@/shared/ui/field";
 import { useDialog } from "@/shared/ui/dialog-provider";
 import { useNotify } from "@/shared/ui/notice-provider";
+import { BusyLabel } from "@/shared/ui/loading";
 
 type Props = { request: EppPurchaseRequest; onClose: () => void; onDone: () => Promise<void> | void };
 
@@ -38,7 +39,7 @@ function Shell({ title, hint, icon, busy, error, submitLabel, onClose, onSubmit,
           {error && <p className="inline-error" role="alert">{error}</p>}
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? "Guardando…" : submitLabel}</button>
+            <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : submitLabel}</button>
           </div>
         </form>
       </section>

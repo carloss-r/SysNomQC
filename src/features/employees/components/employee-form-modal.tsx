@@ -29,6 +29,7 @@ import { reportClientIncident } from "@/lib/report-incident";
 import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { usePhotoUrl } from "../hooks/use-photo-url";
+import { BusyLabel } from "@/shared/ui/loading";
 
 class PhotoUploadError extends Error {}
 
@@ -317,7 +318,7 @@ export function EmployeeFormModal({
             <button type="button" className="button button-neutral" onClick={requestClose} disabled={busy}>Cancelar</button>
             <button type="submit" className="button button-gold" disabled={busy}>
               {busy ? <span className="spinner spinner-light" /> : <Check size={17} />}
-              {busy ? "Guardando…" : editing ? "Guardar cambios" : "Guardar empleado"}
+              {busy ? <BusyLabel>Guardando…</BusyLabel> : editing ? "Guardar cambios" : "Guardar empleado"}
             </button>
           </div>
         </form>

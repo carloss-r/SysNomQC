@@ -11,6 +11,7 @@ import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { downloadText, loadInvoicePreview, openInvoiceFile } from "./files";
 import type { Detected } from "./upload-modal";
+import { BusyLabel, LoadingState } from "@/shared/ui/loading";
 
 type FormKey = "invoice_date" | "due_date" | "folio" | "uuid" | "supplier_name" | "supplier_rfc" | "subtotal" | "tax" | "total" | "currency" | "notes";
 type Form = Record<FormKey, string>;
@@ -205,7 +206,7 @@ export function InvoiceModal({
             {preview ? (
               <iframe src={preview} title={`PDF de la factura ${invoice.folio ?? invoice.id}`} />
             ) : (
-              <p className="epp-empty">{previewError ? "No se pudo mostrar el PDF aquí. Ábrelo en otra pestaña." : "Cargando PDF…"}</p>
+              previewError ? <p className="epp-empty">No se pudo mostrar el PDF aquí. Ábrelo en otra pestaña.</p> : <LoadingState label="Cargando PDF…" />
             )}
           </div>
 
@@ -265,7 +266,7 @@ export function InvoiceModal({
                 {fullError ? (
                   <p className="inline-error" role="alert">{fullError}</p>
                 ) : text === null ? (
-                  <p className="epp-empty">Cargando texto…</p>
+                  <LoadingState label="Cargando texto…" compact />
                 ) : text ? (
                   <pre className="invoice-text-content">{text}</pre>
                 ) : (
@@ -278,7 +279,7 @@ export function InvoiceModal({
               fullError ? (
                 <p className="inline-error" role="alert">{fullError}</p>
               ) : !full ? (
-                <p className="epp-empty">Cargando correcciones…</p>
+                <LoadingState label="Cargando correcciones…" rows={2} compact />
               ) : edits.length === 0 ? (
                 <p className="epp-empty">Nadie ha corregido esta factura: los datos son los que se detectaron al cargarla.</p>
               ) : (
@@ -307,7 +308,7 @@ export function InvoiceModal({
               <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cerrar</button>
               {canEdit && tab === "data" && (
                 <button type="submit" className="button button-gold" disabled={busy || dirty.length === 0}>
-                  <Save size={17} /> {busy ? "Guardando…" : dirty.length ? `Guardar corrección (${dirty.length})` : "Sin cambios"}
+                  <Save size={17} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : dirty.length ? `Guardar corrección (${dirty.length})` : "Sin cambios"}
                 </button>
               )}
             </div>

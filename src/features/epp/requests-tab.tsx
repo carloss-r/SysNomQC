@@ -7,6 +7,7 @@ import { purchaseShortItems } from "@/lib/notifications";
 import { SiteBadge } from "@/shared/ui/badges";
 import { formatDateTime } from "./format";
 import { PURCHASE_STATUS_LABELS } from "./purchase-pdf";
+import { LoadingState, RowBusy } from "@/shared/ui/loading";
 
 const FILTERS: { key: "open" | "all" | PurchaseStatus; label: string }[] = [
   { key: "open", label: "Abiertas" },
@@ -91,7 +92,7 @@ export function RequestsTab({
         </div>
       </div>
 
-      {loading && <p className="epp-empty">Cargando solicitudes…</p>}
+      {loading && <LoadingState label="Cargando solicitudes…" rows={3} />}
       {!loading && rows.length === 0 && (
         <p className="epp-empty">{filter === "open" ? `No hay solicitudes abiertas en ${site}. Cuando falte material, pídelo desde el inventario.` : `No hay solicitudes de ${site} con ese filtro.`}</p>
       )}
@@ -187,6 +188,7 @@ export function RequestsTab({
                   )}
 
                   <div className="epp-request-actions">
+                    {busy && <RowBusy />}
                     <button type="button" className="button button-outline" onClick={() => onPdf([row])}><FileDown size={15} /> Descargar PDF</button>
                     {canBuy && (
                       <button type="button" className="button button-primary" disabled={busy} onClick={() => onBuy(row)}>

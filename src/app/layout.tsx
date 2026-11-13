@@ -3,6 +3,7 @@ import { DM_Sans, Manrope } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/features/auth/auth-provider";
 import { DialogProvider } from "@/shared/ui/dialog-provider";
+import { NetworkStatus } from "@/shared/ui/loading";
 import { NoticeProvider } from "@/shared/ui/notice-provider";
 import { THEME_INIT_SCRIPT } from "@/shared/ui/theme-init";
 import { ClientErrorMonitor } from "./client-error-monitor";
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body>
         <ClientErrorMonitor />
+        <NetworkStatus />
         <NoticeProvider>
           <DialogProvider>
             <AuthProvider>{children}</AuthProvider>

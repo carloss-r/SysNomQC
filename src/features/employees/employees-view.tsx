@@ -20,6 +20,7 @@ import { useDialog } from "@/shared/ui/dialog-provider";
 import { PageHeader } from "@/shared/ui/page-header";
 import { EmployeeFormModal } from "./components/employee-form-modal";
 import { EmployeeProfileModal } from "./components/employee-profile-modal";
+import { LoadingState } from "@/shared/ui/loading";
 
 // Empleados por página: el directorio nunca se descarga completo, solo una página a la vez.
 const PAGE_SIZE = 20;
@@ -246,11 +247,12 @@ function EmployeesDashboard() {
           )
         }
       >
-        <div className="stats-grid">
+        <div className="stats-grid stats-grid-5">
           <StatCard label="Empleados activos" count={stats?.total ?? 0} tone="green" icon={<UsersRound size={18} />} />
           <StatCard label="Campeche" count={stats?.bySite["Campeche"] ?? 0} tone="blue" icon={<Building2 size={18} />} />
           <StatCard label="Lagunas" count={stats?.bySite["Lagunas"] ?? 0} tone="gold" icon={<Building2 size={18} />} />
           <StatCard label="Cruz Azul" count={stats?.bySite["Cruz Azul"] ?? 0} tone="purple" icon={<Building2 size={18} />} />
+          <StatCard label="El Carmen" count={stats?.bySite["El Carmen"] ?? 0} tone="teal" icon={<Building2 size={18} />} />
         </div>
       </PageHeader>
 
@@ -361,7 +363,7 @@ function EmployeesDashboard() {
               ))}
             </tbody>
           </table>
-          {loading && <div className="table-state"><span className="spinner" /> Cargando empleados…</div>}
+          {loading && <LoadingState label="Cargando empleados…" rows={employees.length === 0 ? 6 : 0} />}
           {!loading && employees.length === 0 && (
             <div className="empty-state">
               <div className="empty-icon"><UserRound size={25} /></div>

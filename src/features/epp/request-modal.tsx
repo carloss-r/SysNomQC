@@ -2,11 +2,12 @@
 
 import { Plus, Send, ShoppingCart, Trash2, X } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
-import type { EppArticle } from "@/lib/permissions";
+import { eppArticleLabel, type EppArticle } from "@/lib/permissions";
 import { describeError, requestApi } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-provider";
 import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
+import { BusyLabel } from "@/shared/ui/loading";
 
 type Line = { key: number; article_id: string; quantity: string };
 let lineCounter = 0;
@@ -99,7 +100,7 @@ export function RequestModal({
                       }}>
                         <option value="">Selecciona…</option>
                         {(article && !selectable.includes(article) ? [article, ...selectable] : selectable).map((item) => (
-                          <option key={item.id} value={item.id}>{item.name} (hay {item.stock}, mín. {item.min_stock})</option>
+                          <option key={item.id} value={item.id}>{eppArticleLabel(item.name, item.size)} (hay {item.stock}, mín. {item.min_stock})</option>
                         ))}
                       </select>
                     </Field>
@@ -127,7 +128,7 @@ export function RequestModal({
           {error && <p className="inline-error" role="alert">{error}</p>}
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button type="submit" className="button button-gold" disabled={busy}><Send size={16} /> {busy ? "Enviando…" : "Enviar a compras"}</button>
+            <button type="submit" className="button button-gold" disabled={busy}><Send size={16} /> {busy ? <BusyLabel>Enviando…</BusyLabel> : "Enviar a compras"}</button>
           </div>
         </form>
       </section>

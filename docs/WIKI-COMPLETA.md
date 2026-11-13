@@ -219,7 +219,7 @@ Pantalla principal (`/`, menú **Personal → Empleados**). Código en `src/feat
 
 ## Datos del expediente
 
-Clave de empleado, nombre, sede (`Campeche`, `Lagunas`, `Cruz Azul`), fecha de ingreso, puesto, tipo de contrato, salario, cuenta bancaria, estado activo, género, NSS, CURP, RFC, estado civil, fecha de nacimiento, créditos, correo, teléfono, estado de residencia, domicilio y foto. NSS, CURP y RFC son únicos.
+Clave de empleado, nombre, sede (`Campeche`, `Lagunas`, `Cruz Azul`, `El Carmen`), fecha de ingreso, puesto, tipo de contrato, salario, cuenta bancaria, estado activo, género, NSS, CURP, RFC, estado civil, fecha de nacimiento, créditos, correo, teléfono, estado de residencia, domicilio y foto. NSS, CURP y RFC son únicos.
 
 ## Fotografías
 
@@ -412,7 +412,7 @@ Postgres de Supabase. Todo el esquema vive en `supabase/migrations/` y las migra
 
 | Tabla | Descripción |
 | --- | --- |
-| `employees` | Expedientes. Sedes válidas: `Campeche`, `Lagunas`, `Cruz Azul`. `nss`, `curp` y `rfc` únicos |
+| `employees` | Expedientes. Sedes válidas: `Campeche`, `Lagunas`, `Cruz Azul`, `El Carmen`. `nss`, `curp` y `rfc` únicos |
 | `authorized_users` | Cuentas autorizadas (`user_id` → `auth.users`), con `active`, `full_name`, `role_id` (rol principal) y `site` |
 | `authorized_user_roles` | Roles adicionales por cuenta; los permisos son la suma de todos |
 | `roles` | `nombre`, `descripcion`, `permisos text[]`, `es_sistema` |
@@ -571,7 +571,7 @@ La base guarda nombres técnicos y la app los muestra legibles (`src/lib/roles.t
 ## Reglas
 
 - **Varios roles por cuenta**: los permisos son la suma de todos; el primero marcado es el rol principal (`authorized_users.role_id`). Requiere `202611080001_varios_roles.sql`.
-- **Sede**: cada cuenta puede tener una sede asignada (`Campeche`, `Lagunas`, `Cruz Azul`). Con sede, solo ve y mueve el inventario de esa sede; sin sede (*Todas las sedes*) y el SuperAdmin eligen la sede en pantalla.
+- **Sede**: cada cuenta puede tener una sede asignada (`Campeche`, `Lagunas`, `Cruz Azul`, `El Carmen`). Con sede, solo ve y mueve el inventario de esa sede; sin sede (*Todas las sedes*) y el SuperAdmin eligen la sede en pantalla.
 - **Pantalla de inicio**: si la cuenta abre una pantalla sin permiso, la app la lleva a la primera pantalla del menú que sí puede usar.
 - **Protecciones**: no puedes borrar ni desactivar tu cuenta y siempre queda un SuperAdmin activo.
 - Un permiso nuevo agregado en `permissions.ts` aparece solo en el editor de roles.

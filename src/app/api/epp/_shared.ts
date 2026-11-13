@@ -11,8 +11,10 @@ export const articleSchema = z.object({
   unit: z.string().trim().min(1).max(20).default("PIEZAS"),
   min_stock: z.number().int().min(0).max(100000),
   active: z.boolean().default(true),
-  /** Al editar: sede a la que se aplica el mínimo. */
+  /** Sede del artículo (al crear) o del mínimo (al editar). */
   site: z.enum(SITES).optional(),
+  /** Al crear, solo para quien supervisa todas las sedes: crearlo también en las otras sedes. */
+  all_sites: z.boolean().optional(),
 });
 
 const itemsSchema = z
@@ -78,7 +80,7 @@ export function resolveSite(access: Access, requested: string | null | undefined
 /** Traduce errores de la base (incluidos los mensajes de las funciones de EPP) a respuestas claras. */
 export function eppDatabaseError(error: { code?: string; message: string }, context: string) {
   if (error.code === "23505") {
-    return NextResponse.json({ error: "Ya existe un artículo con ese nombre." }, { status: 409 });
+    return NextResponse.json({ error: "Ya existe un artículo con ese nombre y talla." }, { status: 409 });
   }
   if (error.code === "P0001" || error.code === "42501") {
     // Mensajes escritos por nosotros en la función SQL (existencia insuficiente, permisos, validaciones).

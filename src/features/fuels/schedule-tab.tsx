@@ -11,6 +11,7 @@ import { useNotify } from "@/shared/ui/notice-provider";
 import { useDialog } from "@/shared/ui/dialog-provider";
 import { formatDay } from "./format";
 import { FUELS_SUBTITLE } from "./suppliers-tab";
+import { BusyLabel } from "@/shared/ui/loading";
 
 export function ScheduleTab({
   today,
@@ -134,7 +135,7 @@ export function ScheduleTab({
                 {canEdit && (
                   <td className="row-actions">
                     {row.status === "programado" && (
-                      <button className="button button-danger-outline" onClick={() => void cancel(row)} disabled={busy === row.id}><Ban size={14} /> Cancelar</button>
+                      <button className="button button-danger-outline" onClick={() => void cancel(row)} disabled={busy === row.id}>{busy === row.id ? <BusyLabel>Cancelando…</BusyLabel> : <><Ban size={14} /> Cancelar</>}</button>
                     )}
                   </td>
                 )}

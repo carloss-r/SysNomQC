@@ -7,6 +7,7 @@ import { describeError, requestApi } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-provider";
 import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
+import { BusyLabel } from "@/shared/ui/loading";
 
 export const EPP_CATEGORIES = [
   "Protección de cabeza",
@@ -33,8 +34,12 @@ export function ArticleModal({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const { session } = useAuth();
+  const { session, access } = useAuth();
   const notify = useNotify();
+  // Cada artículo es de una sede. Quien supervisa todas puede crearlo en todas de una vez
+  // (quedan como artículos independientes).
+  const canCreateEverywhere = !article && (!access?.site || access?.is_super_admin === true);
+  const [allSites, setAllSites] = useState(false);
   const [form, setForm] = useState({
     name: article?.name ?? "",
     category: article?.category ?? EPP_CATEGORIES[0],
@@ -61,6 +66,7 @@ export function ArticleModal({
         min_stock: Number(form.min_stock) || 0,
         active: form.active,
         site,
+        all_sites: canCreateEverywhere && allSites ? true : undefined,
       });
       await requestApi(session, article ? `/api/epp/articles/${article.id}` : "/api/epp/articles", {
         method: article ? "PATCH" : "POST",
@@ -69,7 +75,9 @@ export function ArticleModal({
       notify(
         "success",
         article ? "Artículo actualizado" : "Artículo creado",
-        article ? `Se guardaron los cambios de ${form.name.trim()}.` : `${form.name.trim()} ya está en el catálogo. Registra su primer ingreso para tener existencias.`,
+        article
+          ? `Se guardaron los cambios de ${form.name.trim()} en ${site}.`
+          : `${form.name.trim()} se creó en ${canCreateEverywhere && allSites ? "todas las sedes" : site}. Registra su primer ingreso para tener existencias.`,
       );
       await onSaved();
       onClose();
@@ -92,6 +100,11 @@ export function ArticleModal({
           <button className="icon-button close-modal" onClick={onClose} disabled={busy} aria-label="Cerrar"><X size={20} /></button>
         </div>
         <form className="employee-form" onSubmit={submit}>
+          <p className="epp-blind-note">
+            {article
+              ? `Este artículo es del inventario de ${site}. Los cambios (incluido desactivarlo) solo afectan a ${site}.`
+              : `El artículo se crea en el inventario de ${site}; las otras sedes no lo verán.`}
+          </p>
           <div className="form-grid">
             <Field label="Nombre del artículo" required><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} minLength={2} maxLength={120} required /></Field>
             <Field label="Categoría" required>
@@ -101,18 +114,23 @@ export function ArticleModal({
             </Field>
             <Field label="Talla (opcional)"><input value={form.size} onChange={(e) => setForm({ ...form, size: e.target.value })} maxLength={20} placeholder="M, XL, 27…" /></Field>
             <Field label="Unidad"><input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value.toUpperCase() })} maxLength={20} required /></Field>
-            <Field label={`Mínimo en ${site} antes de reponer`} required><input type="number" min={0} max={100000} value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: e.target.value })} required /></Field>
             <Field label="Estatus">
               <select value={form.active ? "1" : "0"} onChange={(e) => setForm({ ...form, active: e.target.value === "1" })}>
                 <option value="1">Activo</option>
                 <option value="0">Desactivado (no se puede entregar)</option>
               </select>
             </Field>
+            <Field label={`Mínimo en ${site} antes de reponer`} required><input type="number" min={0} max={100000} value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: e.target.value })} required /></Field>
           </div>
+          {canCreateEverywhere && (
+            <label className="epp-check">
+              <input type="checkbox" checked={allSites} onChange={(e) => setAllSites(e.target.checked)} /> Crearlo también en las otras sedes (cada sede lo maneja por separado)
+            </label>
+          )}
           {error && <p className="inline-error" role="alert">{error}</p>}
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? "Guardando…" : "Guardar"}</button>
+            <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : "Guardar"}</button>
           </div>
         </form>
       </section>

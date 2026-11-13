@@ -2,7 +2,7 @@
 
 import { ClipboardCheck, PackagePlus, Pencil, Search, ShoppingCart, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { EppArticle } from "@/lib/permissions";
+import { eppArticleLabel, type EppArticle } from "@/lib/permissions";
 import { formatDateTime } from "./format";
 
 export type StockState = "out" | "low" | "ok" | "none";
@@ -68,6 +68,7 @@ export function InventoryTab({
           {categories.map((item) => <option key={item}>{item}</option>)}
         </select>
         <label className="epp-check"><input type="checkbox" checked={onlyLow} onChange={(e) => setOnlyLow(e.target.checked)} /> Solo por reponer</label>
+
         <label className="search-box">
           <Search size={15} />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar artículo o talla" />
@@ -90,7 +91,7 @@ export function InventoryTab({
               const folio = openRequests.get(item.id);
               return (
                 <tr key={item.id} className={item.active ? "" : "epp-inactive"}>
-                  <td><strong>{item.name}</strong>{!item.active && <small className="epp-muted"> · desactivado</small>}</td>
+                  <td><strong>{item.name}</strong>{item.size && <span className="epp-size">Talla {item.size}</span>}{!item.active && <small className="epp-muted"> · desactivado</small>}</td>
                   <td className="hide-phone">{item.category}</td>
                   <td>
                     <span className="epp-stock">{item.stock}</span> <span className={`epp-state epp-state-${state}`}>{STATE_LABELS[state]}</span>
@@ -104,16 +105,17 @@ export function InventoryTab({
                   <td className="hide-tablet">{item.tracked ? <>{item.updated_by_name ?? "—"}<br /><small className="epp-muted">{formatDateTime(item.updated_at)}</small></> : <span className="epp-muted">Aún sin movimientos en {site}</span>}</td>
                   <td>
                     <div className="epp-actions">
+
                       {canRequest && needsRequest(item, openRequests) && (
-                        <button className="button button-gold" onClick={() => onRequest([item.id])} aria-label={`Pedir más ${item.name}`} title="Pedir más a compras"><ShoppingCart size={14} /> <span className="hide-phone">Pedir más</span></button>
+                        <button className="button button-gold" onClick={() => onRequest([item.id])} aria-label={`Pedir más ${eppArticleLabel(item.name, item.size)}`} title="Pedir más a compras"><ShoppingCart size={14} /> <span className="hide-phone">Pedir más</span></button>
                       )}
                       {canDeliver && item.active && item.stock > 0 && !item.pending_count && (
-                        <button className="button button-outline" onClick={() => onDeliver(item.id)} aria-label={`Entregar ${item.name}`} title="Entregar"><ClipboardCheck size={14} /> <span className="hide-phone">Entregar</span></button>
+                        <button className="button button-outline" onClick={() => onDeliver(item.id)} aria-label={`Entregar ${eppArticleLabel(item.name, item.size)}`} title="Entregar"><ClipboardCheck size={14} /> <span className="hide-phone">Entregar</span></button>
                       )}
                       {canManage && (
                         <>
                           {!item.pending_count && <button className="icon-button row-edit hide-phone" onClick={() => onEntry(item.id)} aria-label={`Registrar ingreso de ${item.name}`} title="Registrar ingreso"><PackagePlus size={16} /></button>}
-                          <button className="icon-button row-edit" onClick={() => onEdit(item)} aria-label={`Editar ${item.name}`} title="Editar"><Pencil size={16} /></button>
+                          <button className="icon-button row-edit" onClick={() => onEdit(item)} aria-label={`Editar ${eppArticleLabel(item.name, item.size)}`} title="Editar"><Pencil size={16} /></button>
                         </>
                       )}
                     </div>
@@ -121,7 +123,11 @@ export function InventoryTab({
                 </tr>
               );
             })}
-            {rows.length === 0 && <tr><td colSpan={6} className="epp-empty">No hay artículos con ese filtro.</td></tr>}
+            {rows.length === 0 && (
+              <tr><td colSpan={6} className="epp-empty">
+                {articles.length > 0 ? "No hay artículos con ese filtro." : `${site} todavía no tiene artículos.${canManage ? " Créalos con «Nuevo artículo»." : ""}`}
+              </td></tr>
+            )}
           </tbody>
         </table>
       </div>

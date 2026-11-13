@@ -6,6 +6,7 @@ import { describeError, requestApi } from "@/lib/api-client";
 import type { Invoice } from "@/lib/invoices";
 import { useAuth } from "@/features/auth/auth-provider";
 import { invoiceFileProblem, uploadInvoiceFile } from "./files";
+import { BusyLabel } from "@/shared/ui/loading";
 
 export type Detected = { invoice_date: boolean; total: boolean; supplier: boolean };
 
@@ -71,7 +72,7 @@ export function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUp
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
             <button type="submit" className="button button-gold" disabled={busy || !file}>
-              <ScanText size={17} /> {step === "upload" ? "Subiendo PDF…" : step === "scan" ? "Digitalizando…" : "Cargar y digitalizar"}
+              <ScanText size={17} /> {step === "upload" ? <BusyLabel>Subiendo PDF…</BusyLabel> : step === "scan" ? <BusyLabel>Digitalizando…</BusyLabel> : "Cargar y digitalizar"}
             </button>
           </div>
         </form>

@@ -9,6 +9,7 @@ import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { parseNumber } from "./format";
 import { permitFileProblem, removePermit, uploadPermit } from "./permits";
+import { BusyLabel } from "@/shared/ui/loading";
 
 type ProductDraft = { key: string; id: number | null; name: string; calorific_value: string; chlorine_pct: string; water_pct: string; sulfur_pct: string };
 
@@ -220,7 +221,7 @@ export function SupplierModal({ supplier, onClose, onSaved }: { supplier: FuelSu
           {error && <p className="inline-error" role="alert">{error}</p>}
           <div className="modal-actions">
             <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button type="submit" className="button button-gold" disabled={busy}><FlaskConical size={17} /> {busy ? "Validando…" : "Validar y guardar"}</button>
+            <button type="submit" className="button button-gold" disabled={busy}><FlaskConical size={17} /> {busy ? <BusyLabel>Validando…</BusyLabel> : "Validar y guardar"}</button>
           </div>
         </form>
       </section>
