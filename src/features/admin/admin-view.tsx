@@ -240,7 +240,7 @@ function AdminDashboard() {
                     <td className="hide-tablet">{user.username || "—"}</td>
                     <td className="hide-tablet">{user.email}</td>
                     <td className="hide-phone"><span className="role-list">{user.role_names.length ? user.role_names.map((name) => <span key={name} className="role-pill">{roleLabel(name)}</span>) : "Sin rol"}</span></td>
-                    <td className="hide-tablet">{user.site ?? "Todas"}</td>
+                    <td className="hide-tablet">{user.site ?? <span className="epp-muted">Todas</span>}</td>
                     <td className="hide-phone"><span className={`status-badge ${user.active ? "status-active" : "status-inactive"}`}><span />{user.active ? "Activo" : "Inactivo"}</span></td>
                     <td className="row-actions">
                       <button className="icon-button row-edit" onClick={() => openUserModal(user)} aria-label={`Editar ${user.email}`} title="Editar"><Pencil size={16} /></button>
@@ -300,9 +300,14 @@ function AdminDashboard() {
                 </Field>
                 <Field label="Sede">
                   <select value={userForm.site} onChange={(event) => setUserForm({ ...userForm, site: event.target.value })}>
-                    <option value="">Todas las sedes</option>
-                    {SITES.map((site) => <option key={site} value={site}>{site}</option>)}
+                    <option value="">Todas las sedes (supervisión)</option>
+                    {SITES.map((site) => <option key={site} value={site}>Solo {site}</option>)}
                   </select>
+                  <span className="field-hint">
+                    {userForm.site
+                      ? `Solo verá y operará el inventario de EPP, las solicitudes y las entregas de ${userForm.site}.`
+                      : "Verá y podrá operar el inventario de las tres sedes. Úsalo solo para supervisión o administración."}
+                  </span>
                 </Field>
                 <Field label="Estatus">
                   <select value={userForm.active ? "active" : "inactive"} onChange={(event) => setUserForm({ ...userForm, active: event.target.value === "active" })}>

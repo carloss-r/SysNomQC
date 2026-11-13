@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { eppArticleLabel } from "@/lib/permissions";
 import { recordAudit } from "@/lib/audit";
 import { reportServerIncident } from "@/lib/incidents";
 import { BadJsonError, getAuthenticatedClient, readJson } from "../../employees/_server";
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
     let query = auth.client
       .from("epp_movements")
       .select(
-        "id,article_id,kind,delta,stock_after,employee_id,employee_name,employee_code,site,moved_on,notes,created_at,created_by_name,article:epp_articles(name)",
+        "id,article_id,kind,delta,stock_after,employee_id,employee_name,employee_code,site,moved_on,notes,created_at,created_by_name,article:epp_articles(name,size)",
       )
       .eq("site", resolved.site)
       .order("created_at", { ascending: false })
@@ -32,8 +33,8 @@ export async function GET(request: NextRequest) {
     if (error) return eppDatabaseError(error, "movimientos");
     const rows = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((row) => {
       const { article: joined, ...rest } = row;
-      const found = (Array.isArray(joined) ? joined[0] : joined) as { name?: string } | null | undefined;
-      return { ...rest, article_name: found?.name ?? "Artículo eliminado" };
+      const found = (Array.isArray(joined) ? joined[0] : joined) as { name?: string; size?: string | null } | null | undefined;
+      return { ...rest, article_name: found?.name ? eppArticleLabel(found.name, found.size) : "Artículo eliminado" };
     });
     return NextResponse.json(rows);
   } catch (error) {

@@ -666,6 +666,9 @@ td.row-actions > * { vertical-align: middle; }
 .epp-site-bar strong { color: var(--ink); }
 .epp-state-none { color: var(--ink-soft); border-color: var(--line-strong); background: var(--surface-3); }
 .epp-requested { display: inline-flex; margin-left: 6px; padding: 3px 8px; border: 1px dashed var(--purple-line); border-radius: 999px; color: var(--purple-text); background: var(--purple-bg); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.epp-catalog-fields { min-width: 0; margin: 0; padding: 0; border: 0; }
+.epp-catalog-fields:disabled { opacity: 0.65; }
+.epp-size { display: inline-flex; margin-left: 6px; padding: 1px 7px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--ink-soft); background: var(--surface-3); font-size: 11px; font-weight: 700; white-space: nowrap; }
 .epp-locked { border-style: solid; color: var(--red-text); border-color: var(--red-line); background: var(--red-bg); }
 .epp-status-faltante { color: var(--red-text); border-color: var(--red-line); background: var(--red-bg); }
 .epp-short { color: var(--red-text); font-size: 12px; font-weight: 700; }

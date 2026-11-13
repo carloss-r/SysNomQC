@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
         .select("id,name,category,size,unit,min_stock,active,updated_at,updated_by_name")
         .order("category")
         .order("name")
+        .order("size", { nullsFirst: true })
         .limit(1000),
       auth.client.from("epp_stock").select("article_id,stock,min_stock,updated_at,updated_by_name").eq("site", site).limit(1000),
       // Compras registradas sin contar: esos artículos no se mueven hasta el conteo.

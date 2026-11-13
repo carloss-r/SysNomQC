@@ -14,6 +14,14 @@ Equipo de protección personal. Pantalla `/epp` (menú **Seguridad e higiene →
 | **Historial** | Todos los movimientos con fecha, trabajador, quién los registró y notas |
 | **Solicitudes** | Solicitudes de compra y su estado |
 
+## Inventario por sede
+
+- Cada sede tiene su propio inventario: existencias, mínimos, entregas, solicitudes, compras y conteos.
+- La sede va ligada a la cuenta (**Usuarios y roles → Sede**). Con sede asignada solo se ve y opera esa sede, también en Compras; con *Todas las sedes* (supervisión) y el Super administrador se elige la sede en pantalla. La base lo valida (`can_access_site`), no solo la pantalla.
+- El **catálogo** (nombre, categoría, talla, estatus) es común; solo lo cambia una cuenta sin sede o el Super administrador. Una cuenta de sede ajusta el mínimo de su sede.
+- El inventario muestra solo lo que maneja la sede. **Ver catálogo que la sede no maneja** permite **Agregar a la sede**; **Quitar de la sede** (en el artículo) lo saca si no tiene existencia ni solicitudes abiertas.
+- Cada talla es un artículo propio. Catálogo inicial: `202611130008_epp_catalogo_inicial.sql`; reglas por sede: `202611130009_epp_inventario_por_sede.sql`.
+
 ## Reglas de negocio
 
 - La existencia solo cambia con la función `epp_apply_site()` (transacción atómica; valida permiso, sede y existencia).

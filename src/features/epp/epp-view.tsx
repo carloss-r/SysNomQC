@@ -3,7 +3,7 @@
 import { AlertTriangle, Boxes, CalendarDays, ClipboardCheck, HardHat, History, MapPin, Package, PackagePlus, Plus, Scale, ShoppingCart, UserSearch } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { EppArticle, EppEmployee, EppMovement, EppPurchaseRequest } from "@/lib/permissions";
+import { eppArticleLabel, type EppArticle, type EppEmployee, type EppMovement, type EppPurchaseRequest } from "@/lib/permissions";
 import { SITES } from "@/lib/employees";
 import { describeError, requestApi } from "@/lib/api-client";
 import { EPP_CHANGED_EVENT } from "@/lib/notifications";
@@ -209,6 +209,20 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
     }
   }
 
+  async function addToSite(article: EppArticle) {
+    if (!session) return;
+    try {
+      await requestApi(session, `/api/epp/articles/${article.id}/site`, {
+        method: "POST",
+        body: JSON.stringify({ site, min_stock: article.min_stock }),
+      });
+      notify("success", "Artículo agregado a la sede", `${eppArticleLabel(article.name, article.size)} ya forma parte del inventario de ${site}.`);
+      await load();
+    } catch (err) {
+      notify("error", "No se pudo agregar a la sede", describeError(err, "Inténtalo de nuevo."));
+    }
+  }
+
   /** Tras registrar una compra o un conteo cambian solicitudes, existencias y bloqueos. */
   async function afterPurchaseChange() {
     await Promise.all([loadRequests(), load()]);
@@ -224,7 +238,7 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
   }
 
   const tabs: { key: Tab; label: string; icon: typeof Boxes; show: boolean }[] = [
-    { key: "inventory", label: `Inventario (${articles.length})`, icon: Boxes, show: true },
+    { key: "inventory", label: `Inventario (${articles.filter((item) => item.tracked).length})`, icon: Boxes, show: true },
     { key: "requests", label: `Solicitudes${openCount ? ` (${openCount})` : ""}`, icon: ShoppingCart, show: canSeeRequests },
     { key: "workers", label: "Por trabajador", icon: UserSearch, show: true },
     { key: "monthly", label: "Control mensual", icon: CalendarDays, show: true },
@@ -323,6 +337,7 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
             onEntry={(articleId) => setDialog({ type: "movement", kind: "ingreso", articleId })}
             onEdit={(article) => setDialog({ type: "article", article })}
             onRequest={(articleIds) => setDialog({ type: "request", articleIds })}
+            onAddToSite={(article) => void addToSite(article)}
           />
         ) : tab === "workers" ? (
           <WorkersTab

@@ -1,8 +1,8 @@
 "use client";
 
-import { ClipboardCheck, PackagePlus, Pencil, Search, ShoppingCart, X } from "lucide-react";
+import { ClipboardCheck, MapPinPlus, PackagePlus, Pencil, Search, ShoppingCart, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { EppArticle } from "@/lib/permissions";
+import { eppArticleLabel, type EppArticle } from "@/lib/permissions";
 import { formatDateTime } from "./format";
 
 export type StockState = "out" | "low" | "ok" | "none";
@@ -32,6 +32,7 @@ export function InventoryTab({
   onEntry,
   onEdit,
   onRequest,
+  onAddToSite,
 }: {
   site: string;
   articles: EppArticle[];
@@ -43,21 +44,28 @@ export function InventoryTab({
   onEntry: (articleId: number) => void;
   onEdit: (article: EppArticle) => void;
   onRequest: (articleIds: number[]) => void;
+  /** Agrega al inventario de la sede un artículo del catálogo que aún no maneja. */
+  onAddToSite: (article: EppArticle) => void;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [onlyLow, setOnlyLow] = useState(false);
+  // Cada sede ve su inventario; el resto del catálogo solo se muestra a pedido.
+  const [showCatalog, setShowCatalog] = useState(false);
+  const notHandled = useMemo(() => articles.filter((item) => !item.tracked && item.active).length, [articles]);
 
   const categories = useMemo(() => Array.from(new Set(articles.map((item) => item.category))).sort(), [articles]);
   const rows = useMemo(() => {
     const term = query.trim().toLowerCase();
     return articles.filter((item) => {
+      if (!item.tracked && !showCatalog) return false;
+      if (!item.tracked && !item.active) return false;
       if (category && item.category !== category) return false;
       const state = stockState(item);
       if (onlyLow && state !== "out" && state !== "low") return false;
       return !term || `${item.name} ${item.size ?? ""} ${item.category}`.toLowerCase().includes(term);
     });
-  }, [articles, query, category, onlyLow]);
+  }, [articles, query, category, onlyLow, showCatalog]);
   const missing = useMemo(() => articles.filter((item) => needsRequest(item, openRequests)), [articles, openRequests]);
 
   return (
@@ -68,6 +76,11 @@ export function InventoryTab({
           {categories.map((item) => <option key={item}>{item}</option>)}
         </select>
         <label className="epp-check"><input type="checkbox" checked={onlyLow} onChange={(e) => setOnlyLow(e.target.checked)} /> Solo por reponer</label>
+        {canManage && notHandled > 0 && (
+          <label className="epp-check" title={`Artículos del catálogo que ${site} todavía no maneja`}>
+            <input type="checkbox" checked={showCatalog} onChange={(e) => setShowCatalog(e.target.checked)} /> Ver catálogo que {site} no maneja ({notHandled})
+          </label>
+        )}
         <label className="search-box">
           <Search size={15} />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar artículo o talla" />
@@ -90,7 +103,7 @@ export function InventoryTab({
               const folio = openRequests.get(item.id);
               return (
                 <tr key={item.id} className={item.active ? "" : "epp-inactive"}>
-                  <td><strong>{item.name}</strong>{!item.active && <small className="epp-muted"> · desactivado</small>}</td>
+                  <td><strong>{item.name}</strong>{item.size && <span className="epp-size">Talla {item.size}</span>}{!item.active && <small className="epp-muted"> · desactivado</small>}</td>
                   <td className="hide-phone">{item.category}</td>
                   <td>
                     <span className="epp-stock">{item.stock}</span> <span className={`epp-state epp-state-${state}`}>{STATE_LABELS[state]}</span>
@@ -104,16 +117,19 @@ export function InventoryTab({
                   <td className="hide-tablet">{item.tracked ? <>{item.updated_by_name ?? "—"}<br /><small className="epp-muted">{formatDateTime(item.updated_at)}</small></> : <span className="epp-muted">Aún sin movimientos en {site}</span>}</td>
                   <td>
                     <div className="epp-actions">
+                      {canManage && !item.tracked && (
+                        <button className="button button-outline" onClick={() => onAddToSite(item)} aria-label={`Agregar ${eppArticleLabel(item.name, item.size)} a ${site}`} title={`Agregar al inventario de ${site}`}><MapPinPlus size={14} /> <span className="hide-phone">Agregar a {site}</span></button>
+                      )}
                       {canRequest && needsRequest(item, openRequests) && (
-                        <button className="button button-gold" onClick={() => onRequest([item.id])} aria-label={`Pedir más ${item.name}`} title="Pedir más a compras"><ShoppingCart size={14} /> <span className="hide-phone">Pedir más</span></button>
+                        <button className="button button-gold" onClick={() => onRequest([item.id])} aria-label={`Pedir más ${eppArticleLabel(item.name, item.size)}`} title="Pedir más a compras"><ShoppingCart size={14} /> <span className="hide-phone">Pedir más</span></button>
                       )}
                       {canDeliver && item.active && item.stock > 0 && !item.pending_count && (
-                        <button className="button button-outline" onClick={() => onDeliver(item.id)} aria-label={`Entregar ${item.name}`} title="Entregar"><ClipboardCheck size={14} /> <span className="hide-phone">Entregar</span></button>
+                        <button className="button button-outline" onClick={() => onDeliver(item.id)} aria-label={`Entregar ${eppArticleLabel(item.name, item.size)}`} title="Entregar"><ClipboardCheck size={14} /> <span className="hide-phone">Entregar</span></button>
                       )}
-                      {canManage && (
+                      {canManage && item.tracked && (
                         <>
                           {!item.pending_count && <button className="icon-button row-edit hide-phone" onClick={() => onEntry(item.id)} aria-label={`Registrar ingreso de ${item.name}`} title="Registrar ingreso"><PackagePlus size={16} /></button>}
-                          <button className="icon-button row-edit" onClick={() => onEdit(item)} aria-label={`Editar ${item.name}`} title="Editar"><Pencil size={16} /></button>
+                          <button className="icon-button row-edit" onClick={() => onEdit(item)} aria-label={`Editar ${eppArticleLabel(item.name, item.size)}`} title="Editar"><Pencil size={16} /></button>
                         </>
                       )}
                     </div>
@@ -121,7 +137,11 @@ export function InventoryTab({
                 </tr>
               );
             })}
-            {rows.length === 0 && <tr><td colSpan={6} className="epp-empty">No hay artículos con ese filtro.</td></tr>}
+            {rows.length === 0 && (
+              <tr><td colSpan={6} className="epp-empty">
+                {articles.some((item) => item.tracked) ? "No hay artículos con ese filtro." : `${site} todavía no maneja ningún artículo.${canManage ? " Activa «Ver catálogo» para agregarlos." : ""}`}
+              </td></tr>
+            )}
           </tbody>
         </table>
       </div>

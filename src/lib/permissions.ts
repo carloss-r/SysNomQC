@@ -72,6 +72,13 @@ export type AdminUser = {
   created_at: string | null;
 };
 
+/** Nombre visible de un artículo con su talla: "CAMISOLA · M". Cada talla es un artículo propio. */
+export function eppArticleLabel(name: string | null | undefined, size?: string | null) {
+  const base = (name ?? "").trim() || "Artículo";
+  const talla = (size ?? "").trim();
+  return talla ? `${base} · ${talla}` : base;
+}
+
 /** Artículo del catálogo con la existencia y el mínimo de UNA sede. */
 export type EppArticle = {
   id: number;

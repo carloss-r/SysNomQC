@@ -17,6 +17,7 @@ import {
   type NotificationsResponse,
 } from "@/lib/notifications";
 import { daysBetween, PERMIT_WARNING_DAYS, plantToday } from "@/lib/fuels";
+import { eppArticleLabel } from "@/lib/permissions";
 import { getAuthenticatedClient } from "../employees/_server";
 import { readPurchaseRequests } from "../epp/requests/_read";
 
@@ -55,7 +56,7 @@ function failedSource(area: string, error: unknown): SourceResult {
   return { status: "unavailable", items: [] };
 }
 
-type ArticleRef = { name: string; unit: string; active: boolean };
+type ArticleRef = { name: string; size: string | null; unit: string; active: boolean };
 type StockJoin = { article_id: number; site: string; stock: number; min_stock: number; article: ArticleRef | ArticleRef[] | null };
 const articleOf = (row: StockJoin) => (Array.isArray(row.article) ? (row.article[0] ?? null) : row.article);
 
@@ -102,7 +103,7 @@ export async function GET(request: NextRequest) {
         readAll<StockJoin>((from, to) =>
           client
             .from("epp_stock")
-            .select("article_id,site,stock,min_stock,article:epp_articles(name,unit,active)")
+            .select("article_id,site,stock,min_stock,article:epp_articles(name,size,unit,active)")
             .order("site")
             .order("article_id")
             .range(from, to),
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest) {
         .map((row) => ({
           article_id: row.article_id,
           site: row.site,
-          name: articleOf(row)?.name ?? "Artículo",
+          name: eppArticleLabel(articleOf(row)?.name, articleOf(row)?.size),
           unit: articleOf(row)?.unit ?? "PIEZAS",
           stock: row.stock,
           min_stock: row.min_stock,

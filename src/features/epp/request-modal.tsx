@@ -2,7 +2,7 @@
 
 import { Plus, Send, ShoppingCart, Trash2, X } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
-import type { EppArticle } from "@/lib/permissions";
+import { eppArticleLabel, type EppArticle } from "@/lib/permissions";
 import { describeError, requestApi } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-provider";
 import { Field } from "@/shared/ui/field";
@@ -35,7 +35,7 @@ export function RequestModal({
   const { session } = useAuth();
   const notify = useNotify();
   const byId = useMemo(() => new Map(articles.map((item) => [item.id, item])), [articles]);
-  const selectable = useMemo(() => articles.filter((item) => item.active && !openRequests.has(item.id)), [articles, openRequests]);
+  const selectable = useMemo(() => articles.filter((item) => item.active && item.tracked && !openRequests.has(item.id)), [articles, openRequests]);
   const [lines, setLines] = useState<Line[]>(() => {
     const preset = presetIds.map((id) => byId.get(id)).filter((item): item is EppArticle => Boolean(item) && !openRequests.has(item!.id));
     if (preset.length === 0) return [{ key: ++lineCounter, article_id: "", quantity: "1" }];
@@ -99,7 +99,7 @@ export function RequestModal({
                       }}>
                         <option value="">Selecciona…</option>
                         {(article && !selectable.includes(article) ? [article, ...selectable] : selectable).map((item) => (
-                          <option key={item.id} value={item.id}>{item.name} (hay {item.stock}, mín. {item.min_stock})</option>
+                          <option key={item.id} value={item.id}>{eppArticleLabel(item.name, item.size)} (hay {item.stock}, mín. {item.min_stock})</option>
                         ))}
                       </select>
                     </Field>

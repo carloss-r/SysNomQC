@@ -19,7 +19,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const resolved = resolveSite(auth.access, requestedSite);
     if ("response" in resolved) return resolved.response;
 
-    const { data, error } = await auth.client.from("epp_articles").update(catalog).eq("id", id).select("id,name").single();
+    // El catálogo (nombre, categoría, talla, unidad, estatus) es común a las tres sedes: solo lo cambia una
+    // cuenta sin sede asignada o el Super administrador. Una cuenta de sede solo ajusta el mínimo de su sede.
+    const siteBound = Boolean(auth.access.site) && !auth.access.is_super_admin;
+    const { data, error } = siteBound
+      ? await auth.client.from("epp_articles").select("id,name").eq("id", id).single()
+      : await auth.client.from("epp_articles").update(catalog).eq("id", id).select("id,name").single();
     if (error) return eppDatabaseError(error, "editar artículo");
     const { error: minError } = await auth.client.rpc("epp_set_min_stock", { p_site: resolved.site, p_article: id, p_min: min_stock });
     if (minError) return eppDatabaseError(minError, "mínimo por sede");
