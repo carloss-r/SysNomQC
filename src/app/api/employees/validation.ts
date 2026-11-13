@@ -13,6 +13,7 @@ export const employeeInputSchema = z
     site: z.enum(SITES),
     hire_date: z.iso.date(),
     position: z.string().trim().min(1).max(150),
+    assignment: z.string().trim().max(150).nullable().optional(),
     contract_type: z.enum(CONTRACT_TYPES),
     salary: z.number().finite().min(0).max(100_000_000),
     contribution_salary: z.number().finite().min(0).max(100_000_000).nullable().optional(),

@@ -103,6 +103,7 @@ export function EmployeeProfileModal({
             )}
             <ProfileSection title="Información laboral" icon={<BriefcaseBusiness size={16} />}>
               <ProfileValue label="Fecha de contratación">{formatDate(employee.hire_date)}</ProfileValue>
+              <ProfileValue label="Asignación">{employee.assignment ?? ""}</ProfileValue>
               <ProfileValue label="Tipo de contrato">{employee.contract_type}</ProfileValue>
               <ProfileValue label="Salario base">{formatCurrency(employee.salary)}</ProfileValue>
               <ProfileValue label="Salario de cotización">{employee.contribution_salary === null ? "Sin capturar" : formatCurrency(employee.contribution_salary)}</ProfileValue>
