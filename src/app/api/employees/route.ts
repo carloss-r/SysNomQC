@@ -47,9 +47,10 @@ export async function GET(request: NextRequest) {
     }
 
     // ?stats=1 → solo conteos (sin traer filas) para los contadores de la pantalla.
+    // Los contadores cuentan solo trabajadores activos: una baja los hace bajar.
     if (params.get("stats") === "1") {
       const countSite = (site?: string) => {
-        const query = auth.client.from("employees").select("id", { count: "exact", head: true });
+        const query = auth.client.from("employees").select("id", { count: "exact", head: true }).eq("active", true);
         return site ? query.eq("site", site) : query;
       };
       const results = await Promise.all([countSite(), ...SITES.map((site) => countSite(site))]);
