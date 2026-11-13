@@ -6,7 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import type { NotificationSeverity } from "@/lib/notifications";
 import { useNotifications } from "./notifications-provider";
 
-const MAX_ITEMS = 5;
+// La lista del panel se desliza por dentro; más allá de esto, "Ver todas".
+const MAX_ITEMS = 50;
 
 const ICONS: Record<NotificationSeverity, LucideIcon> = {
   critical: CircleAlert,

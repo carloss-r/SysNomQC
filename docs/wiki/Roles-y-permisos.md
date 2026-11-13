@@ -42,6 +42,11 @@ Los nombres se guardan legibles en la base (`202611110001_normalizar_roles.sql` 
 | `Ecología` | `Ecologia` | Migración de combustibles |
 | `Contabilidad de combustibles` | `ContabilidadCombustibles` | Migración de combustibles |
 | `Cuentas por pagar` | — | Migración de facturas: `invoices.view`, `invoices.manage` |
+| `Solo consulta` | — | Rol de solo consulta: ve empleados, EPP, combustibles y facturas sin poder modificar nada (`202611130003_rol_solo_consulta.sql`) |
+
+## Roles de solo consulta
+
+Al crear o editar un rol, **Solo consulta** limita los permisos a ver áreas: empleados (y, si se elige, descargar expedientes), EPP, combustibles alternos y facturas. Se elige qué áreas ve cada rol; la API y la base (`roles_solo_consulta_check`) rechazan cualquier permiso que modifique datos. Con `epp.view` también se consultan las solicitudes de compra, sin acciones.
 
 ## Reglas
 

@@ -18,7 +18,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   try {
     const input = roleSchema.safeParse(await readJson(request));
-    if (!input.success) return badRequest("Revisa el nombre y los permisos del rol.");
+    if (!input.success) return badRequest(input.error.issues.find((issue) => issue.code === "custom")?.message ?? "Revisa el nombre y los permisos del rol.");
 
     const { data: role, error: readError } = await auth.admin
       .from("roles")
@@ -35,10 +35,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         nombre: input.data.name,
         descripcion: input.data.description,
         permisos: input.data.permissions,
+        solo_consulta: input.data.read_only,
       })
       .eq("id_rol", id.data);
     if (error) return adminDbError(error);
-    await recordAudit(request, auth.access, "role.update", id.data, { name: input.data.name, permissions: input.data.permissions });
+    await recordAudit(request, auth.access, "role.update", id.data, { name: input.data.name, permissions: input.data.permissions, read_only: input.data.read_only });
     return NextResponse.json({ id: id.data });
   } catch (error) {
     if (error instanceof BadJsonError) return badRequest(error.message);

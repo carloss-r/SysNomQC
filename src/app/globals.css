@@ -386,6 +386,11 @@ h1, h2, h3, p { margin-top: 0; }
 }
 
 .admin-permissions { flex-direction: column; align-items: flex-start; gap: 10px; margin-top: 16px; }
+.role-readonly { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px; border: 1px solid var(--blue-line); border-radius: 999px; color: var(--blue-text); background: var(--blue-bg); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.role-readonly-toggle { align-items: flex-start; margin-top: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.role-readonly-toggle span { display: grid; gap: 3px; }
+.role-readonly-toggle strong { display: inline-flex; align-items: center; gap: 6px; }
+.role-readonly-toggle small { color: var(--muted); font-weight: 500; }
 .admin-success { display: flex; justify-content: space-between; align-items: center; border-color: var(--green-line); color: var(--green-text); background: var(--green-bg); }
 .error-banner .text-button, .admin-success .text-button { margin-left: 12px; }
 
@@ -488,7 +493,8 @@ h1, h2, h3, p { margin-top: 0; }
 .filter-select select { min-height: 36px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 7px; outline: 0; color: var(--ink); background: var(--surface); font-size: 13px; }
 .filter-select select:focus { border-color: var(--focus); box-shadow: 0 0 0 3px rgb(18 128 59 / 12%); }
 .notification-bulk { margin-left: auto; }
-.notification-list { margin: 0; padding: 0; list-style: none; }
+/* La lista se desliza por dentro: la rueda o el dedo no mueven toda la página. */
+.notification-list { max-height: calc(100dvh - 330px); min-height: 240px; margin: 0; padding: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; list-style: none; }
 .notification-item { --tone-text: var(--blue-text); --tone-bg: var(--blue-bg); --tone-line: var(--blue-line); --tone-accent: var(--blue-accent); display: flex; align-items: flex-start; gap: 13px; padding: 14px 18px; border-bottom: 1px solid var(--line); border-left: 4px solid var(--tone-accent); }
 .notification-item:last-child { border-bottom: 0; }
 .notification-critical { --tone-text: var(--red-text); --tone-bg: var(--red-bg); --tone-line: var(--red-line); --tone-accent: var(--red-accent); }
@@ -516,6 +522,7 @@ h1, h2, h3, p { margin-top: 0; }
   .notification-item { flex-wrap: wrap; padding: 13px 14px; }
   .notification-body { flex-basis: calc(100% - 47px); }
   .notification-actions { width: 100%; justify-content: flex-end; }
+  .notification-list { max-height: calc(100dvh - 260px); }
 }
 
 /* Panel pequeño de la campana */
@@ -525,7 +532,7 @@ h1, h2, h3, p { margin-top: 0; }
 .bell-chip { flex: 0 0 auto; padding: 5px 9px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--ink-soft); background: transparent; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .bell-chip:hover { background: var(--hover); }
 .bell-chip.active { border-color: var(--brand-text); color: var(--brand-text); background: var(--green-bg); }
-.bell-list { min-height: 0; flex: 1; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.bell-list { min-height: 0; flex: 1; margin: 0; padding: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; list-style: none; }
 .bell-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 8px 10px 12px; border-bottom: 1px solid var(--line); }
 .bell-item:last-child { border-bottom: 0; }
 .bell-item > svg { flex: 0 0 auto; margin-top: 2px; }

@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedClient(request);
   if ("response" in auth) return auth.response;
   const { access } = auth;
-  const canSee = ["epp.purchase", "epp.request", "epp.manage"].some((key) => access.permissions.includes(key as never));
+  const canSee = ["epp.view", "epp.purchase"].some((key) => access.permissions.includes(key as never));
   if (!canSee) return NextResponse.json({ error: "Tu rol no tiene permiso para ver las solicitudes." }, { status: 403 });
 
   const requested = request.nextUrl.searchParams.get("site");

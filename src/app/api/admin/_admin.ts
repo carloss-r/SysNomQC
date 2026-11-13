@@ -49,6 +49,12 @@ export function adminDbError(error: { code?: string; message: string }) {
       { status: 409 },
     );
   }
+  if (error.code === "23514") {
+    return NextResponse.json({ error: "Un rol de solo consulta solo puede tener permisos de ver." }, { status: 400 });
+  }
+  if (error.code === "42703" || error.code === "PGRST204") {
+    return NextResponse.json({ error: "Falta ejecutar en Supabase la migración 202611130003_rol_solo_consulta.sql." }, { status: 503 });
+  }
   reportServerIncident("api · admin", error);
   return NextResponse.json({ error: "No se pudo completar la operación." }, { status: 500 });
 }

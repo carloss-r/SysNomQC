@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { SITES } from "@/lib/employees";
-import { ALL_PERMISSIONS, type Permission } from "@/lib/permissions";
+import { ALL_PERMISSIONS, READ_ONLY_PERMISSIONS, type Permission } from "@/lib/permissions";
 import { roleLabel } from "@/lib/roles";
 
 /** null = todas las sedes. */
@@ -12,8 +12,14 @@ export const roleSchema = z
     name: z.string().trim().min(2).max(60).transform((value) => roleLabel(value.replace(/\s+/g, " "))),
     description: z.string().trim().max(200).nullable(),
     permissions: z.array(z.enum(ALL_PERMISSIONS as [Permission, ...Permission[]])).max(60),
+    /** Solo consulta: únicamente permisos de ver las áreas elegidas. */
+    read_only: z.boolean().default(false),
   })
-  .strict();
+  .strict()
+  .refine(
+    (role) => !role.read_only || (role.permissions.length > 0 && role.permissions.every((key) => READ_ONLY_PERMISSIONS.includes(key))),
+    "Un rol de solo consulta solo puede ver áreas; elige al menos una.",
+  );
 
 /** Uno o varios roles; el primero queda como rol principal. */
 export const roleIdsSchema = z

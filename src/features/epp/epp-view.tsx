@@ -55,7 +55,8 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
   const canAdjust = canManage && access?.is_super_admin === true;
   const canRequest = can("epp.request");
   const buyer = can("epp.purchase");
-  const canSeeRequests = canRequest || buyer || canManage;
+  // Cualquiera que ve EPP consulta las solicitudes; las acciones dependen de cada permiso.
+  const canSeeRequests = can("epp.view");
   // Cuenta con sede asignada: solo su sede. SuperAdmin y cuentas sin sede eligen.
   const fixedSite = access?.is_super_admin ? null : (access?.site ?? null);
   const validRequested = (SITES as readonly string[]).includes(requestedSite ?? "") ? (requestedSite as string) : null;

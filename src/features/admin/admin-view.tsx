@@ -1,12 +1,12 @@
 "use client";
 
-import { Check, KeyRound, Pencil, Plus, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
+import { Check, Eye, KeyRound, Pencil, Plus, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
 import { describeError, requestApi } from "@/lib/api-client";
 import { SITES } from "@/lib/employees";
-import { PERMISSIONS, type AdminRole, type AdminUser, type Permission } from "@/lib/permissions";
+import { PERMISSIONS, READ_ONLY_AREAS, READ_ONLY_PERMISSIONS, type AdminRole, type AdminUser, type Permission } from "@/lib/permissions";
 import { roleLabel, roleLabels } from "@/lib/roles";
 import { useDialog } from "@/shared/ui/dialog-provider";
 import { RequirePermission } from "@/shared/layout/require-permission";
@@ -15,10 +15,10 @@ import { PageHeader } from "@/shared/ui/page-header";
 
 type Tab = "users" | "roles";
 type UserForm = { email: string; username: string; full_name: string; password: string; role_ids: number[]; active: boolean; site: string };
-type RoleForm = { name: string; description: string; permissions: Permission[] };
+type RoleForm = { name: string; description: string; permissions: Permission[]; read_only: boolean };
 
 const EMPTY_USER: UserForm = { email: "", username: "", full_name: "", password: "", role_ids: [], active: true, site: "" };
-const EMPTY_ROLE: RoleForm = { name: "", description: "", permissions: [] };
+const EMPTY_ROLE: RoleForm = { name: "", description: "", permissions: [], read_only: false };
 export const MIN_PASSWORD_LENGTH = 12;
 
 // Pantalla de usuarios y roles (solo cuentas con el permiso "users.manage").
@@ -88,7 +88,9 @@ function AdminDashboard() {
 
   function openRoleModal(role: AdminRole | null) {
     setRoleForm(
-      role ? { name: roleLabel(role.name), description: role.description ?? "", permissions: role.permissions } : EMPTY_ROLE,
+      role
+        ? { name: roleLabel(role.name), description: role.description ?? "", permissions: role.permissions, read_only: role.read_only }
+        : EMPTY_ROLE,
     );
     setFormError("");
     setRoleModal({ editing: role });
@@ -154,11 +156,16 @@ function AdminDashboard() {
   function saveRole(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!session || !roleModal) return;
+    if (roleForm.read_only && roleForm.permissions.length === 0) {
+      setFormError("Elige al menos un área que pueda ver.");
+      return;
+    }
     const editing = roleModal.editing;
     const body = JSON.stringify({
       name: roleForm.name.trim(),
       description: roleForm.description.trim() || null,
       permissions: roleForm.permissions,
+      read_only: roleForm.read_only,
     });
     void runSave(
       () =>
@@ -251,9 +258,9 @@ function AdminDashboard() {
               <tbody>
                 {roles.map((role) => (
                   <tr key={role.id}>
-                    <td><strong>{roleLabel(role.name)}</strong>{role.is_system && <small> · del sistema</small>}</td>
+                    <td><strong>{roleLabel(role.name)}</strong>{role.is_system && <small> · del sistema</small>}{role.read_only && <span className="role-readonly"><Eye size={12} /> Solo consulta</span>}</td>
                     <td className="hide-phone">{role.description || "—"}</td>
-                    <td>{role.is_system ? "Todos" : `${role.permissions.length} de ${PERMISSIONS.length}`}</td>
+                    <td>{role.is_system ? "Todos" : role.read_only ? `Ve ${role.permissions.length} área(s)` : `${role.permissions.length} de ${PERMISSIONS.length}`}</td>
                     <td className="hide-phone">{role.user_count}</td>
                     <td className="row-actions">
                       {!role.is_system && (
@@ -321,7 +328,7 @@ function AdminDashboard() {
                       />
                       <span>
                         <strong>{roleLabel(role.name)}</strong>
-                        <small>{role.description || (role.is_system ? "Control total" : `${role.permissions.length} permiso(s)`)}</small>
+                        <small>{role.description || (role.is_system ? "Control total" : role.read_only ? "Solo consulta" : `${role.permissions.length} permiso(s)`)}</small>
                       </span>
                     </label>
                   );
@@ -353,8 +360,28 @@ function AdminDashboard() {
                 <Field label="Nombre del rol" required><input value={roleForm.name} onChange={(event) => setRoleForm({ ...roleForm, name: event.target.value })} minLength={2} maxLength={60} required /></Field>
                 <Field label="Descripción"><input value={roleForm.description} onChange={(event) => setRoleForm({ ...roleForm, description: event.target.value })} maxLength={200} /></Field>
               </div>
+              <label className="checkbox-option role-readonly-toggle">
+                <input
+                  type="checkbox"
+                  checked={roleForm.read_only}
+                  onChange={(event) =>
+                    setRoleForm({
+                      ...roleForm,
+                      read_only: event.target.checked,
+                      // Al pasar a solo consulta se quitan los permisos que modifican datos.
+                      permissions: event.target.checked
+                        ? roleForm.permissions.filter((key) => READ_ONLY_PERMISSIONS.includes(key))
+                        : roleForm.permissions,
+                    })
+                  }
+                />
+                <span>
+                  <strong><Eye size={14} /> Solo consulta</strong>
+                  <small>Los usuarios con este rol solo ven la información: no pueden registrar, editar ni eliminar nada. Elige qué áreas pueden ver.</small>
+                </span>
+              </label>
               <div className="credit-options admin-permissions">
-                {PERMISSIONS.map((permission) => (
+                {(roleForm.read_only ? READ_ONLY_AREAS : PERMISSIONS).map((permission) => (
                   <label className="checkbox-option" key={permission.key}>
                     <input
                       type="checkbox"
