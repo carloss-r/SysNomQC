@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { reportServerIncident } from "@/lib/incidents";
 import {
+  countNotifications,
   employeeNotifications,
   eppNotifications,
   fuelNotifications,
   purchaseNotifications,
+  shortageNotifications,
   sortNotifications,
   type AppNotification,
   type EmployeeCheckRow,
@@ -122,7 +124,8 @@ export async function GET(request: NextRequest) {
           min_stock: row.min_stock,
           open_request: requested.get(`${row.site}:${row.article_id}`) ?? null,
         }));
-      return { status: "ok", items: eppNotifications(rows) };
+      // Compras registradas que falta contar en almacén (open ya trae solo las de sus sedes).
+      return { status: "ok", items: [...countNotifications(open.requests), ...eppNotifications(rows)] };
     } catch (error) {
       return failedSource("inventario", error);
     }
@@ -133,9 +136,20 @@ export async function GET(request: NextRequest) {
     if (!operator("epp.purchase")) return { status: "no_permission", items: [] };
     try {
       // Con sede asignada, solo las solicitudes de esa sede.
-      const { error, requests } = await readPurchaseRequests(client, { open: true, limit: 500, site: access.site });
-      if (error) throw error;
-      return { status: "ok", items: purchaseNotifications(requests.filter((row) => row.status === "pendiente")) };
+      const [open, received] = await Promise.all([
+        readPurchaseRequests(client, { open: true, limit: 500, site: access.site }),
+        // Recibidas cuyo conteo quedó por debajo de lo comprado y aún no se marcan como enteradas.
+        readPurchaseRequests(client, { status: ["recibida", "en_compra"], limit: 500, site: access.site, withPurchased: true, unacknowledged: true }),
+      ]);
+      if (open.error) throw open.error;
+      if (received.error) throw received.error;
+      return {
+        status: "ok",
+        items: [
+          ...purchaseNotifications(open.requests.filter((row) => row.status === "pendiente")),
+          ...shortageNotifications(received.requests),
+        ],
+      };
     } catch (error) {
       return failedSource("solicitudes de compra", error);
     }

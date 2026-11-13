@@ -1,7 +1,7 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { formatCurrency, formatDate, type Employee } from "@/lib/employees";
+import { formatCurrency, formatDate, formatDateTime, type Employee } from "@/lib/employees";
 
 function rows(items: [string, string][]) {
   return (
@@ -30,7 +30,7 @@ export function ExpedienteSheet({ employee, photoUrl }: { employee: Employee; ph
         <div>
           <h1>Expediente de personal</h1>
           <h2>{employee.full_name}</h2>
-          <p>{employee.employee_code} · {employee.site} · {employee.active ? "Activo" : "Inactivo"}</p>
+          <p>{employee.employee_code} · {employee.site} · {employee.active ? "Activo" : "Baja"}</p>
         </div>
         {photoUrl && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -46,9 +46,17 @@ export function ExpedienteSheet({ employee, photoUrl }: { employee: Employee; ph
           ["Área / puesto", employee.position],
           ["Fecha de contratación", formatDate(employee.hire_date)],
           ["Tipo de contrato", employee.contract_type],
-          ["Salario actual", formatCurrency(employee.salary)],
+          ["Salario base", formatCurrency(employee.salary)],
+          ["Salario de cotización", employee.contribution_salary === null ? "Sin capturar" : formatCurrency(employee.contribution_salary)],
           ["Cuenta bancaria", employee.bank_account || "No especificada"],
-          ["Estatus", employee.active ? "Activo" : "Inactivo"],
+          ["Estatus", employee.active ? "Activo" : "Baja"],
+          ...(employee.termination_date
+            ? ([
+                ["Día de baja", formatDate(employee.termination_date)],
+                ["Baja registrada en el sistema", formatDateTime(employee.terminated_at)],
+                ["Motivo de baja", employee.termination_reason || "No especificado"],
+              ] as [string, string][])
+            : []),
         ])}
       </section>
 

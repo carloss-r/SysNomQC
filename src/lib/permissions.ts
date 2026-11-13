@@ -6,9 +6,9 @@ export const PERMISSIONS = [
   { key: "employees.download", label: "Descargar expedientes" },
   { key: "epp.view", label: "Ver inventario y entregas de EPP" },
   { key: "epp.deliver", label: "Registrar entregas de EPP" },
-  { key: "epp.manage", label: "Administrar catálogo, ingresos y ajustes de EPP" },
+  { key: "epp.manage", label: "Administrar catálogo e ingresos de EPP y contar lo que llega de compras" },
   { key: "epp.request", label: "Solicitar compra de EPP cuando falta material" },
-  { key: "epp.purchase", label: "Atender solicitudes de compra de EPP (encargado de compras)" },
+  { key: "epp.purchase", label: "Registrar las compras de EPP y ver lo comprado (encargado de compras)" },
   { key: "fuels.view", label: "Ver combustibles alternos y semáforo SEMARNAT" },
   { key: "fuels.suppliers", label: "Homologar proveedores de combustibles alternos (M1)" },
   { key: "fuels.schedule", label: "Programar recepciones de combustibles alternos (M2)" },
@@ -75,6 +75,8 @@ export type EppArticle = {
   tracked: boolean;
   updated_at: string;
   updated_by_name: string | null;
+  /** Folio de una compra registrada que aún no se cuenta: el artículo queda bloqueado en la sede. */
+  pending_count: number | null;
 };
 
 export type PurchaseStatus = "pendiente" | "en_compra" | "recibida" | "cancelada";
@@ -86,6 +88,12 @@ export type EppPurchaseItem = {
   quantity: number;
   stock_at_request: number;
   min_stock: number;
+  /** Conteo de lo que llegó (null = aún sin contar). */
+  received_qty: number | null;
+  counted_at: string | null;
+  counted_by_name: string | null;
+  /** Cantidad comprada: solo llega a cuentas con epp.purchase (quien cuenta no la ve). */
+  purchased_qty?: number | null;
 };
 
 export type EppPurchaseRequest = {
@@ -98,6 +106,10 @@ export type EppPurchaseRequest = {
   updated_at: string;
   handled_by_name: string | null;
   status_note: string | null;
+  purchased_at: string | null;
+  purchased_by_name: string | null;
+  shortage_ack_at: string | null;
+  shortage_ack_by_name: string | null;
   items: EppPurchaseItem[];
 };
 

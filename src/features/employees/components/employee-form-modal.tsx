@@ -217,13 +217,15 @@ export function EmployeeFormModal({
               <Field label="Tipo de contrato" required>
                 <select value={form.contract_type} onChange={(event) => updateForm("contract_type", event.target.value)} required>{CONTRACT_TYPES.map((contract) => <option key={contract}>{contract}</option>)}</select>
               </Field>
-              <Field label="Salario actual (MXN)"><input type="number" min="0" step="0.01" value={form.salary} onChange={(event) => updateForm("salary", event.target.value)} placeholder="0.00" /></Field>
+              <Field label="Salario base (MXN)"><input type="number" min="0" step="0.01" value={form.salary} onChange={(event) => updateForm("salary", event.target.value)} placeholder="0.00" /></Field>
+              <Field label="Salario de cotización (MXN)"><input type="number" min="0" step="0.01" value={form.contribution_salary} onChange={(event) => updateForm("contribution_salary", event.target.value)} placeholder="Sin capturar" /></Field>
               <Field label="Cuenta bancaria / CLABE"><input value={form.bank_account} onChange={(event) => updateForm("bank_account", event.target.value)} maxLength={20} placeholder="Opcional" /></Field>
-              <Field label="Estatus">
-                <select value={form.active ? "active" : "inactive"} onChange={(event) => updateForm("active", event.target.value === "active")}>
-                  <option value="active">Activo</option><option value="inactive">Inactivo</option>
-                </select>
-              </Field>
+              {/* El estatus ya no se elige aquí: se cambia con "Dar de baja" / "Reactivar" en el expediente. */}
+              {editing && !editing.active && (
+                <Field label="Estatus">
+                  <div className="field-hint">{editing.termination_date ? "Dado de baja" : "Inactivo"} · se reactiva desde el expediente.</div>
+                </Field>
+              )}
             </div>
           </FormSection>
 

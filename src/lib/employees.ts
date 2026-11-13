@@ -35,9 +35,18 @@ export type Employee = {
   hire_date: string;
   position: string;
   contract_type: string;
+  /** Salario base (MXN). */
   salary: number;
+  /** Salario de cotización (MXN); vacío hasta que se capture. */
+  contribution_salary: number | null;
   bank_account: string | null;
   active: boolean;
+  /** Día de baja capturado por el usuario. */
+  termination_date: string | null;
+  termination_reason: string | null;
+  /** Cuándo se registró la baja en el sistema (lo pone la base). */
+  terminated_at: string | null;
+  terminated_by_name: string | null;
   gender: string | null;
   nss: string | null;
   curp: string | null;
@@ -78,7 +87,11 @@ export const toEmployeeSummary = (employee: Employee): EmployeeSummary => ({
 export const sortEmployees = (list: EmployeeSummary[]) =>
   [...list].sort((a, b) => a.full_name.localeCompare(b.full_name, "es-MX"));
 
-export type EmployeeInput = Omit<Employee, "id" | "created_at" | "updated_at">;
+// La baja se registra por separado (/api/employees/[id]/baja), no desde el formulario.
+export type EmployeeInput = Omit<
+  Employee,
+  "id" | "created_at" | "updated_at" | "termination_date" | "termination_reason" | "terminated_at" | "terminated_by_name"
+>;
 
 export type EmployeeFormValues = {
   employee_code: string;
@@ -88,6 +101,7 @@ export type EmployeeFormValues = {
   position: string;
   contract_type: string;
   salary: string;
+  contribution_salary: string;
   bank_account: string;
   active: boolean;
   gender: string;
@@ -111,6 +125,7 @@ export const EMPTY_EMPLOYEE_FORM: EmployeeFormValues = {
   position: "",
   contract_type: CONTRACT_TYPES[0],
   salary: "",
+  contribution_salary: "",
   bank_account: "",
   active: true,
   gender: "",
@@ -140,6 +155,7 @@ export function formToEmployeeInput(
     position: form.position.trim(),
     contract_type: form.contract_type,
     salary: Number(form.salary) || 0,
+    contribution_salary: form.contribution_salary.trim() === "" ? null : Number(form.contribution_salary) || 0,
     bank_account: optionalValue(form.bank_account),
     active: form.active,
     gender: optionalValue(form.gender),
@@ -166,6 +182,7 @@ export function employeeToForm(employee: Employee): EmployeeFormValues {
     position: employee.position,
     contract_type: employee.contract_type,
     salary: String(employee.salary),
+    contribution_salary: employee.contribution_salary === null || employee.contribution_salary === undefined ? "" : String(employee.contribution_salary),
     bank_account: employee.bank_account ?? "",
     active: employee.active,
     gender: employee.gender ?? "",
@@ -187,6 +204,11 @@ export function formatDate(date: string | null) {
   return new Intl.DateTimeFormat("es-MX", { dateStyle: "long", timeZone: "UTC" }).format(
     new Date(`${date}T00:00:00Z`),
   );
+}
+
+export function formatDateTime(value: string | null) {
+  if (!value) return "No especificada";
+  return new Intl.DateTimeFormat("es-MX", { dateStyle: "long", timeStyle: "short", timeZone: "America/Merida" }).format(new Date(value));
 }
 
 export function formatCurrency(amount: number) {

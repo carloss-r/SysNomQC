@@ -20,7 +20,8 @@ export async function GET(request: NextRequest) {
   else if (requested && (SITES as readonly string[]).includes(requested)) site = requested;
 
   try {
-    const { error, requests } = await readPurchaseRequests(auth.client, { site });
+    // La cantidad comprada solo viaja a Compras: quien cuenta lo que llega no debe conocerla.
+    const { error, requests } = await readPurchaseRequests(auth.client, { site, withPurchased: access.permissions.includes("epp.purchase") });
     if (error) return eppDatabaseError(error, "listar solicitudes");
     return NextResponse.json(requests);
   } catch (error) {

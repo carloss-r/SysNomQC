@@ -360,6 +360,10 @@ function EmployeesDashboard() {
             setFormState({ editing: employee });
           }}
           onDelete={(employee) => void handleDelete(employee)}
+          onChanged={(employee) => {
+            setSelectedEmployee(employee);
+            void refreshEmployees();
+          }}
         />
       )}
     </main>

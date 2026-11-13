@@ -194,6 +194,8 @@ h1, h2, h3, p { margin-top: 0; }
 .field input, .field select { width: 100%; min-height: 37px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 6px; outline: 0; color: var(--ink); background: var(--surface); font-size: 13px; }
 .field input:focus, .field select:focus { border-color: var(--focus); box-shadow: 0 0 0 3px rgb(18 128 59 / 9%); }
 .field input::placeholder { color: var(--faint); }
+.field textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 6px; outline: 0; color: var(--ink); background: var(--surface); font: inherit; font-size: 13px; resize: vertical; }
+.field textarea:focus { border-color: var(--focus); box-shadow: 0 0 0 3px rgb(18 128 59 / 9%); }
 .credit-options { display: flex; min-height: 37px; align-items: center; gap: 18px; }
 .checkbox-option { display: inline-flex; align-items: center; gap: 7px; color: var(--ink-soft); font-size: 13px; }
 .checkbox-option input { width: 15px; height: 15px; accent-color: var(--green-800); }
@@ -651,6 +653,17 @@ td.row-actions > * { vertical-align: middle; }
 .epp-site-bar strong { color: var(--ink); }
 .epp-state-none { color: var(--ink-soft); border-color: var(--line-strong); background: var(--surface-3); }
 .epp-requested { display: inline-flex; margin-left: 6px; padding: 3px 8px; border: 1px dashed var(--purple-line); border-radius: 999px; color: var(--purple-text); background: var(--purple-bg); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.epp-locked { border-style: solid; color: var(--red-text); border-color: var(--red-line); background: var(--red-bg); }
+.epp-status-faltante { color: var(--red-text); border-color: var(--red-line); background: var(--red-bg); }
+.epp-short { color: var(--red-text); font-size: 12px; font-weight: 700; }
+.epp-short-row td { background: var(--red-bg); }
+.epp-shortage { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; padding: 9px 12px; border: 1px solid var(--red-line); border-radius: 10px; color: var(--red-text); background: var(--red-bg); font-size: 13px; }
+.epp-shortage svg, .epp-count-hint svg, .epp-blind-note svg { flex: none; margin-top: 2px; }
+.epp-count-hint { display: flex; gap: 6px; color: var(--gold-text); }
+.epp-blind-note { display: flex; gap: 8px; margin: 0 0 4px; padding: 9px 12px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--ink-soft); font-size: 13px; }
+.epp-count-line { grid-template-columns: minmax(0, 1fr) 130px; align-items: center; }
+.epp-count-line > div:first-child { display: grid; gap: 2px; min-width: 0; }
+@media (max-width: 700px) { .epp-count-line { grid-template-columns: minmax(0, 1fr) 100px; } }
 .epp-request-all { margin-left: auto; }
 .epp-toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .epp-note { margin: 10px 0 0; }

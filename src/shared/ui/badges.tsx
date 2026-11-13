@@ -10,7 +10,7 @@ export function SiteBadge({ site }: { site: string }) {
 }
 
 export function StatusBadge({ active }: { active: boolean }) {
-  return <span className={`status-badge ${active ? "status-active" : "status-inactive"}`}><span />{active ? "Activo" : "Inactivo"}</span>;
+  return <span className={`status-badge ${active ? "status-active" : "status-inactive"}`}><span />{active ? "Activo" : "Baja"}</span>;
 }
 
 export function Avatar({ name, photoUrl, large = false }: { name: string; photoUrl?: string; large?: boolean }) {

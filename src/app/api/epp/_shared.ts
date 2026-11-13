@@ -41,10 +41,23 @@ export const purchaseRequestSchema = z.object({
   notes: z.string().trim().max(500).optional(),
 });
 
+// "En compra" sale de registrar la compra y "Recibida" del conteo: aquí solo se cancela.
 export const purchaseStatusSchema = z.object({
-  status: z.enum(["en_compra", "recibida", "cancelada"]),
+  status: z.literal("cancelada"),
   note: z.string().trim().max(300).optional(),
 });
+
+const quantitiesSchema = z
+  .array(z.object({ article_id: z.number().int().positive(), quantity: z.number().int().min(0).max(100000) }))
+  .min(1)
+  .max(80)
+  .refine((items) => new Set(items.map((item) => item.article_id)).size === items.length, "Artículo repetido.");
+
+/** Compras: cantidad comprada de cada artículo de la solicitud. */
+export const purchaseBuySchema = z.object({ items: quantitiesSchema, note: z.string().trim().max(300).optional() });
+
+/** Seguridad: conteo de lo que llegó (uno o varios artículos). */
+export const purchaseCountSchema = z.object({ items: quantitiesSchema, note: z.string().trim().max(300).optional() });
 
 /**
  * Sede con la que se trabaja en esta petición. Una cuenta con sede asignada solo puede usar la suya
@@ -71,9 +84,9 @@ export function eppDatabaseError(error: { code?: string; message: string }, cont
     // Mensajes escritos por nosotros en la función SQL (existencia insuficiente, permisos, validaciones).
     return NextResponse.json({ error: error.message }, { status: error.code === "42501" ? 403 : 409 });
   }
-  if (error.code === "42P01" || error.code === "PGRST205" || error.code === "PGRST202" || error.code === "42883") {
+  if (["42P01", "42703", "PGRST205", "PGRST202", "PGRST204", "42883"].includes(error.code ?? "")) {
     return NextResponse.json(
-      { error: "Falta ejecutar en Supabase las migraciones de EPP (hasta 202611090001_epp_controles.sql)." },
+      { error: "Falta ejecutar en Supabase las migraciones de EPP (hasta 202611130001_compras_conteo_ciego.sql)." },
       { status: 503 },
     );
   }

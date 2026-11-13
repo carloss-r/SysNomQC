@@ -4,6 +4,8 @@
 export type NotificationSeverity = "critical" | "important" | "minor";
 export type NotificationKind =
   | "purchase_request"
+  | "purchase_shortage"
+  | "purchase_count"
   | "out_of_stock"
   | "low_stock"
   | "reorder_soon"
@@ -49,6 +51,8 @@ export const SEVERITY_LABELS: Record<NotificationSeverity, string> = {
 
 export const KIND_LABELS: Record<NotificationKind, string> = {
   purchase_request: "Solicitud de compra",
+  purchase_shortage: "Llegó menos de lo comprado",
+  purchase_count: "Conteo pendiente",
   out_of_stock: "Sin existencias",
   low_stock: "Stock bajo",
   reorder_soon: "Compra anticipada",
@@ -61,7 +65,7 @@ export const KIND_LABELS: Record<NotificationKind, string> = {
 const SEVERITY_ORDER: Record<NotificationSeverity, number> = { critical: 0, important: 1, minor: 2 };
 
 // Las solicitudes de compra van primero: es el aviso especial del encargado de compras.
-const kindRank = (item: AppNotification) => (item.kind === "purchase_request" ? 0 : 1);
+const kindRank = (item: AppNotification) => (item.kind === "purchase_request" || item.kind === "purchase_shortage" ? 0 : 1);
 
 export function sortNotifications(items: AppNotification[]): AppNotification[] {
   return [...items].sort(
@@ -146,6 +150,67 @@ export function purchaseNotifications(rows: PurchaseRequestRow[]): AppNotificati
   });
 }
 
+export type PurchaseItemCheck = {
+  article_name: string;
+  unit: string;
+  received_qty: number | null;
+  /** Solo en consultas de Compras. */
+  purchased_qty?: number | null;
+};
+
+/** Artículos que llegaron incompletos: se contó menos de lo que Compras registró como comprado. */
+export function purchaseShortItems<T extends PurchaseItemCheck>(items: T[]): T[] {
+  return items.filter(
+    (item) => item.received_qty !== null && typeof item.purchased_qty === "number" && item.received_qty < item.purchased_qty,
+  );
+}
+
+export type PurchaseCheckRow = {
+  id: number;
+  site: string;
+  status: string;
+  updated_at: string;
+  shortage_ack_at: string | null;
+  items: PurchaseItemCheck[];
+};
+
+/** Para Compras: cada compra con faltante es un aviso hasta que la marque como enterada. */
+export function shortageNotifications(rows: PurchaseCheckRow[]): AppNotification[] {
+  return rows.flatMap((row) => {
+    if (row.shortage_ack_at) return [];
+    const short = purchaseShortItems(row.items);
+    if (short.length === 0) return [];
+    const list = short
+      .slice(0, 3)
+      .map((item) => `${item.article_name}: llegaron ${item.received_qty} de ${item.purchased_qty}`)
+      .join(" · ");
+    return [{
+      id: `purchase_shortage:${row.id}:${short.length}`,
+      kind: "purchase_shortage" as const,
+      severity: "important" as const,
+      title: `Llegó menos de lo comprado · ${row.site} (folio ${row.id})`,
+      detail: `${list}${short.length > 3 ? ` y ${short.length - 3} más` : ""}.`,
+      href: eppHref(row.site, "solicitudes"),
+    }];
+  });
+}
+
+/** Para Seguridad: compras registradas con artículos sin contar (bloqueados hasta el conteo). */
+export function countNotifications(rows: PurchaseCheckRow[]): AppNotification[] {
+  return rows.flatMap((row) => {
+    const left = row.items.filter((item) => item.received_qty === null);
+    if (row.status !== "en_compra" || left.length === 0) return [];
+    return [{
+      id: `purchase_count:${row.id}`,
+      kind: "purchase_count" as const,
+      severity: "important" as const,
+      title: `Cuenta lo que llegó · ${row.site} (folio ${row.id})`,
+      detail: `${left.length} artículo(s) sin contar: ${left.slice(0, 3).map((item) => item.article_name).join(", ")}${left.length > 3 ? "…" : ""}. No se pueden entregar hasta contarlos.`,
+      href: eppHref(row.site, "solicitudes"),
+    }];
+  });
+}
+
 export type EmployeeCheckRow = {
   id: string;
   employee_code: string;
@@ -172,7 +237,7 @@ export function employeeNotifications(rows: EmployeeCheckRow[]): AppNotification
       ["CURP", !row.curp],
       ["RFC", !row.rfc],
       ["cuenta bancaria", !row.bank_account],
-      ["salario", !row.salary || row.salary <= 0],
+      ["salario base", !row.salary || row.salary <= 0],
     ]);
     if (payroll.length > 0) {
       result.push({
