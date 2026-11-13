@@ -34,6 +34,8 @@ export type Employee = {
   site: string;
   hire_date: string;
   position: string;
+  /** Asignación (texto libre); null = sin capturar. */
+  assignment: string | null;
   contract_type: string;
   /** Salario base (MXN). */
   salary: number;
@@ -117,6 +119,7 @@ export type EmployeeFormValues = {
   site: string;
   hire_date: string;
   position: string;
+  assignment: string;
   contract_type: string;
   salary: string;
   contribution_salary: string;
@@ -142,6 +145,7 @@ export const EMPTY_EMPLOYEE_FORM: EmployeeFormValues = {
   site: SITES[0],
   hire_date: "",
   position: "",
+  assignment: "",
   contract_type: CONTRACT_TYPES[0],
   salary: "",
   contribution_salary: "",
@@ -173,6 +177,7 @@ export function formToEmployeeInput(
     site: form.site,
     hire_date: form.hire_date,
     position: form.position.trim(),
+    assignment: optionalValue(form.assignment),
     contract_type: form.contract_type,
     salary: Number(form.salary) || 0,
     contribution_salary: form.contribution_salary.trim() === "" ? null : Number(form.contribution_salary) || 0,
@@ -201,6 +206,7 @@ export function employeeToForm(employee: Employee): EmployeeFormValues {
     site: employee.site,
     hire_date: employee.hire_date,
     position: employee.position,
+    assignment: employee.assignment ?? "",
     contract_type: employee.contract_type,
     salary: String(employee.salary),
     contribution_salary: employee.contribution_salary === null || employee.contribution_salary === undefined ? "" : String(employee.contribution_salary),

@@ -44,6 +44,7 @@ export function ExpedienteSheet({ employee, photoUrl }: { employee: Employee; ph
           ["ID empleado", employee.employee_code],
           ["Sede", employee.site],
           ["Área / puesto", employee.position],
+          ["Asignación", employee.assignment ?? ""],
           ["Fecha de contratación", formatDate(employee.hire_date)],
           ["Tipo de contrato", employee.contract_type],
           ["Salario base", formatCurrency(employee.salary)],

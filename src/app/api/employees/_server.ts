@@ -169,7 +169,7 @@ export function databaseErrorResponse(error: { code?: string; message: string })
   // Columna nueva aún no creada en este entorno (salario de cotización, baja…).
   if (error.code === "42703" || error.code === "PGRST204") {
     return NextResponse.json(
-      { error: "Faltan migraciones de empleados en Supabase (hasta 202611130004_empleados_observaciones.sql)." },
+      { error: "Faltan migraciones de empleados en Supabase (hasta 202611130005_empleados_asignacion.sql)." },
       { status: 503 },
     );
   }

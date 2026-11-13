@@ -11,7 +11,7 @@ Pantalla principal (`/`, menú **Personal → Empleados**). Código en `src/feat
 
 ## Datos del expediente
 
-Clave de empleado, nombre, sede (`Campeche`, `Lagunas`, `Cruz Azul`), fecha de ingreso, puesto, tipo de contrato, **salario base** (el salario que ya tenía cada trabajador), **salario de cotización** (vacío hasta capturarlo), cuenta bancaria, estado activo, género, NSS, CURP, RFC, estado civil, fecha de nacimiento, créditos, correo, teléfono, estado de residencia, domicilio y foto. NSS, CURP y RFC son únicos.
+Clave de empleado, nombre, sede (`Campeche`, `Lagunas`, `Cruz Azul`), fecha de ingreso, puesto, **asignación** (texto libre, opcional; vacío en los registros anteriores, migración `202611130005_empleados_asignacion.sql`), tipo de contrato, **salario base** (el salario que ya tenía cada trabajador), **salario de cotización** (vacío hasta capturarlo), cuenta bancaria, estado activo, género, NSS, CURP, RFC, estado civil, fecha de nacimiento, créditos, correo, teléfono, estado de residencia, domicilio y foto. NSS, CURP y RFC son únicos.
 
 ## Seguimiento de expedientes
 

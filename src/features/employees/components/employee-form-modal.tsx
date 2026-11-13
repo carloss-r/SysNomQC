@@ -214,6 +214,7 @@ export function EmployeeFormModal({
                   {positionSuggestions.map((position) => <option key={position} value={position} />)}
                 </datalist>
               </Field>
+              <Field label="Asignación"><input value={form.assignment} onChange={(event) => updateForm("assignment", event.target.value)} maxLength={150} placeholder="Opcional" /></Field>
               <Field label="Tipo de contrato" required>
                 <select value={form.contract_type} onChange={(event) => updateForm("contract_type", event.target.value)} required>{CONTRACT_TYPES.map((contract) => <option key={contract}>{contract}</option>)}</select>
               </Field>
