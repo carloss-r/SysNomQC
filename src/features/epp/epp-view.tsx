@@ -18,6 +18,7 @@ import { HistoryTab } from "./history-tab";
 import { InventoryTab, stockState } from "./inventory-tab";
 import { MonthlyTab } from "./monthly-tab";
 import { MovementModal, type MovementKind } from "./movement-modal";
+import { BuyModal, CountModal } from "./purchase-modals";
 import { downloadPurchasePdf } from "./purchase-pdf";
 import { RequestModal } from "./request-modal";
 import { RequestsTab } from "./requests-tab";
@@ -26,7 +27,9 @@ import { WorkersTab } from "./workers-tab";
 type Tab = "inventory" | "workers" | "monthly" | "history" | "requests";
 
 type Dialog =
-  | { type: "movement"; kind: MovementKind; articleId?: number; employee?: EppEmployee | null; fromRequest?: EppPurchaseRequest }
+  | { type: "movement"; kind: MovementKind; articleId?: number; employee?: EppEmployee | null }
+  | { type: "buy"; request: EppPurchaseRequest }
+  | { type: "count"; request: EppPurchaseRequest }
   | { type: "article"; article: EppArticle | null }
   | { type: "request"; articleIds: number[] }
   | null;
@@ -168,30 +171,46 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
 
   const categories = useMemo(() => Array.from(new Set(articles.map((item) => item.category))), [articles]);
 
-  async function changeStatus(request: EppPurchaseRequest, status: "en_compra" | "recibida" | "cancelada") {
+  async function cancelRequest(request: EppPurchaseRequest) {
     if (!session) return;
-    if (
-      status === "cancelada" &&
-      !(await systemDialog.confirm({
-        title: "Cancelar solicitud de compra",
-        message: `¿Cancelar la solicitud folio ${request.id} de ${request.site}?`,
-        confirmLabel: "Cancelar solicitud",
-        cancelLabel: "Volver",
-        tone: "danger",
-      }))
-    ) return;
+    const ok = await systemDialog.confirm({
+      title: "Cancelar solicitud de compra",
+      message: `¿Cancelar la solicitud folio ${request.id} de ${request.site}?`,
+      confirmLabel: "Cancelar solicitud",
+      cancelLabel: "Volver",
+      tone: "danger",
+    });
+    if (!ok) return;
     setBusyRequest(request.id);
     try {
-      await requestApi(session, `/api/epp/requests/${request.id}`, { method: "PATCH", body: JSON.stringify({ status }) });
-      const labels = { en_compra: "en compra", recibida: "recibida", cancelada: "cancelada" } as const;
-      notify("success", `Solicitud ${labels[status]}`, `Folio ${request.id} · ${request.site}.`);
-      await loadRequests();
-      window.dispatchEvent(new Event(EPP_CHANGED_EVENT));
+      await requestApi(session, `/api/epp/requests/${request.id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelada" }) });
+      notify("success", "Solicitud cancelada", `Folio ${request.id} · ${request.site}.`);
+      await Promise.all([loadRequests(), load()]);
     } catch (err) {
-      notify("error", "No se pudo actualizar la solicitud", describeError(err, "Inténtalo de nuevo."));
+      notify("error", "No se pudo cancelar la solicitud", describeError(err, "Inténtalo de nuevo."));
     } finally {
       setBusyRequest(null);
     }
+  }
+
+  async function ackShortage(request: EppPurchaseRequest) {
+    if (!session) return;
+    setBusyRequest(request.id);
+    try {
+      await requestApi(session, `/api/epp/requests/${request.id}/ack`, { method: "POST", body: "{}" });
+      notify("success", "Faltante revisado", `Folio ${request.id} · el aviso ya no aparecerá.`);
+      await loadRequests();
+      window.dispatchEvent(new Event(EPP_CHANGED_EVENT));
+    } catch (err) {
+      notify("error", "No se pudo marcar el aviso", describeError(err, "Inténtalo de nuevo."));
+    } finally {
+      setBusyRequest(null);
+    }
+  }
+
+  /** Tras registrar una compra o un conteo cambian solicitudes, existencias y bloqueos. */
+  async function afterPurchaseChange() {
+    await Promise.all([loadRequests(), load()]);
   }
 
   async function downloadPdf(list: EppPurchaseRequest[]) {
@@ -203,11 +222,6 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
     }
   }
 
-  function receive(request: EppPurchaseRequest) {
-    if (request.site !== site) changeSite(request.site);
-    setDialog({ type: "movement", kind: "ingreso", fromRequest: request });
-  }
-
   const tabs: { key: Tab; label: string; icon: typeof Boxes; show: boolean }[] = [
     { key: "inventory", label: `Inventario (${articles.length})`, icon: Boxes, show: true },
     { key: "requests", label: `Solicitudes${openCount ? ` (${openCount})` : ""}`, icon: ShoppingCart, show: canSeeRequests },
@@ -215,8 +229,6 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
     { key: "monthly", label: "Control mensual", icon: CalendarDays, show: true },
     { key: "history", label: `Historial (${movements.length})`, icon: History, show: true },
   ];
-
-  const fromRequest = dialog?.type === "movement" ? dialog.fromRequest : undefined;
 
   return (
     <main className="main-content">
@@ -287,9 +299,12 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
             buyer={buyer}
             canManage={canManage}
             canRequest={canRequest}
+            superAdmin={access?.is_super_admin === true}
             busyId={busyRequest}
-            onStatus={(request, status) => void changeStatus(request, status)}
-            onReceive={receive}
+            onCancel={(request) => void cancelRequest(request)}
+            onBuy={(request) => setDialog({ type: "buy", request })}
+            onCount={(request) => setDialog({ type: "count", request })}
+            onAck={(request) => void ackShortage(request)}
             onPdf={(list) => void downloadPdf(list)}
             onNew={() => setDialog({ type: "request", articleIds: [] })}
           />
@@ -333,9 +348,8 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
         )}
       </section>
 
-      {dialog?.type === "movement" && !(fromRequest && (loading || fromRequest.site !== site)) && (
+      {dialog?.type === "movement" && (
         <MovementModal
-          key={fromRequest?.id ?? "manual"}
           site={site}
           kind={dialog.kind}
           articles={articles}
@@ -343,22 +357,12 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
           movements={movements}
           presetArticleId={dialog.articleId}
           presetEmployee={dialog.employee}
-          presetItems={fromRequest?.items.map((item) => ({ article_id: item.article_id, quantity: item.quantity }))}
-          presetNotes={fromRequest ? `Llegada de la solicitud de compra folio ${fromRequest.id}` : undefined}
           onClose={() => setDialog(null)}
-          onDone={async () => {
-            if (fromRequest && session) {
-              try {
-                await requestApi(session, `/api/epp/requests/${fromRequest.id}`, { method: "PATCH", body: JSON.stringify({ status: "recibida" }) });
-              } catch (err) {
-                notify("warning", "El ingreso se guardó, pero la solicitud sigue abierta", describeError(err, "Márcala como recibida desde Solicitudes."));
-              }
-              await loadRequests();
-            }
-            await load();
-          }}
+          onDone={load}
         />
       )}
+      {dialog?.type === "buy" && <BuyModal request={dialog.request} onClose={() => setDialog(null)} onDone={afterPurchaseChange} />}
+      {dialog?.type === "count" && <CountModal request={dialog.request} onClose={() => setDialog(null)} onDone={afterPurchaseChange} />}
       {dialog?.type === "article" && (
         <ArticleModal site={site} article={dialog.article} categories={categories} onClose={() => setDialog(null)} onSaved={load} />
       )}

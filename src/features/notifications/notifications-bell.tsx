@@ -52,7 +52,7 @@ export function NotificationsBell() {
   // El número solo cuenta lo grave e importante; lo de menor importancia no debe generar ruido.
   const urgent = active.filter((item) => item.severity !== "minor");
   const hasCritical = urgent.some((item) => item.severity === "critical");
-  const hasPurchase = urgent.some((item) => item.kind === "purchase_request");
+  const hasPurchase = urgent.some((item) => item.kind === "purchase_request" || item.kind === "purchase_shortage");
   const label = urgent.length === 0 ? "Notificaciones" : `Notificaciones: ${urgent.length} por atender`;
 
   const filtered = filter === "all" ? active : active.filter((item) => item.severity === filter);
@@ -90,7 +90,7 @@ export function NotificationsBell() {
           {shown.length > 0 ? (
             <ul className="bell-list">
               {shown.map((item) => {
-                const purchase = item.kind === "purchase_request";
+                const purchase = item.kind === "purchase_request" || item.kind === "purchase_shortage";
                 const Icon = purchase ? ShoppingCart : ICONS[item.severity];
                 const text = (
                   <>

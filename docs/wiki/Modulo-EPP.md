@@ -21,16 +21,17 @@ Equipo de protección personal. Pantalla `/epp` (menú **Seguridad e higiene →
 - **Inventario por sede**: el catálogo es común; existencia y mínimo son de cada sede (`epp_stock`). Una cuenta con sede asignada solo opera su sede (la base lo impone aunque se llame directo a Supabase).
 - La existencia previa a la migración por sede pasó completa a **Campeche**; Lagunas y Cruz Azul cargan la suya con **Ingreso** o **Ajuste**.
 
-## Solicitudes de compra
+## Solicitudes de compra y conteo ciego
 
-1. En el inventario, lo agotado o bajo el mínimo muestra **Pedir más**; **Pedir faltantes** junta todo en una solicitud con cantidad sugerida (hasta el doble del mínimo).
-2. Un artículo con una solicitud abierta no se puede volver a pedir hasta que se cierre.
-3. El `EncargadoCompras` recibe el aviso especial (campana morada y aviso emergente) y desde **EPP → Solicitudes** las marca *En compra*, *Recibida* o *Cancelada*.
-4. Puede descargar el **PDF** de una solicitud o de todas las abiertas, con resumen por artículo para una sola compra.
-5. **Registrar llegada** abre el ingreso con los artículos ya capturados; al guardarlo la solicitud queda *Recibida*.
-6. Una cuenta de compras con sede solo ve las solicitudes de su sede; con *Todas las sedes* ve todas.
+1. **Seguridad** (almacén) pide material: en el inventario, lo agotado o bajo el mínimo muestra **Pedir más**; **Pedir faltantes** junta todo en una solicitud. Un artículo con una solicitud abierta no se puede volver a pedir.
+2. **Compras** recibe el aviso y en **EPP → Solicitudes** usa **Registrar compra** para capturar cuánto compró de cada artículo. La solicitud pasa a *Comprada · por contar*. Esa cantidad solo la ven las cuentas con `epp.purchase` (tabla `epp_purchase_buys`); puede corregirla mientras nadie haya contado.
+3. Mientras un artículo de una compra no se cuente, en esa sede **no se puede entregar, ingresar ni ajustar** (lo bloquea `epp_apply_site()` en la base). En el inventario aparece *Por contar · folio N*.
+4. Seguridad usa **Contar lo que llegó**: captura lo que contó **sin ver lo comprado**. Se puede contar por artículo; cada conteo suma la existencia (movimiento de ingreso) y libera el artículo. Un conteo guardado no se cambia. Contado todo, la solicitud queda *Recibida*.
+5. Si se contó menos de lo comprado, Compras recibe el aviso **Llegó menos de lo comprado** (campana y aviso emergente) hasta que pulsa **Enterado del faltante**.
+6. Cancelar: lo pendiente lo cancela Compras o quien pidió; una compra registrada sin conteos, solo el Super administrador.
+7. PDF de una solicitud o de todas las abiertas, con resumen por artículo.
 
-Estados: `pendiente` → `en_compra` → `recibida` (o `cancelada`).
+Estados: `pendiente` → `en_compra` (comprada, por contar) → `recibida` (o `cancelada`).
 
 ## Permisos
 
@@ -38,4 +39,4 @@ Estados: `pendiente` → `en_compra` → `recibida` (o `cancelada`).
 
 ## Migraciones
 
-`202611060001_epp.sql`, `202611060002_epp_historial.sql`, `202611070001_epp_por_sede.sql` y `202611090001_epp_controles.sql`.
+`202611060001_epp.sql`, `202611060002_epp_historial.sql`, `202611070001_epp_por_sede.sql`, `202611090001_epp_controles.sql` y `202611130001_compras_conteo_ciego.sql`.

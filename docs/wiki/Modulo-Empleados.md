@@ -11,7 +11,14 @@ Pantalla principal (`/`, menú **Personal → Empleados**). Código en `src/feat
 
 ## Datos del expediente
 
-Clave de empleado, nombre, sede (`Campeche`, `Lagunas`, `Cruz Azul`), fecha de ingreso, puesto, tipo de contrato, salario, cuenta bancaria, estado activo, género, NSS, CURP, RFC, estado civil, fecha de nacimiento, créditos, correo, teléfono, estado de residencia, domicilio y foto. NSS, CURP y RFC son únicos.
+Clave de empleado, nombre, sede (`Campeche`, `Lagunas`, `Cruz Azul`), fecha de ingreso, puesto, tipo de contrato, **salario base** (el salario que ya tenía cada trabajador), **salario de cotización** (vacío hasta capturarlo), cuenta bancaria, estado activo, género, NSS, CURP, RFC, estado civil, fecha de nacimiento, créditos, correo, teléfono, estado de residencia, domicilio y foto. NSS, CURP y RFC son únicos.
+
+## Baja de trabajadores
+
+- **Dar de baja** (en el expediente, permiso `employees.edit`): día de baja capturado a mano y motivo opcional. El trabajador queda inactivo.
+- La **fecha de registro en el sistema** y quién la registró los pone la base (trigger `employees_termination_guard`) y no se pueden editar; puede coincidir con el día de baja.
+- **Reactivar** quita la baja. El estatus ya no se elige en el formulario de edición.
+- Migración: `202611130002_empleados_salarios_y_baja.sql`.
 
 ## Fotografías
 

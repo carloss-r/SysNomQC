@@ -130,7 +130,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       const pending = result.items.filter((item) => (saved[item.id] ?? 0) <= checkedAt);
 
       // Encargado de compras: aviso especial cada vez que llega una solicitud que no había visto.
-      const purchases = pending.filter((item) => item.kind === "purchase_request");
+      // También cuando un conteo en almacén quedó por debajo de lo comprado.
+      const isBuyerNotice = (item: AppNotification) => item.kind === "purchase_request" || item.kind === "purchase_shortage";
+      const purchases = pending.filter(isBuyerNotice);
       if (result.sources.purchases === "ok") {
         const seenKey = `sysnomqc.notifications.seen-purchases.${userId}`;
         let seen: string[] = [];
@@ -141,10 +143,16 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         }
         const fresh = purchases.filter((item) => !seen.includes(item.id) && !shownToasts.current.has(item.id));
         fresh.forEach((item) => shownToasts.current.add(item.id));
-        if (fresh.length === 1) notify("info", "Nueva solicitud de compra de EPP", `${fresh[0]?.title}. ${fresh[0]?.detail}`);
-        else if (fresh.length > 1) notify("info", "Nuevas solicitudes de compra de EPP", `Tienes ${fresh.length} solicitudes nuevas por atender. Revisa la campana.`);
+        const first = fresh[0];
+        if (fresh.length === 1 && first) {
+          notify(
+            first.kind === "purchase_shortage" ? "warning" : "info",
+            first.kind === "purchase_shortage" ? "Llegó menos de lo comprado" : "Nueva solicitud de compra de EPP",
+            `${first.title}. ${first.detail}`,
+          );
+        } else if (fresh.length > 1) notify("info", "Nuevos avisos de compras de EPP", `Tienes ${fresh.length} avisos nuevos por atender. Revisa la campana.`);
         try {
-          window.localStorage.setItem(seenKey, JSON.stringify(result.items.filter((item) => item.kind === "purchase_request").map((item) => item.id)));
+          window.localStorage.setItem(seenKey, JSON.stringify(result.items.filter(isBuyerNotice).map((item) => item.id)));
         } catch {
           // Sin almacenamiento: puede repetirse el aviso al recargar.
         }

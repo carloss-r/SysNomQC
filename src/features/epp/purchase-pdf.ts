@@ -3,7 +3,7 @@ import { formatDateTime, formatDay } from "./format";
 
 export const PURCHASE_STATUS_LABELS: Record<PurchaseStatus, string> = {
   pendiente: "Pendiente",
-  en_compra: "En compra",
+  en_compra: "Comprada · por contar",
   recibida: "Recibida",
   cancelada: "Cancelada",
 };

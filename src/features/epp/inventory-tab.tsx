@@ -94,7 +94,11 @@ export function InventoryTab({
                   <td className="hide-phone">{item.category}</td>
                   <td>
                     <span className="epp-stock">{item.stock}</span> <span className={`epp-state epp-state-${state}`}>{STATE_LABELS[state]}</span>
-                    {folio && <span className="epp-requested" title="Ya se pidió a compras">Pedido · folio {folio}</span>}
+                    {item.pending_count ? (
+                      <span className="epp-requested epp-locked" title="Llegó una compra: hay que contarla antes de entregar o mover este artículo">Por contar · folio {item.pending_count}</span>
+                    ) : folio ? (
+                      <span className="epp-requested" title="Ya se pidió a compras">Pedido · folio {folio}</span>
+                    ) : null}
                   </td>
                   <td className="hide-phone">{item.tracked ? item.min_stock : "—"}</td>
                   <td className="hide-tablet">{item.tracked ? <>{item.updated_by_name ?? "—"}<br /><small className="epp-muted">{formatDateTime(item.updated_at)}</small></> : <span className="epp-muted">Aún sin movimientos en {site}</span>}</td>
@@ -103,12 +107,12 @@ export function InventoryTab({
                       {canRequest && needsRequest(item, openRequests) && (
                         <button className="button button-gold" onClick={() => onRequest([item.id])} aria-label={`Pedir más ${item.name}`} title="Pedir más a compras"><ShoppingCart size={14} /> <span className="hide-phone">Pedir más</span></button>
                       )}
-                      {canDeliver && item.active && item.stock > 0 && (
+                      {canDeliver && item.active && item.stock > 0 && !item.pending_count && (
                         <button className="button button-outline" onClick={() => onDeliver(item.id)} aria-label={`Entregar ${item.name}`} title="Entregar"><ClipboardCheck size={14} /> <span className="hide-phone">Entregar</span></button>
                       )}
                       {canManage && (
                         <>
-                          <button className="icon-button row-edit hide-phone" onClick={() => onEntry(item.id)} aria-label={`Registrar ingreso de ${item.name}`} title="Registrar ingreso"><PackagePlus size={16} /></button>
+                          {!item.pending_count && <button className="icon-button row-edit hide-phone" onClick={() => onEntry(item.id)} aria-label={`Registrar ingreso de ${item.name}`} title="Registrar ingreso"><PackagePlus size={16} /></button>}
                           <button className="icon-button row-edit" onClick={() => onEdit(item)} aria-label={`Editar ${item.name}`} title="Editar"><Pencil size={16} /></button>
                         </>
                       )}

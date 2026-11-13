@@ -47,8 +47,6 @@ export function MovementModal({
   movements,
   presetArticleId,
   presetEmployee,
-  presetItems,
-  presetNotes,
   onClose,
   onDone,
 }: {
@@ -59,9 +57,6 @@ export function MovementModal({
   movements: EppMovement[];
   presetArticleId?: number;
   presetEmployee?: EppEmployee | null;
-  /** Para registrar la llegada de una solicitud de compra. */
-  presetItems?: { article_id: number; quantity: number }[];
-  presetNotes?: string;
   onClose: () => void;
   onDone: () => Promise<void>;
 }) {
@@ -69,21 +64,21 @@ export function MovementModal({
   const notify = useNotify();
   const copy = COPY[kind];
   const Icon = copy.icon;
-  const [lines, setLines] = useState<Line[]>(() =>
-    presetItems && presetItems.length > 0
-      ? presetItems.map((item) => ({ ...newLine(String(item.article_id)), quantity: String(item.quantity) }))
-      : [newLine(presetArticleId ? String(presetArticleId) : "")],
-  );
+  const [lines, setLines] = useState<Line[]>(() => [newLine(presetArticleId ? String(presetArticleId) : "")]);
   const [employee, setEmployee] = useState<EppEmployee | null>(presetEmployee ?? null);
   const [query, setQuery] = useState("");
   // La fecha no se puede elegir: el servidor registra el día de hoy.
   const today = todayLocal();
-  const [notes, setNotes] = useState(presetNotes ?? "");
+  const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const selectable = useMemo(
-    () => articles.filter((item) => (kind === "ajuste" ? true : item.active) && (kind !== "entrega" || item.stock > 0)),
+    // Un artículo con una compra sin contar no se mueve hasta el conteo (la base también lo bloquea).
+    () =>
+      articles.filter(
+        (item) => item.pending_count === null && (kind === "ajuste" ? true : item.active) && (kind !== "entrega" || item.stock > 0),
+      ),
     [articles, kind],
   );
   // Solo trabajadores de la sede del inventario (el servidor ya los filtra; esto es una segunda barrera).
@@ -152,6 +147,8 @@ export function MovementModal({
     if (items.some((item) => !Number.isFinite(item.quantity) || item.quantity === 0)) return setError("Escribe una cantidad válida.");
     if (kind !== "ajuste" && items.some((item) => item.quantity < 0)) return setError("Las cantidades deben ser mayores a cero.");
     if (new Set(items.map((item) => item.article_id)).size !== items.length) return setError("Un artículo está repetido; únelo en un solo renglón.");
+    const locked = items.map((item) => byId.get(item.article_id)).find((item) => item?.pending_count);
+    if (locked) return setError(`${locked.name} tiene pendiente el conteo de la compra folio ${locked.pending_count}. Haz el conteo antes de moverlo.`);
     if (kind === "entrega") {
       const short = items.find((item) => item.quantity > (byId.get(item.article_id)?.stock ?? 0));
       if (short) return setError(`Solo hay ${byId.get(short.article_id)?.stock ?? 0} de ${byId.get(short.article_id)?.name}.`);

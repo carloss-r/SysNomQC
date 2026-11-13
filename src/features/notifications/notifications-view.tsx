@@ -156,9 +156,9 @@ export function NotificationsView() {
         {shown.length > 0 && (
           <ul className="notification-list">
             {shown.map((item) => {
-              const Icon = item.kind === "purchase_request" ? ShoppingCart : SEVERITY_ICONS[item.severity];
+              const Icon = item.kind === "purchase_request" || item.kind === "purchase_shortage" ? ShoppingCart : SEVERITY_ICONS[item.severity];
               return (
-                <li className={`notification-item notification-${item.severity}${item.kind === "purchase_request" ? " notification-purchase" : ""}`} key={item.id}>
+                <li className={`notification-item notification-${item.severity}${item.kind === "purchase_request" || item.kind === "purchase_shortage" ? " notification-purchase" : ""}`} key={item.id}>
                   <span className="notification-icon"><Icon size={18} /></span>
                   <div className="notification-body">
                     <strong>{item.title}</strong>

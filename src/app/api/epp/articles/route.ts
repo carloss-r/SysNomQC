@@ -5,7 +5,8 @@ import type { EppArticle } from "@/lib/permissions";
 import { BadJsonError, getAuthenticatedClient, readJson } from "../../employees/_server";
 import { articleSchema, eppDatabaseError, resolveSite } from "../_shared";
 
-type CatalogRow = Omit<EppArticle, "stock" | "site" | "tracked">;
+type CatalogRow = Omit<EppArticle, "stock" | "site" | "tracked" | "pending_count">;
+type PendingRow = { id: number; items: { article_id: number; received_qty: number | null }[] | null };
 type StockRow = { article_id: number; stock: number; min_stock: number; updated_at: string; updated_by_name: string | null };
 
 // Catálogo común + existencia y mínimo de la sede pedida (?site=). Una cuenta con sede solo ve la suya.
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
   const { site } = resolved;
 
   try {
-    const [catalog, stock] = await Promise.all([
+    const [catalog, stock, counts] = await Promise.all([
       auth.client
         .from("epp_articles")
         .select("id,name,category,size,unit,min_stock,active,updated_at,updated_by_name")
@@ -25,9 +26,23 @@ export async function GET(request: NextRequest) {
         .order("name")
         .limit(1000),
       auth.client.from("epp_stock").select("article_id,stock,min_stock,updated_at,updated_by_name").eq("site", site).limit(1000),
+      // Compras registradas sin contar: esos artículos no se mueven hasta el conteo.
+      auth.client
+        .from("epp_purchase_requests")
+        .select("id,items:epp_purchase_request_items(article_id,received_qty)")
+        .eq("site", site)
+        .eq("status", "en_compra")
+        .order("id")
+        .limit(500),
     ]);
     if (catalog.error) return eppDatabaseError(catalog.error, "listar");
     if (stock.error) return eppDatabaseError(stock.error, "existencias por sede");
+    if (counts.error) return eppDatabaseError(counts.error, "conteos pendientes");
+
+    const pending = new Map<number, number>();
+    for (const row of counts.data as PendingRow[]) {
+      for (const item of row.items ?? []) if (item.received_qty === null && !pending.has(item.article_id)) pending.set(item.article_id, row.id);
+    }
 
     const bySite = new Map((stock.data as StockRow[]).map((row) => [row.article_id, row]));
     const articles: EppArticle[] = (catalog.data as CatalogRow[]).map((item) => {
@@ -40,6 +55,7 @@ export async function GET(request: NextRequest) {
         min_stock: own?.min_stock ?? item.min_stock,
         updated_at: own?.updated_at ?? item.updated_at,
         updated_by_name: own?.updated_by_name ?? item.updated_by_name,
+        pending_count: pending.get(item.id) ?? null,
       };
     });
     return NextResponse.json(articles);

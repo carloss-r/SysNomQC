@@ -4,7 +4,7 @@ import { reportServerIncident } from "@/lib/incidents";
 import { BadJsonError, getAuthenticatedClient, readJson } from "../../../employees/_server";
 import { eppDatabaseError, purchaseStatusSchema } from "../../_shared";
 
-// Cambia el estado de una solicitud. Quién puede hacer qué lo decide epp_update_purchase() en la base.
+// Cancela una solicitud. Quién puede hacerlo lo decide epp_update_purchase() en la base.
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const auth = await getAuthenticatedClient(request);
   if ("response" in auth) return auth.response;

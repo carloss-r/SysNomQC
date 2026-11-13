@@ -13,9 +13,9 @@ Se administran en la pantalla **Usuarios y roles** (`/admin`, permiso `users.man
 | `employees.download` | Descargar expedientes |
 | `epp.view` | Ver inventario y entregas de EPP |
 | `epp.deliver` | Registrar entregas de EPP |
-| `epp.manage` | Administrar catálogo, ingresos y ajustes |
+| `epp.manage` | Administrar catálogo e ingresos y contar lo que llega de compras |
 | `epp.request` | Solicitar compra cuando falta material |
-| `epp.purchase` | Atender solicitudes de compra (encargado de compras) |
+| `epp.purchase` | Registrar compras de EPP y ver lo comprado (encargado de compras) |
 | `fuels.view` | Ver combustibles alternos y semáforo SEMARNAT |
 | `fuels.suppliers` | Homologar proveedores (M1) |
 | `fuels.schedule` | Programar recepciones (M2) |
@@ -35,8 +35,8 @@ Los nombres se guardan legibles en la base (`202611110001_normalizar_roles.sql` 
 | `Super administrador` | `SuperAdmin` | Rol de sistema (`es_sistema`): todos los permisos y todas las sedes |
 | `Administrador de sede` | `AdminSede` | Migración de roles |
 | `Recursos humanos` | `RecursosHumanos` | Migración de roles (altas, bajas y expedientes) |
-| `Almacenista de EPP` | `AlmacenistaEPP` | Permisos de inventario: `epp.view`, `epp.deliver`, `epp.manage`, `epp.request` |
-| `Encargado de compras` | `EncargadoCompras` | Migración de EPP por sede; recibe el aviso de solicitudes nuevas |
+| `Seguridad` | `Almacenista de EPP` | Almacén de EPP: entrega, pide material y cuenta lo que llega (`epp.view`, `epp.deliver`, `epp.manage`, `epp.request`). Renombrado en `202611130001_compras_conteo_ciego.sql` |
+| `Encargado de compras` | `EncargadoCompras` | Solo `epp.view` y `epp.purchase`: consulta y registra compras; recibe avisos de solicitudes nuevas y de faltantes |
 | `Combustibles alternos` | `CombustiblesAlternos` | Migración de combustibles |
 | `Operador de báscula` | `OperadorBascula` | Migración de combustibles |
 | `Ecología` | `Ecologia` | Migración de combustibles |

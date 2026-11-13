@@ -15,6 +15,7 @@ export const employeeInputSchema = z
     position: z.string().trim().min(1).max(150),
     contract_type: z.enum(CONTRACT_TYPES),
     salary: z.number().finite().min(0).max(100_000_000),
+    contribution_salary: z.number().finite().min(0).max(100_000_000).nullable().optional(),
     bank_account: z.string().trim().max(40).nullable(),
     active: z.boolean(),
     gender: z.enum(GENDERS).nullable(),
@@ -35,4 +36,12 @@ export const employeeInputSchema = z
 export const employeePatchSchema = employeeInputSchema
   .partial()
   .refine((value) => Object.keys(value).length > 0, "Debes enviar al menos un campo.")
+  .strict();
+
+/** Baja: el día lo captura el usuario; el motivo es opcional. La fecha de registro la pone la base. */
+export const terminationSchema = z
+  .object({
+    termination_date: z.iso.date(),
+    termination_reason: z.string().trim().max(500).optional(),
+  })
   .strict();
