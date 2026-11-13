@@ -247,7 +247,7 @@ function EmployeesDashboard() {
         }
       >
         <div className="stats-grid">
-          <StatCard label="Total empleados" count={stats?.total ?? 0} tone="green" icon={<UsersRound size={18} />} />
+          <StatCard label="Empleados activos" count={stats?.total ?? 0} tone="green" icon={<UsersRound size={18} />} />
           <StatCard label="Campeche" count={stats?.bySite["Campeche"] ?? 0} tone="blue" icon={<Building2 size={18} />} />
           <StatCard label="Lagunas" count={stats?.bySite["Lagunas"] ?? 0} tone="gold" icon={<Building2 size={18} />} />
           <StatCard label="Cruz Azul" count={stats?.bySite["Cruz Azul"] ?? 0} tone="purple" icon={<Building2 size={18} />} />
@@ -418,6 +418,8 @@ function EmployeesDashboard() {
           onChanged={(employee) => {
             setSelectedEmployee(employee);
             void refreshEmployees();
+            // Baja o reactivación: los contadores (solo activos) cambian.
+            void loadStats();
           }}
         />
       )}

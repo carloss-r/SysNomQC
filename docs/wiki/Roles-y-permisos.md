@@ -44,6 +44,19 @@ Los nombres se guardan legibles en la base (`202611110001_normalizar_roles.sql` 
 | `Cuentas por pagar` | — | Migración de facturas: `invoices.view`, `invoices.manage` |
 | `Solo consulta` | — | Rol de solo consulta: ve Empleados y EPP sin poder modificar nada (`202611130003_rol_solo_consulta.sql`) |
 
+## Separación por área
+
+Cada rol ve solo su pantalla (`202611130006_roles_por_area.sql` deja a cada rol con los permisos de su área):
+
+| Área | Roles |
+| --- | --- |
+| Empleados | Administrador de sede, Recursos humanos |
+| EPP | Seguridad, Encargado de compras |
+| Combustibles alternos | Combustibles alternos, Operador de báscula, Ecología, Contabilidad de combustibles |
+| Facturas | Cuentas por pagar |
+
+El Super administrador ve todo y los roles de solo consulta no se modifican. Una cuenta con varios roles ve las áreas de todos ellos.
+
 ## Roles de solo consulta
 
 Al crear o editar un rol, **Solo consulta** limita los permisos a ver **Empleados** y/o **EPP** (no descarga expedientes ni ve combustibles o facturas). Se elige cuál de las dos áreas ve cada rol; la API y la base (`roles_solo_consulta_check`) rechazan cualquier permiso que modifique datos. Con `epp.view` también se consultan las solicitudes de compra, sin acciones.
