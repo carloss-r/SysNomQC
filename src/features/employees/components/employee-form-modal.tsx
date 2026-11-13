@@ -1,6 +1,6 @@
 "use client";
 
-import { BriefcaseBusiness, Check, CircleUserRound, ImagePlus, MapPin, UserRound, X } from "lucide-react";
+import { BriefcaseBusiness, Check, CircleUserRound, ClipboardList, ImagePlus, MapPin, UserRound, X } from "lucide-react";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -261,6 +261,21 @@ export function EmployeeFormModal({
               <Field label="Estado de residencia"><input value={form.residence_state} onChange={(event) => updateForm("residence_state", event.target.value)} maxLength={80} /></Field>
               <Field label="Dirección"><input value={form.address} onChange={(event) => updateForm("address", event.target.value)} maxLength={500} placeholder="Calle, número, colonia y código postal" /></Field>
             </div>
+          </FormSection>
+
+          <FormSection title="Observaciones del expediente" icon={<ClipboardList size={16} />}>
+            <Field label="Observaciones">
+              <textarea
+                value={form.observations}
+                onChange={(event) => updateForm("observations", event.target.value)}
+                maxLength={1000}
+                rows={3}
+                placeholder="Documentación faltante o cualquier detalle a dar seguimiento (ej. falta acta de nacimiento, comprobante de domicilio vencido…)"
+              />
+            </Field>
+            <span className="field-hint">
+              Si escribes algo, el trabajador aparecerá en la pestaña «Seguimiento de expedientes». Deja el cuadro vacío cuando quede resuelto.
+            </span>
           </FormSection>
 
           <FormSection title="Fotografía" icon={<ImagePlus size={16} />}>

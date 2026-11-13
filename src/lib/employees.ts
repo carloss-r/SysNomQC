@@ -59,6 +59,11 @@ export type Employee = {
   residence_state: string | null;
   address: string | null;
   photo_path: string | null;
+  /** Observaciones del expediente: faltantes o detalles a dar seguimiento. */
+  observations: string | null;
+  /** Lo sella la base al cambiar la observación. */
+  observations_updated_at: string | null;
+  observations_updated_by_name: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -71,7 +76,12 @@ export const EMPLOYEE_LIST_COLUMNS =
 export type EmployeeSummary = Pick<
   Employee,
   "id" | "employee_code" | "full_name" | "site" | "position" | "contract_type" | "active" | "email"
->;
+> &
+  // Solo llegan en la pestaña de seguimiento de expedientes.
+  Partial<Pick<Employee, "observations" | "observations_updated_at" | "observations_updated_by_name">>;
+
+/** Columnas de la pestaña "Seguimiento de expedientes". */
+export const EMPLOYEE_FOLLOWUP_COLUMNS = `${EMPLOYEE_LIST_COLUMNS},observations,observations_updated_at,observations_updated_by_name`;
 
 export const toEmployeeSummary = (employee: Employee): EmployeeSummary => ({
   id: employee.id,
@@ -90,7 +100,15 @@ export const sortEmployees = (list: EmployeeSummary[]) =>
 // La baja se registra por separado (/api/employees/[id]/baja), no desde el formulario.
 export type EmployeeInput = Omit<
   Employee,
-  "id" | "created_at" | "updated_at" | "termination_date" | "termination_reason" | "terminated_at" | "terminated_by_name"
+  | "id"
+  | "created_at"
+  | "updated_at"
+  | "termination_date"
+  | "termination_reason"
+  | "terminated_at"
+  | "terminated_by_name"
+  | "observations_updated_at"
+  | "observations_updated_by_name"
 >;
 
 export type EmployeeFormValues = {
@@ -115,6 +133,7 @@ export type EmployeeFormValues = {
   phone: string;
   residence_state: string;
   address: string;
+  observations: string;
 };
 
 export const EMPTY_EMPLOYEE_FORM: EmployeeFormValues = {
@@ -139,6 +158,7 @@ export const EMPTY_EMPLOYEE_FORM: EmployeeFormValues = {
   phone: "",
   residence_state: "",
   address: "",
+  observations: "",
 };
 
 const optionalValue = (value: string) => value.trim() || null;
@@ -170,6 +190,7 @@ export function formToEmployeeInput(
     residence_state: optionalValue(form.residence_state),
     address: optionalValue(form.address),
     photo_path: photoPath,
+    observations: optionalValue(form.observations),
   };
 }
 
@@ -196,6 +217,7 @@ export function employeeToForm(employee: Employee): EmployeeFormValues {
     phone: employee.phone ?? "",
     residence_state: employee.residence_state ?? "",
     address: employee.address ?? "",
+    observations: employee.observations ?? "",
   };
 }
 

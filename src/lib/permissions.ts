@@ -28,10 +28,7 @@ export type Permission = (typeof PERMISSIONS)[number]["key"];
  */
 export const READ_ONLY_AREAS: { key: Permission; label: string }[] = [
   { key: "employees.view", label: "Empleados: directorio y expedientes" },
-  { key: "employees.download", label: "Empleados: descargar expedientes" },
   { key: "epp.view", label: "EPP: inventario, entregas, historial y solicitudes" },
-  { key: "fuels.view", label: "Combustibles alternos" },
-  { key: "invoices.view", label: "Facturas y resúmenes de pago" },
 ];
 export const READ_ONLY_PERMISSIONS: Permission[] = READ_ONLY_AREAS.map((area) => area.key);
 export const ALL_PERMISSIONS: Permission[] = PERMISSIONS.map((permission) => permission.key);

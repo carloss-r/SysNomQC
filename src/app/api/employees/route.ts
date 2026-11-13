@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { recordAudit } from "@/lib/audit";
 import { reportServerIncident } from "@/lib/incidents";
-import { EMPLOYEE_LIST_COLUMNS, SITES } from "@/lib/employees";
+import { EMPLOYEE_FOLLOWUP_COLUMNS, EMPLOYEE_LIST_COLUMNS, SITES } from "@/lib/employees";
 import { BadJsonError, databaseErrorResponse, getAuthenticatedClient, readJson } from "./_server";
 import { employeeInputSchema } from "./validation";
 
@@ -56,9 +56,15 @@ export async function GET(request: NextRequest) {
       const failed = results.find((result) => result.error);
       if (failed?.error) return databaseErrorResponse(failed.error);
       const [all, ...perSite] = results;
+      // Expedientes en seguimiento. Si la columna aún no existe (falta la migración), cuenta 0.
+      const followUp = await auth.client
+        .from("employees")
+        .select("id", { count: "exact", head: true })
+        .not("observations", "is", null);
       return NextResponse.json({
         total: all.count ?? 0,
         bySite: Object.fromEntries(SITES.map((site, index) => [site, perSite[index].count ?? 0])),
+        followUp: followUp.error ? 0 : (followUp.count ?? 0),
       });
     }
 
@@ -67,16 +73,19 @@ export async function GET(request: NextRequest) {
     const site = params.get("site");
     const textFilter = searchFilter(params.get("search"));
 
+    // ?seguimiento=1 → solo expedientes con observaciones, con el texto y quién lo escribió.
+    const followUp = params.get("seguimiento") === "1";
     let query = auth.client
       .from("employees")
-      .select(EMPLOYEE_LIST_COLUMNS, { count: withCount ? "exact" : undefined });
+      .select(followUp ? EMPLOYEE_FOLLOWUP_COLUMNS : EMPLOYEE_LIST_COLUMNS, { count: withCount ? "exact" : undefined });
     if (site && (SITES as readonly string[]).includes(site)) query = query.eq("site", site);
     if (textFilter) query = query.or(textFilter);
+    if (followUp) query = query.not("observations", "is", null);
 
-    const { data, error, count } = await query
-      .order("full_name")
-      .order("id")
-      .range(offset, offset + limit - 1);
+    const { data, error, count } = await (followUp
+      ? query.order("observations_updated_at", { ascending: false, nullsFirst: false }).order("id")
+      : query.order("full_name").order("id")
+    ).range(offset, offset + limit - 1);
 
     if (error) return databaseErrorResponse(error);
     return NextResponse.json(withCount ? { data, total: count ?? 0 } : data);

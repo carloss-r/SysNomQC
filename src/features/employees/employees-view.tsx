@@ -1,10 +1,11 @@
 "use client";
 
-import { Building2, Filter, Pencil, Plus, Search, UserRound, UsersRound, X } from "lucide-react";
+import { Building2, ClipboardList, Filter, Pencil, Plus, Search, UserRound, UsersRound, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
 import { ApiError, describeError, requestApi } from "@/lib/api-client";
 import {
+  formatDateTime,
   POSITIONS,
   SITES,
   type Employee,
@@ -24,7 +25,10 @@ import { EmployeeProfileModal } from "./components/employee-profile-modal";
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 350;
 
-type EmployeeStats = { total: number; bySite: Record<string, number> };
+type EmployeeStats = { total: number; bySite: Record<string, number>; followUp?: number };
+
+/** directory: directorio general · followup: expedientes con observaciones. */
+type View = "directory" | "followup";
 
 type FormState = { editing: Employee | null } | null;
 
@@ -51,6 +55,7 @@ function EmployeesDashboard() {
   const [pageError, setPageError] = useState("");
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [filterSite, setFilterSite] = useState("Todas");
+  const [view, setView] = useState<View>("directory");
   // Los avisos enlazan aquí con ?buscar=<ID>. Esta pantalla solo se monta en el navegador, ya con sesión.
   const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get("buscar") ?? "");
   const [debouncedSearch, setDebouncedSearch] = useState(() => search.trim());
@@ -87,6 +92,7 @@ function EmployeesDashboard() {
       });
       if (filterSite !== "Todas") params.set("site", filterSite);
       if (debouncedSearch) params.set("search", debouncedSearch);
+      if (view === "followup") params.set("seguimiento", "1");
 
       const result = await requestApi<{ data: EmployeeSummary[]; total: number }>(
         activeSession,
@@ -109,7 +115,7 @@ function EmployeesDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [notify, page, filterSite, debouncedSearch]);
+  }, [notify, page, filterSite, debouncedSearch, view]);
 
   // Contadores por sede: solo conteos en el servidor (sin traer filas).
   const loadStats = useCallback(async () => {
@@ -188,6 +194,13 @@ function EmployeesDashboard() {
     if (employee) setFormState({ editing: employee });
   }
 
+  function changeView(next: View) {
+    if (next === view) return;
+    setEmployees([]);
+    setView(next);
+    setPage(0);
+  }
+
   function handleSaved() {
     // Con paginación el orden y la página dependen del servidor: se vuelve a pedir solo la página actual.
     void refreshEmployees();
@@ -242,6 +255,18 @@ function EmployeesDashboard() {
       </PageHeader>
 
       <section className="directory-card">
+        <div className="directory-toolbar directory-views">
+          <div className="site-tabs" role="tablist" aria-label="Vista del directorio">
+            <button type="button" role="tab" aria-selected={view === "directory"} className={`site-tab${view === "directory" ? " active" : ""}`} onClick={() => changeView("directory")}>
+              <UsersRound size={14} /> Directorio general
+            </button>
+            <button type="button" role="tab" aria-selected={view === "followup"} className={`site-tab${view === "followup" ? " active" : ""}`} onClick={() => changeView("followup")}>
+              <ClipboardList size={14} /> Seguimiento de expedientes
+              {(stats?.followUp ?? 0) > 0 && <span className="site-count">{stats?.followUp}</span>}
+            </button>
+          </div>
+          {view === "followup" && <span className="epp-scope">Trabajadores con observaciones pendientes en su expediente</span>}
+        </div>
         <div className="directory-toolbar">
           <div className="filter-label"><Filter size={16} /><span>Filtrar por sede</span></div>
           <div className="site-tabs" role="tablist" aria-label="Filtrar por sede">
@@ -282,9 +307,18 @@ function EmployeesDashboard() {
                 <th className="hide-phone">ID empleado</th>
                 <th>Nombre completo</th>
                 <th className="hide-phone">Sede</th>
-                <th className="hide-tablet">Área / departamento</th>
-                <th className="hide-tablet">Tipo de contrato</th>
-                <th>Estatus</th>
+                {view === "followup" ? (
+                  <>
+                    <th>Observaciones</th>
+                    <th className="hide-tablet">Última actualización</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="hide-tablet">Área / departamento</th>
+                    <th className="hide-tablet">Tipo de contrato</th>
+                    <th>Estatus</th>
+                  </>
+                )}
                 <th><span className="sr-only">Acciones</span></th>
               </tr>
             </thead>
@@ -303,9 +337,22 @@ function EmployeesDashboard() {
                     </button>
                   </td>
                   <td className="hide-phone"><SiteBadge site={employee.site} /></td>
-                  <td className="position-cell hide-tablet">{employee.position}</td>
-                  <td className="contract-cell hide-tablet">{employee.contract_type}</td>
-                  <td><StatusBadge active={employee.active} /></td>
+                  {view === "followup" ? (
+                    <>
+                      <td className="observation-cell"><p title={employee.observations ?? ""}>{employee.observations}</p></td>
+                      <td className="hide-tablet">
+                        {employee.observations_updated_by_name ?? "—"}
+                        <br />
+                        <small className="epp-muted">{employee.observations_updated_at ? formatDateTime(employee.observations_updated_at) : ""}</small>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="position-cell hide-tablet">{employee.position}</td>
+                      <td className="contract-cell hide-tablet">{employee.contract_type}</td>
+                      <td><StatusBadge active={employee.active} /></td>
+                    </>
+                  )}
                   <td className="row-actions">
                     <button className="text-button hide-tablet" onClick={() => void openProfile(employee)} disabled={detailLoadingId === employee.id}>{detailLoadingId === employee.id ? "Abriendo…" : "Ver expediente"}</button>
                     {can("employees.edit") && <button className="icon-button row-edit" onClick={() => void openEditFromRow(employee)} disabled={detailLoadingId === employee.id} aria-label={`Editar ${employee.full_name}`} title="Editar"><Pencil size={16} /></button>}
@@ -318,9 +365,17 @@ function EmployeesDashboard() {
           {!loading && employees.length === 0 && (
             <div className="empty-state">
               <div className="empty-icon"><UserRound size={25} /></div>
-              <h2>{!hasFilters ? "Aún no hay empleados registrados" : "No se encontraron empleados"}</h2>
-              <p>{!hasFilters ? "Agrega el primer expediente para empezar a usar el directorio." : "Prueba con otro nombre, ID o sede."}</p>
-              {!hasFilters && can("employees.create") && <button className="button button-primary" onClick={() => void openCreateForm()}><Plus size={17} /> Registrar empleado</button>}
+              <h2>
+                {view === "followup"
+                  ? hasFilters ? "Ningún expediente en seguimiento coincide" : "No hay expedientes en seguimiento"
+                  : !hasFilters ? "Aún no hay empleados registrados" : "No se encontraron empleados"}
+              </h2>
+              <p>
+                {view === "followup"
+                  ? "Aquí aparecen los trabajadores con observaciones en su expediente. Escríbelas al editar el expediente."
+                  : !hasFilters ? "Agrega el primer expediente para empezar a usar el directorio." : "Prueba con otro nombre, ID o sede."}
+              </p>
+              {view === "directory" && !hasFilters && can("employees.create") && <button className="button button-primary" onClick={() => void openCreateForm()}><Plus size={17} /> Registrar empleado</button>}
             </div>
           )}
         </div>

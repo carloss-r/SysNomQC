@@ -1,6 +1,6 @@
 "use client";
 
-import { BriefcaseBusiness, Download, FileText, MapPin, Pencil, Trash2, UserCheck, UserMinus, UserRound, X } from "lucide-react";
+import { BriefcaseBusiness, ClipboardList, Download, FileText, MapPin, Pencil, Trash2, UserCheck, UserMinus, UserRound, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
 import { describeError, requestApi } from "@/lib/api-client";
@@ -92,6 +92,15 @@ export function EmployeeProfileModal({
             </div>
           </div>
           <div className="profile-body">
+            {employee.observations && (
+              <section className="profile-section profile-observations">
+                <h3><ClipboardList size={16} />Observaciones del expediente</h3>
+                <p>{employee.observations}</p>
+                {employee.observations_updated_at && (
+                  <small>Actualizado por {employee.observations_updated_by_name || "—"} · {formatDateTime(employee.observations_updated_at)}</small>
+                )}
+              </section>
+            )}
             <ProfileSection title="Información laboral" icon={<BriefcaseBusiness size={16} />}>
               <ProfileValue label="Fecha de contratación">{formatDate(employee.hire_date)}</ProfileValue>
               <ProfileValue label="Tipo de contrato">{employee.contract_type}</ProfileValue>
