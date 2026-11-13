@@ -30,6 +30,7 @@ export const employeeInputSchema = z
     residence_state: z.string().trim().max(80).nullable(),
     address: z.string().trim().max(500).nullable(),
     photo_path: z.string().trim().max(500).nullable(),
+    observations: z.string().trim().max(1000).nullable().optional(),
   })
   .strict();
 

@@ -21,6 +21,16 @@ export const PERMISSIONS = [
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number]["key"];
+
+/**
+ * Áreas que puede ver un rol de solo consulta. Son los únicos permisos que admite
+ * (la base lo vuelve a validar con roles_solo_consulta_check).
+ */
+export const READ_ONLY_AREAS: { key: Permission; label: string }[] = [
+  { key: "employees.view", label: "Empleados: directorio y expedientes" },
+  { key: "epp.view", label: "EPP: inventario, entregas, historial y solicitudes" },
+];
+export const READ_ONLY_PERMISSIONS: Permission[] = READ_ONLY_AREAS.map((area) => area.key);
 export const ALL_PERMISSIONS: Permission[] = PERMISSIONS.map((permission) => permission.key);
 
 /** Acceso de la cuenta que inició sesión (lo devuelve /api/me). */
@@ -44,6 +54,8 @@ export type AdminRole = {
   description: string | null;
   permissions: Permission[];
   is_system: boolean;
+  /** Solo visualiza: sus permisos se limitan a READ_ONLY_PERMISSIONS. */
+  read_only: boolean;
   user_count: number;
 };
 

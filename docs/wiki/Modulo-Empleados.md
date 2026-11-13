@@ -13,6 +13,12 @@ Pantalla principal (`/`, menú **Personal → Empleados**). Código en `src/feat
 
 Clave de empleado, nombre, sede (`Campeche`, `Lagunas`, `Cruz Azul`), fecha de ingreso, puesto, tipo de contrato, **salario base** (el salario que ya tenía cada trabajador), **salario de cotización** (vacío hasta capturarlo), cuenta bancaria, estado activo, género, NSS, CURP, RFC, estado civil, fecha de nacimiento, créditos, correo, teléfono, estado de residencia, domicilio y foto. NSS, CURP y RFC son únicos.
 
+## Seguimiento de expedientes
+
+- Cada expediente tiene el cuadro **Observaciones** (hasta 1000 caracteres): lo que le falta o cualquier detalle a dar seguimiento.
+- Los trabajadores con observaciones aparecen en la pestaña **Seguimiento de expedientes**, con el texto, quién lo escribió y cuándo (lo sella la base). Al vaciar el cuadro salen de la lista.
+- Migración: `202611130004_empleados_observaciones.sql`.
+
 ## Baja de trabajadores
 
 - **Dar de baja** (en el expediente, permiso `employees.edit`): día de baja capturado a mano y motivo opcional. El trabajador queda inactivo.
