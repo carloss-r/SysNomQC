@@ -63,6 +63,8 @@ function EmployeesDashboard() {
   const [formState, setFormState] = useState<FormState>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const sessionRef = useRef(session);
+  // Total ya contado para estos filtros: al cambiar solo de página no se vuelve a contar en la base.
+  const countedRef = useRef<{ key: string; total: number } | null>(null);
 
   useEffect(() => {
     sessionRef.current = session;
@@ -86,23 +88,32 @@ function EmployeesDashboard() {
     setLoading(true);
     setPageError("");
     try {
+      const filtersKey = `${filterSite}|${debouncedSearch}|${view}`;
+      const known = countedRef.current?.key === filtersKey ? countedRef.current : null;
       const params = new URLSearchParams({
         offset: String(page * PAGE_SIZE),
         limit: String(PAGE_SIZE),
-        count: "1",
       });
+      if (!known) params.set("count", "1");
       if (filterSite !== "Todas") params.set("site", filterSite);
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (view === "followup") params.set("seguimiento", "1");
 
-      const result = await requestApi<{ data: EmployeeSummary[]; total: number }>(
+      const response = await requestApi<{ data: EmployeeSummary[]; total: number } | EmployeeSummary[]>(
         activeSession,
         `/api/employees?${params.toString()}`,
       );
+      const result = Array.isArray(response) ? { data: response, total: known?.total ?? response.length } : response;
+      if (!known) countedRef.current = { key: filtersKey, total: result.total };
 
-      // Si se borró el último registro de la última página, se retrocede una página.
-      if (result.data.length === 0 && result.total > 0 && page > 0) {
-        setPage(Math.ceil(result.total / PAGE_SIZE) - 1);
+      // Si se borró el último registro de la última página, se retrocede (y se vuelve a contar).
+      if (result.data.length === 0 && page > 0) {
+        if (known) {
+          countedRef.current = null;
+          setPage((current) => Math.max(0, current - 1));
+        } else if (result.total > 0) {
+          setPage(Math.ceil(result.total / PAGE_SIZE) - 1);
+        }
         return;
       }
       setEmployees(result.data);
@@ -204,6 +215,7 @@ function EmployeesDashboard() {
 
   function handleSaved() {
     // Con paginación el orden y la página dependen del servidor: se vuelve a pedir solo la página actual.
+    countedRef.current = null;
     void refreshEmployees();
     void loadStats();
     setFormState(null);
@@ -223,6 +235,7 @@ function EmployeesDashboard() {
       await requestApi<void>(session, `/api/employees/${employee.id}`, { method: "DELETE" });
       if (employee.photo_path) void deleteEmployeePhoto(employee.photo_path);
       setSelectedEmployee(null);
+      countedRef.current = null;
       void refreshEmployees();
       void loadStats();
       notify("success", "Empleado eliminado", `Se eliminó el expediente de ${employee.full_name}.`);
@@ -419,6 +432,7 @@ function EmployeesDashboard() {
           onDelete={(employee) => void handleDelete(employee)}
           onChanged={(employee) => {
             setSelectedEmployee(employee);
+            countedRef.current = null;
             void refreshEmployees();
             // Baja o reactivación: los contadores (solo activos) cambian.
             void loadStats();

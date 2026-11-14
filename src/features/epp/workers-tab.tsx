@@ -1,18 +1,22 @@
 "use client";
 
 import { ClipboardCheck, Search, UserRound, X } from "lucide-react";
-import { useDeferredValue, useMemo, useState } from "react";
-import type { EppEmployee, EppMovement } from "@/lib/permissions";
+import { useMemo, useState } from "react";
+import { eppKey, type EppEmployee, type EppLedgerPage, type EppMovement, type EppPerson } from "@/lib/permissions";
 import { formatDateTime, formatDay } from "./format";
 import { ExportButtons } from "@/shared/reports/export-buttons";
-import { buildPeople, monthKey, monthLabel, normalize, type Person } from "./people";
+import { LoadingState } from "@/shared/ui/loading";
+import { monthKey, monthLabel } from "./people";
 import { fileSafe, type Report } from "@/shared/reports/report-export";
+import { useDebounced, useEppQuery } from "./use-epp-query";
 
-const MAX_RESULTS = 5;
+type PeopleResult = { people: EppPerson[]; total: number };
+type Person = EppPerson;
+const EMPTY: EppMovement[] = [];
 
 export function WorkersTab({
   site,
-  movements,
+  version,
   employees,
   canDeliver,
   selectedKey,
@@ -22,7 +26,7 @@ export function WorkersTab({
   onDeliver,
 }: {
   site: string;
-  movements: EppMovement[];
+  version: number;
   employees: EppEmployee[];
   canDeliver: boolean;
   selectedKey: string | null;
@@ -32,27 +36,19 @@ export function WorkersTab({
   onDeliver: (employee: EppEmployee) => void;
 }) {
   const [query, setQuery] = useState("");
-  const deferred = useDeferredValue(query);
-  const people = useMemo(() => buildPeople(movements), [movements]);
-  const indexed = useMemo(() => people.map((person) => ({ person, text: normalize(`${person.name} ${person.position ?? ""} ${person.group ?? ""}`) })), [people]);
+  const term = useDebounced(query.trim());
+  const base = `/api/epp/people?site=${encodeURIComponent(site)}`;
+  // La base agrupa y busca; solo llegan 5 personas (antes se armaba la lista con todo el libro).
+  const search = useEppQuery<PeopleResult>(term ? `${base}&q=${encodeURIComponent(term)}` : base, version);
+  const results = search.data?.people ?? [];
+  const extra = Math.max(0, (search.data?.total ?? 0) - results.length);
 
-  const { results, extra } = useMemo(() => {
-    const tokens = normalize(deferred).split(" ").filter(Boolean);
-    if (tokens.length === 0) {
-      const recent = [...people].sort((a, b) => b.lastDate.localeCompare(a.lastDate)).slice(0, MAX_RESULTS);
-      return { results: recent, extra: 0 };
-    }
-    const found = indexed
-      .filter((entry) => tokens.every((token) => entry.text.includes(token)))
-      .map((entry) => entry.person);
-    return { results: found.slice(0, MAX_RESULTS), extra: Math.max(0, found.length - MAX_RESULTS) };
-  }, [people, indexed, deferred]);
-
-  const person = people.find((item) => item.key === selectedKey) ?? null;
-  const rows = useMemo(
-    () => (person ? movements.filter((row) => row.kind === "entrega" && row.employee_name && normalize(row.employee_name) === person.key) : []),
-    [movements, person],
-  );
+  // Persona elegida: si no está entre los resultados (p. ej. llega desde el control mensual), se pide sola.
+  const listed = results.find((item) => item.key === selectedKey) ?? null;
+  const single = useEppQuery<PeopleResult>(selectedKey && !listed ? `${base}&key=${encodeURIComponent(selectedKey)}` : null, version);
+  const person = listed ?? single.data?.people.find((item) => item.key === selectedKey) ?? null;
+  const detail = useEppQuery<EppLedgerPage>(selectedKey ? `/api/epp/ledger?site=${encodeURIComponent(site)}&worker=${encodeURIComponent(selectedKey)}` : null, version, { keepPrevious: false });
+  const rows = detail.data?.rows ?? EMPTY;
   const months = useMemo(() => Array.from(new Set(rows.map((row) => monthKey(row.moved_on)))).sort().reverse(), [rows]);
   const visible = useMemo(() => (month ? rows.filter((row) => monthKey(row.moved_on) === month) : rows), [rows, month]);
 
@@ -83,7 +79,7 @@ export function WorkersTab({
   }, [visible, month]);
 
   function employeeFor(target: Person): EppEmployee | null {
-    return employees.find((item) => item.id === target.employeeId || normalize(item.full_name) === target.key) ?? null;
+    return employees.find((item) => item.id === target.employeeId || eppKey(item.full_name) === target.key) ?? null;
   }
 
   function buildReport(generatedBy: string): Report {
@@ -144,7 +140,8 @@ export function WorkersTab({
         </label>
         <p className="epp-muted">{query.trim() ? "Resultados" : "Entregas más recientes"}</p>
         <ul className="epp-results epp-people">
-          {results.length === 0 && <li className="epp-empty">Sin coincidencias.</li>}
+          {search.error && <li className="epp-empty">{search.error}</li>}
+          {!search.error && results.length === 0 && <li className="epp-empty">{search.loading ? "Buscando…" : "Sin coincidencias."}</li>}
           {results.map((item) => (
             <li key={item.key}>
               <button type="button" className={item.key === selectedKey ? "active" : ""} onClick={() => onSelect(item.key)}>
@@ -158,8 +155,12 @@ export function WorkersTab({
       </div>
 
       <div className="epp-worker-detail">
-        {!person ? (
+        {selectedKey && !person && (single.loading || search.loading) ? (
+          <LoadingState label="Cargando trabajador…" rows={4} />
+        ) : !person ? (
           <div className="epp-empty"><UserRound size={28} /><p>Elige un trabajador para ver todo el EPP que se le ha entregado.</p></div>
+        ) : detail.loading && !detail.data ? (
+          <LoadingState label={`Cargando entregas de ${person.name}…`} rows={4} />
         ) : (
           <>
             <header className="epp-worker-head">

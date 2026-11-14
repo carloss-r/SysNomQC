@@ -38,6 +38,11 @@ Clave de empleado, nombre, sede (`Campeche`, `Lagunas`, `Cruz Azul`, `El Carmen`
 
 - Guardar o eliminar actualiza la lista en memoria sin volver a descargarla.
 - Cambiar de pestaña o renovarse el token de sesión no recarga el directorio.
+- Contadores en una sola consulta (vista `employee_site_counts`) y siguiente ID calculado en la base (`employee_next_code()`).
+- El total se cuenta solo al cambiar filtros; cambiar de página pide únicamente las 20 filas.
+- Búsqueda con índices de texto (`pg_trgm`) y políticas RLS evaluadas una vez por consulta.
+- La campana usa `employee_gaps` (solo verdadero/falso por campo): NSS, CURP, RFC y cuenta ya no salen de la base para los avisos.
+- Requiere `202611140002_empleados_consultas_rapidas.sql`.
 
 ## Auditoría
 

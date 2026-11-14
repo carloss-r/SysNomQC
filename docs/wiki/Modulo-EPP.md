@@ -22,6 +22,15 @@ Equipo de protección personal. Pantalla `/epp` (menú **Seguridad e higiene →
 - **Nuevo artículo** lo crea en la sede elegida; quien supervisa todas las sedes puede marcar *Crearlo también en las otras sedes* (quedan como artículos independientes).
 - Cada talla es un artículo propio. El catálogo inicial (`202611130008`) es solo de Campeche; Lagunas, Cruz Azul y El Carmen crean sus propios artículos. Migraciones: compras por sede `202611130009`, artículos por sede `202611130010`, catálogo inicial solo en Campeche `202611130011`, sede El Carmen `202611130012`.
 
+## Cargas optimizadas (`202611140001_epp_consultas_rapidas.sql`)
+
+- Al entrar solo se piden los artículos de la sede, los totales por mes (`epp_month_summary`) y las solicitudes **abiertas**. Ya no se descarga el libro completo de movimientos.
+- **Inventario** se muestra de 25 en 25. **Historial** pide 50 movimientos por página y filtra (tipo y búsqueda) en la base.
+- **Control mensual** pide solo el mes elegido. **Por trabajador** busca en la vista `epp_people` (5 resultados) y trae solo las entregas de la persona elegida (`employee_key`, columna generada con `epp_norm`).
+- La lista de trabajadores se pide solo al entregar EPP o al abrir *Por trabajador*. La lista completa de solicitudes, solo en la pestaña *Solicitudes*.
+- La campana se actualiza solo tras registrar un cambio, no en cada carga.
+- Las políticas de lectura de `epp_movements`, `epp_stock` y `epp_articles` evalúan permiso y sede una vez por consulta (`current_site_scope()`), con las mismas reglas que antes.
+
 ## Reglas de negocio
 
 - La existencia solo cambia con la función `epp_apply_site()` (transacción atómica; valida permiso, sede y existencia).
