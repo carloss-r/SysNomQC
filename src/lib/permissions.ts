@@ -150,6 +150,41 @@ export type EppMovement = {
   created_at: string;
   created_by_name: string | null;
   historical: boolean;
+  /** Nombre normalizado (epp_norm en la base): identifica al trabajador aunque no tenga employee_id. */
+  employee_key: string | null;
 };
 
-export type EppEmployee = { id: string; employee_code: string; full_name: string; site: string; position: string };
+/** Página del historial de movimientos. */
+export type EppLedgerPage = { rows: EppMovement[]; total: number };
+
+/** Trabajador con entregas, ya agrupado en la base (vista epp_people). */
+export type EppPerson = {
+  key: string;
+  name: string;
+  employeeId: string | null;
+  group: string | null;
+  position: string | null;
+  pieces: number;
+  deliveries: number;
+  lastDate: string;
+};
+
+/** Totales de una sede en un mes (vista epp_month_summary). */
+export type EppMonthSummary = { month: string; delivered: number; received: number; workers: number; movements: number };
+
+/**
+ * Mismo criterio que public.epp_norm() de la base (sin acentos, mayúsculas, espacios simples),
+ * para buscar por employee_key. No recorta los extremos, igual que la función SQL.
+ */
+export function eppKey(value: string): string {
+  const from = "áéíóúüñÁÉÍÓÚÜÑ";
+  const to = "aeiouunAEIOUUN";
+  let out = "";
+  for (const char of value) {
+    const index = from.indexOf(char);
+    out += index >= 0 ? to[index] : char;
+  }
+  return out.toUpperCase().replace(/\s+/g, " ");
+}
+
+export type EppEmployee ={ id: string; employee_code: string; full_name: string; site: string; position: string };

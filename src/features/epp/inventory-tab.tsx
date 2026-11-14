@@ -4,6 +4,10 @@ import { ClipboardCheck, PackagePlus, Pencil, Search, ShoppingCart, X } from "lu
 import { useMemo, useState } from "react";
 import { eppArticleLabel, type EppArticle } from "@/lib/permissions";
 import { formatDateTime } from "./format";
+import { Pager } from "./pager";
+
+/** Artículos por página: la tabla no pinta todo el catálogo de golpe. */
+const PAGE_SIZE = 25;
 
 export type StockState = "out" | "low" | "ok" | "none";
 
@@ -47,6 +51,7 @@ export function InventoryTab({
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [onlyLow, setOnlyLow] = useState(false);
+  const [page, setPage] = useState(0);
 
   const categories = useMemo(() => Array.from(new Set(articles.map((item) => item.category))).sort(), [articles]);
   const rows = useMemo(() => {
@@ -58,21 +63,25 @@ export function InventoryTab({
       return !term || `${item.name} ${item.size ?? ""} ${item.category}`.toLowerCase().includes(term);
     });
   }, [articles, query, category, onlyLow]);
+  // Al cambiar un filtro se regresa a la primera página; si la lista se achica, a la última que exista.
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const current = Math.min(page, pages - 1);
+  const visible = rows.slice(current * PAGE_SIZE, current * PAGE_SIZE + PAGE_SIZE);
   const missing = useMemo(() => articles.filter((item) => needsRequest(item, openRequests)), [articles, openRequests]);
 
   return (
     <>
       <div className="directory-toolbar">
-        <select className="epp-select" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Filtrar por categoría">
+        <select className="epp-select" value={category} onChange={(e) => { setCategory(e.target.value); setPage(0); }} aria-label="Filtrar por categoría">
           <option value="">Todas las categorías</option>
           {categories.map((item) => <option key={item}>{item}</option>)}
         </select>
-        <label className="epp-check"><input type="checkbox" checked={onlyLow} onChange={(e) => setOnlyLow(e.target.checked)} /> Solo por reponer</label>
+        <label className="epp-check"><input type="checkbox" checked={onlyLow} onChange={(e) => { setOnlyLow(e.target.checked); setPage(0); }} /> Solo por reponer</label>
 
         <label className="search-box">
           <Search size={15} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar artículo o talla" />
-          {query && <button type="button" onClick={() => setQuery("")} aria-label="Limpiar búsqueda"><X size={14} /></button>}
+          <input value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} placeholder="Buscar artículo o talla" />
+          {query && <button type="button" onClick={() => { setQuery(""); setPage(0); }} aria-label="Limpiar búsqueda"><X size={14} /></button>}
         </label>
         {canRequest && missing.length > 0 && (
           <button type="button" className="button button-gold epp-request-all" onClick={() => onRequest(missing.map((item) => item.id))}>
@@ -86,7 +95,7 @@ export function InventoryTab({
             <tr><th>Artículo</th><th className="hide-phone">Categoría</th><th>Existencia en {site}</th><th className="hide-phone">Mínimo</th><th className="hide-tablet">Última actualización</th><th><span className="sr-only">Acciones</span></th></tr>
           </thead>
           <tbody>
-            {rows.map((item) => {
+            {visible.map((item) => {
               const state = stockState(item);
               const folio = openRequests.get(item.id);
               return (
@@ -131,6 +140,7 @@ export function InventoryTab({
           </tbody>
         </table>
       </div>
+      {rows.length > 0 && <Pager page={current} size={PAGE_SIZE} shown={visible.length} total={rows.length} noun={["artículo", "artículos"]} onPage={setPage} />}
     </>
   );
 }

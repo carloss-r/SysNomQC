@@ -82,9 +82,10 @@ export async function GET(request: NextRequest) {
     try {
       const rows = await readAll<EmployeeCheckRow>((from, to) =>
         client
-          .from("employees")
-          .select("id,employee_code,full_name,salary,bank_account,nss,curp,rfc,email,phone")
-          .eq("active", true)
+          // Vista employee_gaps: solo empleados activos con algún dato faltante, y solo verdadero/falso
+          // (antes se descargaban NSS, CURP, RFC y cuenta de todos los activos en cada actualización).
+          .from("employee_gaps")
+          .select("id,employee_code,full_name,has_nss,has_curp,has_rfc,has_bank_account,has_salary,has_email,has_phone")
           .order("id")
           .range(from, to),
       );

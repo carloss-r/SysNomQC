@@ -494,8 +494,10 @@ Las rutas de `/api/admin` usan además `requireAdmin` (límite de 60 peticiones 
 | `/api/epp/articles/[id]` | PATCH | `epp.manage` |
 | `/api/epp/employees` | GET | `epp.deliver` |
 | `/api/epp/movements` | GET / POST | `epp.view` / validado en `epp_apply_site` según el tipo |
-| `/api/epp/ledger` | GET | `epp.view` |
-| `/api/epp/requests` | GET / POST | Cuenta autorizada / `epp.request` |
+| `/api/epp/ledger` | GET | `epp.view` · por páginas (`?page=&size=&kind=&q=`), por mes (`?month=YYYY-MM`) o por trabajador (`?worker=KEY`); responde `{ rows, total }` |
+| `/api/epp/summary` | GET | `epp.view` · totales por mes de la sede (vista `epp_month_summary`) |
+| `/api/epp/people` | GET | `epp.view` · trabajadores con entregas (`?q=` o `?key=`, máx. 5; vista `epp_people`) |
+| `/api/epp/requests` | GET / POST | Cuenta autorizada (`?open=1`: solo abiertas) / `epp.request` |
 | `/api/epp/requests/[id]` | PATCH | Validado en `epp_update_purchase` |
 
 ### Combustibles alternos

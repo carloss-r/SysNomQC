@@ -2,7 +2,7 @@
 
 import { CalendarDays, Check, ClipboardCheck, PackagePlus, Plus, Scale, Search, Trash2, X } from "lucide-react";
 import { useDeferredValue, useId, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
-import { eppArticleLabel, type EppArticle, type EppEmployee, type EppMovement } from "@/lib/permissions";
+import { eppArticleLabel, eppKey, type EppArticle, type EppEmployee, type EppLedgerPage } from "@/lib/permissions";
 import { describeError, requestApi } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-provider";
 import { Field } from "@/shared/ui/field";
@@ -10,6 +10,7 @@ import { SiteBadge } from "@/shared/ui/badges";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { formatDay, todayLocal } from "./format";
 import { normalize } from "./people";
+import { useEppQuery } from "./use-epp-query";
 import { BusyLabel } from "@/shared/ui/loading";
 
 export type MovementKind = "entrega" | "ingreso" | "ajuste";
@@ -45,7 +46,7 @@ export function MovementModal({
   kind,
   articles,
   employees,
-  movements,
+  employeesLoading = false,
   presetArticleId,
   presetEmployee,
   onClose,
@@ -55,7 +56,7 @@ export function MovementModal({
   kind: MovementKind;
   articles: EppArticle[];
   employees: EppEmployee[];
-  movements: EppMovement[];
+  employeesLoading?: boolean;
   presetArticleId?: number;
   presetEmployee?: EppEmployee | null;
   onClose: () => void;
@@ -126,9 +127,14 @@ export function MovementModal({
     }
   }
 
+  // Entregas previas solo del trabajador elegido (antes se buscaban en el libro completo de la sede).
+  const previous = useEppQuery<EppLedgerPage>(
+    kind === "entrega" && employee ? `/api/epp/ledger?site=${encodeURIComponent(site)}&worker=${encodeURIComponent(eppKey(employee.full_name))}` : null,
+    0,
+    { keepPrevious: false },
+  );
   function lastDelivery(articleId: number) {
-    if (!employee) return null;
-    return movements.find((m) => m.kind === "entrega" && m.article_id === articleId && (m.employee_id === employee.id || (m.employee_name ? normalize(m.employee_name) === normalize(employee.full_name) : false))) ?? null;
+    return previous.data?.rows.find((m) => m.article_id === articleId) ?? null;
   }
 
   function updateLine(key: number, patch: Partial<Line>) {
@@ -204,7 +210,7 @@ export function MovementModal({
                 <div className="epp-combo">
                   <div className="search-box epp-search">
                     <Search size={15} />
-                    <input value={query} onChange={(e) => { setQuery(e.target.value); setHighlight(0); }} onKeyDown={onSearchKey} placeholder={`Escribe nombre o ID de un trabajador de ${site}`} autoFocus />
+                    <input value={query} onChange={(e) => { setQuery(e.target.value); setHighlight(0); }} onKeyDown={onSearchKey} placeholder={employeesLoading && employees.length === 0 ? "Cargando trabajadores…" : `Escribe nombre o ID de un trabajador de ${site}`} autoFocus />
                     {query && <button type="button" onClick={() => setQuery("")} aria-label="Limpiar búsqueda"><X size={14} /></button>}
                   </div>
                   {query.trim() && (

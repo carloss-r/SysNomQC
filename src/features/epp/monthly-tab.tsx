@@ -1,38 +1,50 @@
 "use client";
 
 import { useMemo } from "react";
-import type { EppMovement } from "@/lib/permissions";
-import { KIND_LABELS, formatDay } from "./format";
+import type { EppLedgerPage, EppMovement } from "@/lib/permissions";
+import { KIND_LABELS, formatDay, todayLocal } from "./format";
 import { ExportButtons } from "@/shared/reports/export-buttons";
-import { monthKey, monthLabel, normalize } from "./people";
+import { LoadingState } from "@/shared/ui/loading";
+import { monthKey, monthLabel } from "./people";
 import { fileSafe, type Report } from "@/shared/reports/report-export";
+import { useEppQuery } from "./use-epp-query";
+
+const EMPTY: EppMovement[] = [];
 
 export function MonthlyTab({
   site,
-  movements,
+  version,
+  monthsWithData,
   month,
   onMonth,
   onOpenWorker,
 }: {
   site: string;
-  movements: EppMovement[];
+  version: number;
+  /** Meses con movimientos (del resumen de la sede). */
+  monthsWithData: string[];
   month: string;
   onMonth: (month: string) => void;
   onOpenWorker: (key: string, month: string) => void;
 }) {
   const months = useMemo(() => {
-    const set = new Set(movements.map((row) => monthKey(row.moved_on)));
-    set.add(monthKey(new Date().toISOString()));
+    const set = new Set(monthsWithData);
+    set.add(monthKey(todayLocal()));
     return Array.from(set).sort().reverse();
-  }, [movements]);
+  }, [monthsWithData]);
   const current = month || months[0] || "";
-  const rows = useMemo(() => movements.filter((row) => monthKey(row.moved_on) === current), [movements, current]);
+  // Solo los movimientos del mes elegido (antes se filtraba el libro completo en el navegador).
+  const { data, loading, error } = useEppQuery<EppLedgerPage>(
+    current ? `/api/epp/ledger?site=${encodeURIComponent(site)}&month=${current}` : null,
+    version,
+  );
+  const rows = data?.rows ?? EMPTY;
 
   const totals = useMemo(() => {
     const deliveries = rows.filter((row) => row.kind === "entrega");
     return {
       pieces: deliveries.reduce((sum, row) => sum + Math.abs(row.delta), 0),
-      workers: new Set(deliveries.map((row) => normalize(row.employee_name ?? ""))).size,
+      workers: new Set(deliveries.map((row) => row.employee_key ?? "")).size,
       entries: rows.filter((row) => row.kind === "ingreso").reduce((sum, row) => sum + row.delta, 0),
     };
   }, [rows]);
@@ -53,7 +65,7 @@ export function MonthlyTab({
     const map = new Map<string, { key: string; name: string; group: string | null; pieces: number; items: Map<string, number> }>();
     for (const row of rows) {
       if (row.kind !== "entrega" || !row.employee_name) continue;
-      const key = normalize(row.employee_name);
+      const key = row.employee_key ?? row.employee_name;
       const entry = map.get(key) ?? { key, name: row.employee_name, group: row.employee_group, pieces: 0, items: new Map() };
       entry.pieces += Math.abs(row.delta);
       entry.items.set(row.article_name, (entry.items.get(row.article_name) ?? 0) + Math.abs(row.delta));
@@ -130,8 +142,10 @@ export function MonthlyTab({
           </select>
         </label>
         <span className="epp-muted">{totals.pieces} piezas entregadas a {totals.workers} trabajadores · {totals.entries} piezas ingresadas</span>
-        <ExportButtons className="epp-push" build={buildReport} disabled={rows.length === 0} />
+        <ExportButtons className="epp-push" build={buildReport} disabled={rows.length === 0 || loading} />
       </div>
+      {error && <div className="error-banner" role="alert">{error}</div>}
+      {loading && !data ? <LoadingState label={`Cargando ${monthLabel(current)}…`} rows={5} /> : (
 
       <div className="epp-two">
         <div>
@@ -167,6 +181,7 @@ export function MonthlyTab({
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

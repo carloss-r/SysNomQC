@@ -474,6 +474,7 @@ body:has(.network-bar.saving) { cursor: progress; }
 
 /* ---- Notificaciones ---- */
 .epp-results button.active { background: var(--green-soft); }
+.epp-pager { display: flex; align-items: center; gap: 12px; }
 .epp-more { padding: 8px 12px; color: var(--faint); font-size: 12px; text-align: center; background: var(--surface-2); }
 /* Buscadores de EPP: la lista flota sobre el formulario (no lo empuja) y los textos largos no lo ensanchan. */
 .epp-combo { position: relative; min-width: 0; }

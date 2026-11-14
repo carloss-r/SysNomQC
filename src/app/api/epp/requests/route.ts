@@ -21,7 +21,9 @@ export async function GET(request: NextRequest) {
 
   try {
     // La cantidad comprada solo viaja a Compras: quien cuenta lo que llega no debe conocerla.
-    const { error, requests } = await readPurchaseRequests(auth.client, { site, withPurchased: access.permissions.includes("epp.purchase") });
+    // ?open=1: solo pendientes y en compra (lo que la pantalla necesita siempre: bloqueos y contadores).
+    const open = request.nextUrl.searchParams.get("open") === "1";
+    const { error, requests } = await readPurchaseRequests(auth.client, { site, open, withPurchased: access.permissions.includes("epp.purchase") });
     if (error) return eppDatabaseError(error, "listar solicitudes");
     return NextResponse.json(requests);
   } catch (error) {

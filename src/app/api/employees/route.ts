@@ -28,44 +28,27 @@ export async function GET(request: NextRequest) {
   try {
     // ?next_code=1 → siguiente ID sugerido (QG-n). Lee solo la columna del código y solo se pide
     // al abrir "Registrar empleado", porque la lista paginada no tiene todos los códigos.
+    // Lo calcula la base en una consulta (employee_next_code); antes se descargaban todos los códigos.
     if (params.get("next_code") === "1") {
-      const CHUNK = 1000;
-      let highest = 100;
-      for (let from = 0; ; from += CHUNK) {
-        const { data: codes, error: codesError } = await auth.client
-          .from("employees")
-          .select("employee_code")
-          .order("employee_code")
-          .range(from, from + CHUNK - 1);
-        if (codesError) return databaseErrorResponse(codesError);
-        for (const row of codes) {
-          highest = Math.max(highest, Number(row.employee_code.match(/(\d+)$/)?.[1] ?? 0));
-        }
-        if (codes.length < CHUNK) break;
-      }
-      return NextResponse.json({ next_code: `QG-${highest + 1}` });
+      const { data: nextCode, error: codeError } = await auth.client.rpc("employee_next_code");
+      if (codeError) return databaseErrorResponse(codeError);
+      return NextResponse.json({ next_code: nextCode as string });
     }
 
     // ?stats=1 → solo conteos (sin traer filas) para los contadores de la pantalla.
     // Los contadores cuentan solo trabajadores activos: una baja los hace bajar.
+    // Una sola consulta a la vista employee_site_counts (antes eran 6 conteos por separado).
     if (params.get("stats") === "1") {
-      const countSite = (site?: string) => {
-        const query = auth.client.from("employees").select("id", { count: "exact", head: true }).eq("active", true);
-        return site ? query.eq("site", site) : query;
-      };
-      const results = await Promise.all([countSite(), ...SITES.map((site) => countSite(site))]);
-      const failed = results.find((result) => result.error);
-      if (failed?.error) return databaseErrorResponse(failed.error);
-      const [all, ...perSite] = results;
-      // Expedientes en seguimiento. Si la columna aún no existe (falta la migración), cuenta 0.
-      const followUp = await auth.client
-        .from("employees")
-        .select("id", { count: "exact", head: true })
-        .not("observations", "is", null);
+      const { data: counts, error: countsError } = await auth.client
+        .from("employee_site_counts")
+        .select("site,active,follow_up");
+      if (countsError) return databaseErrorResponse(countsError);
+      const rows = (counts ?? []) as { site: string; active: number; follow_up: number }[];
+      const bySite = Object.fromEntries(SITES.map((site) => [site, rows.find((row) => row.site === site)?.active ?? 0]));
       return NextResponse.json({
-        total: all.count ?? 0,
-        bySite: Object.fromEntries(SITES.map((site, index) => [site, perSite[index].count ?? 0])),
-        followUp: followUp.error ? 0 : (followUp.count ?? 0),
+        total: rows.reduce((sum, row) => sum + row.active, 0),
+        bySite,
+        followUp: rows.reduce((sum, row) => sum + row.follow_up, 0),
       });
     }
 

@@ -211,17 +211,18 @@ export function countNotifications(rows: PurchaseCheckRow[]): AppNotification[] 
   });
 }
 
+/** Fila de la vista employee_gaps: solo indica si cada dato existe; el valor nunca sale de la base. */
 export type EmployeeCheckRow = {
   id: string;
   employee_code: string;
   full_name: string;
-  salary: number | null;
-  bank_account: string | null;
-  nss: string | null;
-  curp: string | null;
-  rfc: string | null;
-  email: string | null;
-  phone: string | null;
+  has_nss: boolean;
+  has_curp: boolean;
+  has_rfc: boolean;
+  has_bank_account: boolean;
+  has_salary: boolean;
+  has_email: boolean;
+  has_phone: boolean;
 };
 
 const missing = (entries: [string, boolean][]) => entries.filter(([, absent]) => absent).map(([label]) => label);
@@ -233,11 +234,11 @@ export function employeeNotifications(rows: EmployeeCheckRow[]): AppNotification
     const result: AppNotification[] = [];
 
     const payroll = missing([
-      ["NSS", !row.nss],
-      ["CURP", !row.curp],
-      ["RFC", !row.rfc],
-      ["cuenta bancaria", !row.bank_account],
-      ["salario base", !row.salary || row.salary <= 0],
+      ["NSS", !row.has_nss],
+      ["CURP", !row.has_curp],
+      ["RFC", !row.has_rfc],
+      ["cuenta bancaria", !row.has_bank_account],
+      ["salario base", !row.has_salary],
     ]);
     if (payroll.length > 0) {
       result.push({
@@ -251,8 +252,8 @@ export function employeeNotifications(rows: EmployeeCheckRow[]): AppNotification
     }
 
     const contact = missing([
-      ["correo", !row.email],
-      ["teléfono", !row.phone],
+      ["correo", !row.has_email],
+      ["teléfono", !row.has_phone],
     ]);
     if (contact.length > 0) {
       result.push({

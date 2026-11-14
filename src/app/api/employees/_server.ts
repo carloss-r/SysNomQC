@@ -166,10 +166,10 @@ export function databaseErrorResponse(error: { code?: string; message: string })
     );
   }
 
-  // Columna nueva aún no creada en este entorno (salario de cotización, baja…).
-  if (error.code === "42703" || error.code === "PGRST204") {
+  // Columna, vista o función nueva aún no creada en este entorno (salario de cotización, contadores…).
+  if (["42703", "PGRST204", "42P01", "PGRST205", "42883", "PGRST202"].includes(error.code ?? "")) {
     return NextResponse.json(
-      { error: "Faltan migraciones de empleados en Supabase (hasta 202611130005_empleados_asignacion.sql)." },
+      { error: "Faltan migraciones de empleados en Supabase (hasta 202611140002_empleados_consultas_rapidas.sql)." },
       { status: 503 },
     );
   }

@@ -3,7 +3,7 @@
 import { AlertTriangle, Boxes, CalendarDays, ClipboardCheck, HardHat, History, MapPin, Package, PackagePlus, Plus, Scale, ShoppingCart, UserSearch } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { EppArticle, EppEmployee, EppMovement, EppPurchaseRequest } from "@/lib/permissions";
+import type { EppArticle, EppEmployee, EppMonthSummary, EppPurchaseRequest } from "@/lib/permissions";
 import { SITES } from "@/lib/employees";
 import { describeError, requestApi } from "@/lib/api-client";
 import { EPP_CHANGED_EVENT } from "@/lib/notifications";
@@ -24,6 +24,10 @@ import { RequestModal } from "./request-modal";
 import { RequestsTab } from "./requests-tab";
 import { WorkersTab } from "./workers-tab";
 import { LoadingState } from "@/shared/ui/loading";
+import { todayLocal } from "./format";
+import { useEppQuery } from "./use-epp-query";
+
+const NO_EMPLOYEES: EppEmployee[] = [];
 
 type Tab = "inventory" | "workers" | "monthly" | "history" | "requests";
 
@@ -64,10 +68,15 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
 
   const [site, setSite] = useState<string>(fixedSite ?? validRequested ?? SITES[0]);
   const [articles, setArticles] = useState<EppArticle[]>([]);
-  const [movements, setMovements] = useState<EppMovement[]>([]);
-  const [employees, setEmployees] = useState<EppEmployee[]>([]);
+  // Totales por mes de la sede (calculados en la base). Ya no se descarga el libro de movimientos al entrar.
+  const [summary, setSummary] = useState<EppMonthSummary[]>([]);
+  const [employees, setEmployees] = useState<{ site: string; rows: EppEmployee[] } | null>(null);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
+  // Solo solicitudes abiertas de todas las sedes (bloqueos "Pedido" y contadores); la lista completa
+  // se pide al abrir la pestaña Solicitudes.
   const [requests, setRequests] = useState<EppPurchaseRequest[]>([]);
-  const [requestsLoading, setRequestsLoading] = useState(canSeeRequests);
+  /** Se incrementa tras cada cambio para que la pestaña abierta vuelva a pedir sus datos. */
+  const [version, setVersion] = useState(0);
   const [busyRequest, setBusyRequest] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>(requestedTab === "solicitudes" && canSeeRequests ? "requests" : "inventory");
   const [workerKey, setWorkerKey] = useState<string | null>(null);
@@ -86,14 +95,13 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
     if (!active) return;
     try {
       const query = `?site=${encodeURIComponent(site)}`;
-      const [items, moves] = await Promise.all([
+      const [items, months] = await Promise.all([
         requestApi<EppArticle[]>(active, `/api/epp/articles${query}`),
-        requestApi<EppMovement[]>(active, `/api/epp/ledger${query}`),
+        requestApi<EppMonthSummary[]>(active, `/api/epp/summary${query}`),
       ]);
       setArticles(items);
-      setMovements(moves);
+      setSummary(months);
       setError("");
-      window.dispatchEvent(new Event(EPP_CHANGED_EVENT));
     } catch (err) {
       setError(describeError(err, "No se pudo cargar el inventario de EPP."));
     } finally {
@@ -105,13 +113,18 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
     const active = sessionRef.current;
     if (!active || !canSeeRequests) return;
     try {
-      setRequests(await requestApi<EppPurchaseRequest[]>(active, "/api/epp/requests"));
+      setRequests(await requestApi<EppPurchaseRequest[]>(active, "/api/epp/requests?open=1"));
     } catch (err) {
       setError(describeError(err, "No se pudieron cargar las solicitudes de compra."));
-    } finally {
-      setRequestsLoading(false);
     }
   }, [canSeeRequests]);
+
+  /** Tras registrar algo: se recarga lo visible y se avisa a la campana (solo entonces, no en cada carga). */
+  const afterChange = useCallback(async (withRequests = false) => {
+    setVersion((value) => value + 1);
+    await Promise.all([load(), withRequests ? loadRequests() : Promise.resolve()]);
+    window.dispatchEvent(new Event(EPP_CHANGED_EVENT));
+  }, [load, loadRequests]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -123,22 +136,38 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
     return () => window.clearTimeout(timer);
   }, [loadRequests]);
 
-  // La lista de trabajadores solo se pide a quien puede entregar EPP, y solo los de la sede elegida.
+  // La lista de trabajadores se pide solo cuando hace falta (al entregar o en "Por trabajador"),
+  // una vez por sede, y solo a quien puede entregar EPP.
+  const needEmployees = canDeliver && (tab === "workers" || (dialog?.type === "movement" && dialog.kind === "entrega"));
+  const haveEmployees = employees?.site === site;
   useEffect(() => {
     const active = sessionRef.current;
-    if (!active || !canDeliver) return;
+    if (!active || !needEmployees || haveEmployees) return;
     let cancelled = false;
-    requestApi<EppEmployee[]>(active, `/api/epp/employees?site=${encodeURIComponent(site)}`)
-      .then((rows) => { if (!cancelled) setEmployees(rows.filter((item) => item.site === site)); })
-      .catch((err) => { if (!cancelled) setError(describeError(err, "No se pudo cargar la lista de trabajadores.")); });
-    return () => { cancelled = true; };
-  }, [canDeliver, session?.user.id, site]);
+    const timer = window.setTimeout(() => {
+      setEmployeesLoading(true);
+      requestApi<EppEmployee[]>(active, `/api/epp/employees?site=${encodeURIComponent(site)}`)
+        .then((rows) => { if (!cancelled) setEmployees({ site, rows: rows.filter((item) => item.site === site) }); })
+        .catch((err) => { if (!cancelled) setError(describeError(err, "No se pudo cargar la lista de trabajadores.")); })
+        .finally(() => { if (!cancelled) setEmployeesLoading(false); });
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [needEmployees, haveEmployees, site]);
+  const siteEmployees = haveEmployees ? employees.rows : NO_EMPLOYEES;
+
+  // Lista completa de solicitudes de la sede: solo con la pestaña Solicitudes abierta.
+  const siteRequests = useEppQuery<EppPurchaseRequest[]>(
+    tab === "requests" && canSeeRequests ? `/api/epp/requests?site=${encodeURIComponent(site)}` : null,
+    version,
+  );
 
   function changeSite(next: string) {
     if (next === site) return;
     setLoading(true);
     setWorkerKey(null);
-    setEmployees([]);
     setSite(next);
   }
 
@@ -160,16 +189,15 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
 
   const stats = useMemo(() => {
     const active = articles.filter((item) => item.active);
-    const month = new Date().toISOString().slice(0, 7);
+    const month = todayLocal().slice(0, 7);
     return {
       articles: active.filter((item) => item.tracked).length,
       pieces: active.reduce((sum, item) => sum + item.stock, 0),
       low: active.filter((item) => stockState(item) === "out" || stockState(item) === "low").length,
-      delivered: movements
-        .filter((row) => row.kind === "entrega" && row.moved_on.startsWith(month))
-        .reduce((sum, row) => sum + Math.abs(row.delta), 0),
+      delivered: summary.find((row) => row.month === month)?.delivered ?? 0,
     };
-  }, [articles, movements]);
+  }, [articles, summary]);
+  const monthsWithData = useMemo(() => summary.filter((row) => row.movements > 0).map((row) => row.month), [summary]);
 
   const categories = useMemo(() => Array.from(new Set(articles.map((item) => item.category))), [articles]);
 
@@ -187,7 +215,7 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
     try {
       await requestApi(session, `/api/epp/requests/${request.id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelada" }) });
       notify("success", "Solicitud cancelada", `Folio ${request.id} · ${request.site}.`);
-      await Promise.all([loadRequests(), load()]);
+      await afterChange(true);
     } catch (err) {
       notify("error", "No se pudo cancelar la solicitud", describeError(err, "Inténtalo de nuevo."));
     } finally {
@@ -201,8 +229,7 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
     try {
       await requestApi(session, `/api/epp/requests/${request.id}/ack`, { method: "POST", body: "{}" });
       notify("success", "Faltante revisado", `Folio ${request.id} · el aviso ya no aparecerá.`);
-      await loadRequests();
-      window.dispatchEvent(new Event(EPP_CHANGED_EVENT));
+      await afterChange(true);
     } catch (err) {
       notify("error", "No se pudo marcar el aviso", describeError(err, "Inténtalo de nuevo."));
     } finally {
@@ -212,7 +239,7 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
 
   /** Tras registrar una compra o un conteo cambian solicitudes, existencias y bloqueos. */
   async function afterPurchaseChange() {
-    await Promise.all([loadRequests(), load()]);
+    await afterChange(true);
   }
 
   async function downloadPdf(list: EppPurchaseRequest[]) {
@@ -229,7 +256,7 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
     { key: "requests", label: `Solicitudes${openCount ? ` (${openCount})` : ""}`, icon: ShoppingCart, show: canSeeRequests },
     { key: "workers", label: "Por trabajador", icon: UserSearch, show: true },
     { key: "monthly", label: "Control mensual", icon: CalendarDays, show: true },
-    { key: "history", label: `Historial (${movements.length})`, icon: History, show: true },
+    { key: "history", label: "Historial", icon: History, show: true },
   ];
 
   return (
@@ -296,8 +323,8 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
         {tab === "requests" ? (
           <RequestsTab
             site={site}
-            requests={requests}
-            loading={requestsLoading}
+            requests={siteRequests.data ?? []}
+            loading={siteRequests.loading && !siteRequests.data}
             buyer={buyer}
             canManage={canManage}
             canRequest={canRequest}
@@ -327,9 +354,10 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
           />
         ) : tab === "workers" ? (
           <WorkersTab
+            key={site}
             site={site}
-            movements={movements}
-            employees={employees}
+            version={version}
+            employees={siteEmployees}
             canDeliver={canDeliver}
             selectedKey={workerKey}
             month={workerMonth}
@@ -339,14 +367,16 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
           />
         ) : tab === "monthly" ? (
           <MonthlyTab
+            key={site}
             site={site}
-            movements={movements}
+            version={version}
+            monthsWithData={monthsWithData}
             month={reportMonth}
             onMonth={setReportMonth}
             onOpenWorker={(key, month) => { setWorkerKey(key); setWorkerMonth(month); setTab("workers"); }}
           />
         ) : (
-          <HistoryTab movements={movements} />
+          <HistoryTab key={site} site={site} version={version} />
         )}
       </section>
 
@@ -355,18 +385,18 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
           site={site}
           kind={dialog.kind}
           articles={articles}
-          employees={employees}
-          movements={movements}
+          employees={siteEmployees}
+          employeesLoading={employeesLoading}
           presetArticleId={dialog.articleId}
           presetEmployee={dialog.employee}
           onClose={() => setDialog(null)}
-          onDone={load}
+          onDone={() => afterChange()}
         />
       )}
       {dialog?.type === "buy" && <BuyModal request={dialog.request} onClose={() => setDialog(null)} onDone={afterPurchaseChange} />}
       {dialog?.type === "count" && <CountModal request={dialog.request} onClose={() => setDialog(null)} onDone={afterPurchaseChange} />}
       {dialog?.type === "article" && (
-        <ArticleModal site={site} article={dialog.article} categories={categories} onClose={() => setDialog(null)} onSaved={load} />
+        <ArticleModal site={site} article={dialog.article} categories={categories} onClose={() => setDialog(null)} onSaved={() => afterChange()} />
       )}
       {dialog?.type === "request" && (
         <RequestModal
@@ -375,10 +405,7 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
           presetIds={dialog.articleIds}
           openRequests={openRequests}
           onClose={() => setDialog(null)}
-          onDone={() => {
-            void loadRequests();
-            window.dispatchEvent(new Event(EPP_CHANGED_EVENT));
-          }}
+          onDone={() => void afterChange(true)}
         />
       )}
     </main>
