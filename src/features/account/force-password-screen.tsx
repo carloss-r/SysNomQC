@@ -17,7 +17,7 @@ export function ForcePasswordScreen() {
         <p className="eyebrow">SEGURIDAD DE TU CUENTA</p>
         <h1>Crea tu nueva contraseña</h1>
         <p className="login-copy">
-          {access?.full_name ? `${access.full_name}, el` : "El"} administrador restableció tu contraseña. Escribe la temporal que te dio y elige una nueva que solo tú conozcas.
+          {access?.full_name ? `${access.full_name}, el` : "El"} administrador restableció tu contraseña. Elige una nueva contraseña que solo tú conozcas.
         </p>
         <PasswordForm forced />
         <button type="button" className="text-button account-signout" onClick={() => void signOut()}><LogOut size={15} /> Cerrar sesión</button>

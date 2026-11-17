@@ -12,15 +12,15 @@ import { useNotify } from "@/shared/ui/notice-provider";
 import { PageHeader } from "@/shared/ui/page-header";
 import { PasswordForm } from "./password-form";
 
-type Form = { full_name: string; username: string; phone: string };
+type Form = { full_name: string; phone: string };
 
-/** "Mi cuenta": cada usuario edita su nombre, usuario de acceso y teléfono, y cambia su contraseña. */
+/** "Mi cuenta": cada usuario edita su nombre y teléfono, y cambia su contraseña. El usuario de acceso lo pone el administrador. */
 export function AccountView() {
   const { session, refreshAccess } = useAuth();
   const notify = useNotify();
   const sessionRef = useRef(session);
   const [profile, setProfile] = useState<MyProfile | null>(null);
-  const [form, setForm] = useState<Form>({ full_name: "", username: "", phone: "" });
+  const [form, setForm] = useState<Form>({ full_name: "", phone: "" });
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -38,7 +38,7 @@ export function AccountView() {
       .then((data) => {
         if (cancelled) return;
         setProfile(data);
-        setForm({ full_name: data.full_name ?? "", username: data.username ?? "", phone: data.phone ?? "" });
+        setForm({ full_name: data.full_name ?? "", phone: data.phone ?? "" });
       })
       .catch((err) => { if (!cancelled) setLoadError(describeError(err, "No se pudieron cargar tus datos.")); });
     return () => { cancelled = true; };
@@ -49,26 +49,22 @@ export function AccountView() {
     if (!session || !profile) return;
     setError("");
     const full_name = form.full_name.trim().replace(/\s+/g, " ");
-    const username = form.username.trim();
     const phone = form.phone.trim();
     if (full_name.length < 3) return setError("Escribe tu nombre completo.");
-    if (username && !/^[A-Za-z0-9._-]{3,30}$/.test(username)) return setError("El usuario lleva de 3 a 30 letras, números, punto, guion o guion bajo (sin espacios ni @).");
     if (phone && !/^[0-9 +()-]{7,20}$/.test(phone)) return setError("El teléfono lleva de 7 a 20 dígitos (puede incluir espacios, guiones o +).");
 
     // Solo lo que cambió.
     const changes: Record<string, string | null> = {};
     if (full_name !== (profile.full_name ?? "")) changes.full_name = full_name;
-    if (username !== (profile.username ?? "")) changes.username = username || null;
     if (phone !== (profile.phone ?? "")) changes.phone = phone || null;
     if (Object.keys(changes).length === 0) return notify("info", "Sin cambios", "Tus datos ya están guardados.");
 
     setBusy(true);
     try {
       await requestApi(session, "/api/me/profile", { method: "PATCH", body: JSON.stringify(changes) });
-      const updated = { ...profile, full_name, username: username || null, phone: phone || null };
-      setProfile(updated);
-      setForm({ full_name, username, phone });
-      notify("success", "Datos guardados", username && changes.username !== undefined ? `Ya puedes entrar con el usuario "${username}".` : "Tu cuenta quedó actualizada.");
+      setProfile({ ...profile, full_name, phone: phone || null });
+      setForm({ full_name, phone });
+      notify("success", "Datos guardados", "Tu cuenta quedó actualizada.");
       await refreshAccess().catch(() => undefined);
     } catch (err) {
       setError(describeError(err, "No se pudieron guardar tus datos."));
@@ -92,20 +88,16 @@ export function AccountView() {
               <Field label="Nombre completo" required>
                 <input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} maxLength={150} autoComplete="name" required />
               </Field>
-              <div className="form-grid">
-                <Field label="Usuario para iniciar sesión">
-                  <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} maxLength={30} autoCapitalize="none" spellCheck={false} autoComplete="username" placeholder="Opcional, p. ej. jperez" />
-                </Field>
-                <Field label="Teléfono">
-                  <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} maxLength={20} inputMode="tel" autoComplete="tel" placeholder="Opcional" />
-                </Field>
-              </div>
+              <Field label="Teléfono">
+                <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} maxLength={20} inputMode="tel" autoComplete="tel" placeholder="Opcional" />
+              </Field>
               <dl className="account-facts">
+                <div><dt>Usuario</dt><dd>{profile.username ?? "Sin usuario (entra con su correo)"}</dd></div>
                 <div><dt>Correo</dt><dd>{profile.email}</dd></div>
                 <div><dt>Rol</dt><dd>{roleLabels(profile.role_names) || "Sin rol"}</dd></div>
                 <div><dt>Sede</dt><dd>{profile.site ?? "Todas las sedes"}</dd></div>
               </dl>
-              <p className="epp-muted account-note">El correo, el rol y la sede solo los cambia el administrador.</p>
+              <p className="epp-muted account-note">El usuario, el correo, el rol y la sede solo los cambia el administrador.</p>
               {error && <p className="inline-error" role="alert">{error}</p>}
               <div className="modal-actions">
                 <button type="submit" className="button button-gold" disabled={busy}><Save size={16} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : "Guardar datos"}</button>

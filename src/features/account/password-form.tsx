@@ -10,8 +10,8 @@ import { BusyLabel } from "@/shared/ui/loading";
 import { useNotify } from "@/shared/ui/notice-provider";
 
 /**
- * Cambiar la contraseña de la propia cuenta. Pide la actual (o la temporal que dio el administrador),
- * la nueva y su confirmación.
+ * Cambiar la contraseña de la propia cuenta: la nueva y su confirmación. La actual es opcional
+ * (si se escribe se verifica; si no se recuerda se deja vacía).
  */
 export function PasswordForm({ forced = false, onDone }: { forced?: boolean; onDone?: () => void }) {
   const { session, refreshAccess } = useAuth();
@@ -30,15 +30,14 @@ export function PasswordForm({ forced = false, onDone }: { forced?: boolean; onD
     event.preventDefault();
     if (!session) return;
     setError("");
-    if (!current) return setError(forced ? "Escribe la contraseña temporal que te dieron." : "Escribe tu contraseña actual.");
     if (!longEnough) return setError(`La nueva contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`);
     if (!matches) return setError("La confirmación no coincide con la nueva contraseña.");
-    if (next === current) return setError("La nueva contraseña debe ser distinta de la actual.");
+    if (current && next === current) return setError("La nueva contraseña debe ser distinta de la actual.");
     setBusy(true);
     try {
       await requestApi(session, "/api/me/password", {
         method: "POST",
-        body: JSON.stringify({ current_password: current, new_password: next }),
+        body: JSON.stringify({ ...(current ? { current_password: current } : {}), new_password: next }),
       });
       setCurrent("");
       setNext("");
@@ -56,8 +55,8 @@ export function PasswordForm({ forced = false, onDone }: { forced?: boolean; onD
   const type = show ? "text" : "password";
   return (
     <form className="employee-form account-form" onSubmit={submit}>
-      <Field label={forced ? "Contraseña temporal" : "Contraseña actual"} required>
-        <input type={type} autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} maxLength={72} required />
+      <Field label={forced ? "Contraseña temporal (opcional)" : "Contraseña actual (opcional)"}>
+        <input type={type} autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} maxLength={72} placeholder="Déjala vacía si no la recuerdas" />
       </Field>
       <div className="form-grid">
         <Field label={`Nueva contraseña (mín. ${MIN_PASSWORD_LENGTH})`} required>

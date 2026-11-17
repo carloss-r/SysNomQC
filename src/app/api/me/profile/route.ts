@@ -5,16 +5,14 @@ import { recordAudit } from "@/lib/audit";
 import { reportServerIncident } from "@/lib/incidents";
 import type { MyProfile } from "@/lib/permissions";
 import { createServiceClient } from "@/lib/supabase-admin";
-import { usernameSchema } from "../../admin/_schemas";
 import { BadJsonError, getAuthenticatedClient, readJson } from "../../employees/_server";
 
 const noStore = { "Cache-Control": "no-store" };
 
-/** Lo único que una cuenta puede cambiar de sí misma. Rol, sede y estatus son del administrador. */
+/** Lo único que una cuenta puede cambiar de sí misma. Usuario, correo, rol, sede y estatus son del administrador. */
 const profileSchema = z
   .object({
     full_name: z.string().trim().min(3).max(150),
-    username: usernameSchema.nullable(),
     phone: z
       .string()
       .trim()
@@ -60,18 +58,17 @@ export async function PATCH(request: NextRequest) {
     const input = profileSchema.safeParse(await readJson(request));
     if (!input.success) {
       return NextResponse.json(
-        { error: "Revisa tus datos: nombre de 3 a 150 letras; usuario de 3 a 30 (letras, números, punto, guion); teléfono de 7 a 20 dígitos." },
+        { error: "Revisa tus datos: nombre de 3 a 150 letras y teléfono de 7 a 20 dígitos." },
         { status: 400 },
       );
     }
     const admin = createServiceClient();
     if (!admin) return NextResponse.json({ error: "El servidor no está configurado para guardar cambios de cuenta." }, { status: 500 });
 
-    // Solo la fila de la propia cuenta y solo estos campos.
+    // Solo la fila de la propia cuenta y solo estos campos (nombre y teléfono).
     const { error } = await admin.from("authorized_users").update(input.data).eq("user_id", auth.access.user_id);
     if (error) {
-      if (error.code === "23505") return NextResponse.json({ error: "Ese nombre de usuario ya lo usa otra cuenta." }, { status: 409 });
-      if (error.code === "23514") return NextResponse.json({ error: "El usuario o el teléfono no tienen un formato válido." }, { status: 400 });
+      if (error.code === "23514") return NextResponse.json({ error: "El teléfono no tiene un formato válido." }, { status: 400 });
       if (error.code === "42703" || error.code === "PGRST204") {
         return NextResponse.json({ error: "Falta ejecutar en Supabase la migración 202611180001_mi_cuenta.sql." }, { status: 503 });
       }

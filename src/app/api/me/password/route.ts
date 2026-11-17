@@ -11,14 +11,15 @@ import { BadJsonError, getAuthenticatedClient, readJson } from "../../employees/
 
 const passwordSchema = z
   .object({
-    current_password: z.string().min(1).max(72),
+    /** Opcional: si se escribe, se verifica; si se deja vacía, se cambia sin ella (la sesión ya está iniciada). */
+    current_password: z.string().max(72).optional(),
     new_password: z.string().min(MIN_PASSWORD_LENGTH).max(72),
   })
   .strict();
 
 /**
- * Cambio de contraseña de la propia cuenta. Se confirma la contraseña actual (o la temporal que dio el
- * administrador) antes de cambiarla, para que una sesión abierta y olvidada no baste para quedarse la cuenta.
+ * Cambio de contraseña de la propia cuenta (con la sesión iniciada). La contraseña actual es opcional:
+ * si el usuario la escribe se verifica; si no la recuerda puede dejarla vacía.
  */
 export async function POST(request: NextRequest) {
   const auth = await getAuthenticatedClient(request);
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `La nueva contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.` }, { status: 400 });
     }
     const { current_password, new_password } = input.data;
-    if (current_password === new_password) {
+    if (current_password && current_password === new_password) {
       return NextResponse.json({ error: "La nueva contraseña debe ser distinta de la actual." }, { status: 400 });
     }
 
@@ -43,19 +44,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "El servidor no está configurado para cambiar contraseñas." }, { status: 500 });
     }
 
-    // Verificar la contraseña actual sin tocar la sesión del navegador.
-    const verifier = createClient(url, publishableKey, { auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false } });
-    const check = await verifier.auth.signInWithPassword({ email: auth.access.email, password: current_password });
-    if (check.error || !check.data.session) {
-      if (check.error && (check.error.name === "AuthRetryableFetchError" || (check.error.status ?? 0) >= 500)) {
-        reportServerIncident("api · cambiar contraseña · verificar", check.error);
-        return NextResponse.json({ error: "No se pudo verificar tu contraseña. Inténtalo de nuevo." }, { status: 503 });
+    // Si escribió la contraseña actual, se verifica sin tocar la sesión del navegador.
+    if (current_password) {
+      const verifier = createClient(url, publishableKey, { auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false } });
+      const check = await verifier.auth.signInWithPassword({ email: auth.access.email, password: current_password });
+      if (check.error || !check.data.session) {
+        if (check.error && (check.error.name === "AuthRetryableFetchError" || (check.error.status ?? 0) >= 500)) {
+          reportServerIncident("api · cambiar contraseña · verificar", check.error);
+          return NextResponse.json({ error: "No se pudo verificar tu contraseña. Inténtalo de nuevo." }, { status: 503 });
+        }
+        return NextResponse.json({ error: "La contraseña actual no es correcta. Si no la recuerdas, deja ese campo vacío." }, { status: 400 });
       }
-      return NextResponse.json({ error: "La contraseña actual no es correcta." }, { status: 400 });
+      // Esa verificación abrió una sesión de servidor que no se usa: se descarta solo ESA
+      // (scope "local"; el modo por defecto cerraría también la sesión del navegador).
+      await verifier.auth.signOut({ scope: "local" }).catch(() => undefined);
     }
-    // Esa verificación abrió una sesión de servidor que no se usa: se descarta solo ESA
-    // (scope "local"; el modo por defecto cerraría también la sesión del navegador).
-    await verifier.auth.signOut({ scope: "local" }).catch(() => undefined);
 
     const { error } = await admin.auth.admin.updateUserById(auth.access.user_id, { password: new_password });
     if (error) {
@@ -68,7 +71,7 @@ export async function POST(request: NextRequest) {
     if (flag.error && flag.error.code !== "42703" && flag.error.code !== "PGRST204") throw flag.error;
 
     clearAccessCache();
-    await recordAudit(request, auth.access, "account.password", auth.access.user_id);
+    await recordAudit(request, auth.access, "account.password", auth.access.user_id, { verified_current: Boolean(current_password) });
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (error instanceof BadJsonError) return NextResponse.json({ error: error.message }, { status: 400 });
