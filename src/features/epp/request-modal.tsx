@@ -2,12 +2,13 @@
 
 import { Plus, Send, ShoppingCart, Trash2, X } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
-import { eppArticleLabel, type EppArticle } from "@/lib/permissions";
+import type { EppArticle } from "@/lib/permissions";
 import { describeError, requestApi } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-provider";
 import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { BusyLabel } from "@/shared/ui/loading";
+import { ArticlePicker } from "./article-picker";
 
 type Line = { key: number; article_id: string; quantity: string };
 let lineCounter = 0;
@@ -94,15 +95,16 @@ export function RequestModal({
                 return (
                   <div key={line.key} className="epp-line">
                     <Field label="Artículo">
-                      <select value={line.article_id} onChange={(e) => {
-                        const next = byId.get(Number(e.target.value));
-                        updateLine(line.key, { article_id: e.target.value, quantity: next ? String(suggestedQuantity(next)) : line.quantity });
-                      }}>
-                        <option value="">Selecciona…</option>
-                        {(article && !selectable.includes(article) ? [article, ...selectable] : selectable).map((item) => (
-                          <option key={item.id} value={item.id}>{eppArticleLabel(item.name, item.size)} (hay {item.stock}, mín. {item.min_stock})</option>
-                        ))}
-                      </select>
+                      <ArticlePicker
+                        articles={article && !selectable.includes(article) ? [article, ...selectable] : selectable}
+                        value={line.article_id}
+                        taken={lines.filter((other) => other.key !== line.key).map((other) => other.article_id)}
+                        detail={(item) => `${item.category} · hay ${item.stock}, mín. ${item.min_stock}`}
+                        onChange={(id) => {
+                          const next = byId.get(Number(id));
+                          updateLine(line.key, { article_id: id, quantity: next ? String(suggestedQuantity(next)) : line.quantity });
+                        }}
+                      />
                     </Field>
                     <Field label="Cantidad">
                       <input type="number" step={1} min={1} max={100000} value={line.quantity} onChange={(e) => updateLine(line.key, { quantity: e.target.value })} />
