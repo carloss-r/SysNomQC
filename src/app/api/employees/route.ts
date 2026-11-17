@@ -3,12 +3,13 @@ import { recordAudit } from "@/lib/audit";
 import { reportServerIncident } from "@/lib/incidents";
 import { EMPLOYEE_FOLLOWUP_COLUMNS, EMPLOYEE_LIST_COLUMNS, SITES } from "@/lib/employees";
 import { BadJsonError, databaseErrorResponse, getAuthenticatedClient, readJson } from "./_server";
-import { employeeInputSchema } from "./validation";
+import { searchTerm } from "@/lib/safe-input";
+import { employeeInputSchema, employeeValidationMessage } from "./validation";
 
-// Filtro de texto para .or(): se quitan comodines y separadores de PostgREST para que lo
-// escrito por el usuario no pueda alterar la consulta.
+// Filtro de texto para .or(): searchTerm deja solo letras, números, espacios y guiones, así lo escrito
+// por el usuario no puede alterar la consulta (comas, paréntesis, puntos y comodines quedan fuera).
 function searchFilter(raw: string | null) {
-  const text = (raw ?? "").replace(/[%_,()"\\*]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  const text = searchTerm(raw);
   if (!text) return null;
   return ["full_name", "employee_code", "position", "email"]
     .map((column) => `${column}.ilike.%${text}%`)
@@ -87,20 +88,26 @@ export async function POST(request: NextRequest) {
   try {
     const input = employeeInputSchema.safeParse(await readJson(request));
     if (!input.success) {
-      return NextResponse.json(
-        { error: "Revisa los campos obligatorios y el formato de los datos." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: employeeValidationMessage(input.error) }, { status: 400 });
     }
 
-    const { data, error } = await auth.client
-      .from("employees")
-      .insert(input.data)
-      .select("*")
-      .single();
-
-    if (error) return databaseErrorResponse(error);
-    await recordAudit(request, auth.access, "employee.create", data.id, { code: data.employee_code });
+    // El ID lo asigna el servidor (siguiente QG-n), no el formulario. Si otra persona dio de alta a alguien
+    // al mismo tiempo y tomó ese número, se calcula el siguiente y se reintenta.
+    let saved: { data: Record<string, unknown> | null; error: { code?: string; message: string } | null } = { data: null, error: null };
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { data: nextCode, error: codeError } = await auth.client.rpc("employee_next_code");
+      if (codeError) return databaseErrorResponse(codeError);
+      saved = await auth.client
+        .from("employees")
+        .insert({ ...input.data, employee_code: nextCode as string })
+        .select("*")
+        .single();
+      const codeTaken = saved.error?.code === "23505" && /employee_code/.test(saved.error.message);
+      if (!codeTaken) break;
+    }
+    const { data, error } = saved;
+    if (error || !data) return databaseErrorResponse(error ?? { message: "Sin datos" });
+    await recordAudit(request, auth.access, "employee.create", data.id as string, { code: data.employee_code });
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     console.error("Error inesperado al crear empleado:", error);

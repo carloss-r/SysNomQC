@@ -142,7 +142,9 @@ export function EmployeeFormModal({
         photoPath = uploadedPath;
       }
 
-      const payload: EmployeeInput = formToEmployeeInput(form, photoPath);
+      // El ID de empleado no viaja: en el alta lo asigna el servidor y después ya no se cambia.
+      const payload: Partial<EmployeeInput> = formToEmployeeInput(form, photoPath);
+      delete payload.employee_code;
       const saved = isEdit
         ? await requestApi<Employee>(session, `/api/employees/${editing.id}`, {
             method: "PATCH",
@@ -195,7 +197,10 @@ export function EmployeeFormModal({
         <form className="employee-form" onSubmit={handleSubmit}>
           <FormSection title="Datos laborales" icon={<BriefcaseBusiness size={16} />}>
             <div className="form-grid">
-              <Field label="ID empleado" required><input value={form.employee_code} onChange={(event) => updateForm("employee_code", event.target.value)} maxLength={30} required /></Field>
+              <Field label="ID empleado">
+                <input value={form.employee_code} readOnly aria-readonly="true" className="input-locked" title="El ID lo asigna el sistema y no se puede cambiar" placeholder="Se asigna al guardar" />
+                <span className="field-hint">{editing ? "El ID no se puede cambiar." : "Lo asigna el sistema al guardar (puede ser el siguiente si alguien registra a otro al mismo tiempo)."}</span>
+              </Field>
               <Field label="Nombre completo" required><input value={form.full_name} onChange={(event) => updateForm("full_name", event.target.value)} maxLength={150} required /></Field>
               <Field label="Sede asignada" required>
                 <select value={form.site} onChange={(event) => updateForm("site", event.target.value)} required>{SITES.map((site) => <option key={site}>{site}</option>)}</select>

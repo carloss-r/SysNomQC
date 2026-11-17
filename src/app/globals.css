@@ -993,3 +993,5 @@ a.signed-user:hover, a.signed-user:focus-visible { background: rgb(255 255 255 /
 .temp-password { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .temp-password code { flex: 1 1 200px; padding: 12px 14px; border: 1px dashed var(--gold-line); border-radius: 9px; background: var(--gold-bg); color: var(--ink); font-size: 19px; font-weight: 700; letter-spacing: .06em; text-align: center; user-select: all; }
 .temp-password-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; color: var(--gold-text); font-size: 11px; font-weight: 700; white-space: nowrap; }
+/* Campo de solo lectura (p. ej. ID de empleado asignado por el sistema) */
+.field > input.input-locked { background: var(--surface-3); color: var(--muted); cursor: not-allowed; font-weight: 700; letter-spacing: .02em; }

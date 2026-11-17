@@ -176,6 +176,11 @@ export function databaseErrorResponse(error: { code?: string; message: string })
     );
   }
 
+  // Reglas escritas por nosotros en la base (p. ej. "El ID de empleado no se puede cambiar.").
+  if (error.code === "P0001") {
+    return NextResponse.json({ error: error.message }, { status: 409 });
+  }
+
   // Columna, vista o función nueva aún no creada en este entorno (salario de cotización, contadores…).
   if (["42703", "PGRST204", "42P01", "PGRST205", "42883", "PGRST202"].includes(error.code ?? "")) {
     return NextResponse.json(
