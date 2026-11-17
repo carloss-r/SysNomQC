@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { EppPurchaseRequest } from "@/lib/permissions";
 
 const COLUMNS =
-  "id,site,status,notes,requested_by_name,created_at,updated_at,handled_by_name,status_note,purchased_at,purchased_by_name,shortage_ack_at,shortage_ack_by_name," +
+  "id,site,status,direct,notes,requested_by_name,created_at,updated_at,handled_by_name,status_note,purchased_at,purchased_by_name,shortage_ack_at,shortage_ack_by_name," +
   "items:epp_purchase_request_items(article_id,article_name,unit,quantity,stock_at_request,min_stock,received_qty,counted_at,counted_by_name)";
 
 type BuyRow = { request_id: number; article_id: number; purchased_qty: number };

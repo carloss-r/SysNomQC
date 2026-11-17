@@ -131,13 +131,13 @@ export type PurchaseRequestRow = {
   site: string;
   created_at: string;
   requested_by_name: string | null;
-  items: { quantity: number }[];
+  items: { quantity: number | null }[];
 };
 
 /** Solo para el encargado de compras: cada solicitud pendiente es un aviso hasta que la atienda. */
 export function purchaseNotifications(rows: PurchaseRequestRow[]): AppNotification[] {
   return rows.map((row) => {
-    const pieces = row.items.reduce((sum, item) => sum + item.quantity, 0);
+    const pieces = row.items.reduce((sum, item) => sum + (item.quantity ?? 0), 0);
     const day = row.created_at.slice(0, 10).split("-").reverse().join("/");
     return {
       id: `purchase_request:${row.id}`,

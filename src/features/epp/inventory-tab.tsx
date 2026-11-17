@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardCheck, PackagePlus, Pencil, Search, ShoppingCart, X } from "lucide-react";
+import { ClipboardCheck, Pencil, Search, ShoppingCart, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { eppArticleLabel, type EppArticle } from "@/lib/permissions";
 import { formatDateTime } from "./format";
@@ -33,7 +33,6 @@ export function InventoryTab({
   canManage,
   canRequest,
   onDeliver,
-  onEntry,
   onEdit,
   onRequest,
 }: {
@@ -44,7 +43,6 @@ export function InventoryTab({
   canManage: boolean;
   canRequest: boolean;
   onDeliver: (articleId: number) => void;
-  onEntry: (articleId: number) => void;
   onEdit: (article: EppArticle) => void;
   onRequest: (articleIds: number[]) => void;
 }) {
@@ -123,7 +121,6 @@ export function InventoryTab({
                       )}
                       {canManage && (
                         <>
-                          {!item.pending_count && <button className="icon-button row-edit hide-phone" onClick={() => onEntry(item.id)} aria-label={`Registrar ingreso de ${item.name}`} title="Registrar ingreso"><PackagePlus size={16} /></button>}
                           <button className="icon-button row-edit" onClick={() => onEdit(item)} aria-label={`Editar ${eppArticleLabel(item.name, item.size)}`} title="Editar"><Pencil size={16} /></button>
                         </>
                       )}

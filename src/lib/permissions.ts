@@ -104,7 +104,8 @@ export type EppPurchaseItem = {
   article_id: number;
   article_name: string;
   unit: string;
-  quantity: number;
+  /** Cantidad solicitada; null en una compra directa (no hubo solicitud). */
+  quantity: number | null;
   stock_at_request: number;
   min_stock: number;
   /** Conteo de lo que llegó (null = aún sin contar). */
@@ -119,6 +120,8 @@ export type EppPurchaseRequest = {
   id: number;
   site: string;
   status: PurchaseStatus;
+  /** Compra directa: Compras la registró sin solicitud previa. */
+  direct: boolean;
   notes: string | null;
   requested_by_name: string | null;
   created_at: string;

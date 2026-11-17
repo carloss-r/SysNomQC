@@ -1,0 +1,48 @@
+PENDIENTES DE LA CARGA INICIAL DE EPP - CAMPECHE (conteo del 17/11/2026)
+=========================================================================
+
+Ya cargado:
+  * supabase/migrations/202611170002_epp_carga_inicial_campeche.sql            (18 renglones, 504 unidades)
+  * supabase/migrations/202611170003_epp_carga_inicial_campeche_variantes.sql  (5 renglones, 145 unidades)
+
+Falta solo lo que se maneja por talla. Cuando lleguen las tallas, se cargan con
+"Ingreso de material" en EPP (Campeche) o se hace un script como los anteriores.
+
+Total pendiente: 4 renglones, 23 unidades.
+
+
+FALTA LA TALLA (el artículo se maneja por talla)
+------------------------------------------------
+Conteo                         Cantidad   Artículo oficial                          Tallas que existen
+Camisola                       13         CAMISOLA DE MEZCLILLA CON REFLEJANTE      S, M, L, XL, XXL, XXXL, XXXXL
+Overoles                       7          OVEROL NARANJA CON REFLEJANTE             S, M, L, XL, XXL, XXXL
+Botas altas                    1          ¿BOTAS CON CASQUILLO?                     25 a 30 (medios números)
+Botas dieléctricas             2          BOTAS DIELÉCTRICAS                        24, 24.5, 25, 25.5, 26
+
+   Pendiente: desglose por talla (ej. Camisola M 5, L 8).
+   Botas altas: confirmar si son BOTAS CON CASQUILLO o es otro artículo.
+
+
+VARIANTES DEFINIDAS (cargadas con 202611170003)
+-----------------------------------------------
+Cartucho carbón activado (2 pares)       -> FILTROS DE REPUESTO PARA RESPIRADOR CARA COMPLETA
+Tapas para almohadilla (3 pares)         -> RETENEDORES PARA RESPIRADOR CARA COMPLETA
+Guantes nitrilo (120 pares)              -> GUANTES DE NITRILO (LIGEROS)
+Polainas (4 pares)                       -> POLAINAS DE CARNAZA
+Guantes carnaza manga larga (16)         -> GUANTES OPERADOR PUÑO LARGO
+
+
+EQUIVALENCIAS USADAS EN 202611170002
+------------------------------------
+Respirador N95 (120)                  -> RESPIRADOR PARA POLVOS
+Respirador C/A sin válvula (52)       -> RESPIRADOR CARBÓN ACTIVADO CERRADO
+Tapón auditivo con cajita (39)
+  + Tapones (58)                      -> TAPONES AUDITIVOS CON CAJA (97)
+Peto Mezclilla (2)                    -> MANDIL DE MEZCLILLA
+Petos de cuero (5)                    -> MANDIL DE CARNAZA (PETO)
+Mangas de cuero (8 pares)             -> MANGAS DE CARNAZA
+Guantes carnaza (28 pares)            -> GUANTES OPERADOR CARNAZA
+Almohadillas (100 pares)              -> ALMOHADILLAS (PREFILTROS PARA RESPIRADOR)  [artículo nuevo]
+Guantes aicron (7)                    -> GUANTES AICRON                              [artículo nuevo]
+Cubre botas (6 pares)                 -> CUBRE BOTAS                                 [artículo nuevo]
+Micas para caretas de soldador (9)    -> MICAS PARA CARETA DE SOLDADOR               [artículo nuevo]

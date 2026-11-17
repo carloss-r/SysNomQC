@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Boxes, CalendarDays, ClipboardCheck, HardHat, History, MapPin, Package, PackagePlus, Plus, Scale, ShoppingCart, UserSearch } from "lucide-react";
+import { AlertTriangle, Boxes, CalendarDays, ClipboardCheck, HardHat, History, MapPin, Package, Plus, Scale, ShoppingCart, Truck, UserSearch } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EppArticle, EppEmployee, EppMonthSummary, EppPurchaseRequest } from "@/lib/permissions";
@@ -18,6 +18,7 @@ import { HistoryTab } from "./history-tab";
 import { InventoryTab, stockState } from "./inventory-tab";
 import { MonthlyTab } from "./monthly-tab";
 import { MovementModal, type MovementKind } from "./movement-modal";
+import { DirectPurchaseModal } from "./direct-purchase-modal";
 import { BuyModal, CountModal } from "./purchase-modals";
 import { downloadPurchasePdf } from "./purchase-pdf";
 import { RequestModal } from "./request-modal";
@@ -37,6 +38,7 @@ type Dialog =
   | { type: "count"; request: EppPurchaseRequest }
   | { type: "article"; article: EppArticle | null }
   | { type: "request"; articleIds: number[] }
+  | { type: "direct" }
   | null;
 
 // Los avisos enlazan con ?sede=…&tab=solicitudes; al cambiar la dirección la pantalla se vuelve a armar.
@@ -269,7 +271,8 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
           <div className="epp-header-actions">
             {canDeliver && <button className="button button-gold" onClick={() => setDialog({ type: "movement", kind: "entrega" })}><ClipboardCheck size={17} /> Entregar EPP</button>}
             {canRequest && <button className="button button-outline" onClick={() => setDialog({ type: "request", articleIds: [] })}><ShoppingCart size={17} /> Pedir material</button>}
-            {canManage && <button className="button button-outline" onClick={() => setDialog({ type: "movement", kind: "ingreso" })}><PackagePlus size={17} /> Ingreso de material</button>}
+            {/* Sin "Ingreso de material": el material entra solo por compra (solicitada o directa) y su conteo ciego. */}
+            {buyer && <button className="button button-outline" onClick={() => setDialog({ type: "direct" })}><Truck size={17} /> Compra directa</button>}
             {canAdjust && <button className="button button-outline" onClick={() => setDialog({ type: "movement", kind: "ajuste" })}><Scale size={17} /> Ajuste</button>}
             {canManage && <button className="button button-outline" onClick={() => setDialog({ type: "article", article: null })}><Plus size={17} /> Nuevo artículo</button>}
           </div>
@@ -336,6 +339,7 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
             onAck={(request) => void ackShortage(request)}
             onPdf={(list) => void downloadPdf(list)}
             onNew={() => setDialog({ type: "request", articleIds: [] })}
+            onDirect={() => setDialog({ type: "direct" })}
           />
         ) : loading ? (
           <LoadingState label={`Cargando inventario de ${site}…`} rows={6} />
@@ -348,7 +352,6 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
             canManage={canManage}
             canRequest={canRequest}
             onDeliver={(articleId) => setDialog({ type: "movement", kind: "entrega", articleId })}
-            onEntry={(articleId) => setDialog({ type: "movement", kind: "ingreso", articleId })}
             onEdit={(article) => setDialog({ type: "article", article })}
             onRequest={(articleIds) => setDialog({ type: "request", articleIds })}
           />
@@ -397,6 +400,15 @@ function EppScreen({ requestedSite, requestedTab }: { requestedSite: string | nu
       {dialog?.type === "count" && <CountModal request={dialog.request} onClose={() => setDialog(null)} onDone={afterPurchaseChange} />}
       {dialog?.type === "article" && (
         <ArticleModal site={site} article={dialog.article} categories={categories} onClose={() => setDialog(null)} onSaved={() => afterChange()} />
+      )}
+      {dialog?.type === "direct" && (
+        <DirectPurchaseModal
+          site={site}
+          articles={articles}
+          openRequests={openRequests}
+          onClose={() => setDialog(null)}
+          onDone={() => void afterChange(true)}
+        />
       )}
       {dialog?.type === "request" && (
         <RequestModal
