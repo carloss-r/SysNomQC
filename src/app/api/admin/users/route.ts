@@ -15,11 +15,12 @@ export async function GET(request: NextRequest) {
   const columns = "user_id,email,full_name,active,site,created_at";
   const listUsers = (select: string) => auth.admin.from("authorized_users").select(select).order("email");
   const [first, roleList, userRoles] = await Promise.all([
-    listUsers(`${columns},username`),
+    listUsers(`${columns},username,must_change_password`),
     auth.admin.from("roles").select("id_rol,nombre"),
     readUserRoleIds(auth.admin),
   ]);
   let result = first;
+  if (result.error?.code === "42703") result = await listUsers(`${columns},username`);
   if (result.error?.code === "42703") result = await listUsers(columns);
   const { data, error } = result;
   if (error) return adminDbError(error);
@@ -39,6 +40,7 @@ export async function GET(request: NextRequest) {
       role_ids: roleIds,
       role_names: roleIds.map((id) => names.get(id)).filter((name): name is string => Boolean(name)),
       created_at: row.created_at as string | null,
+      must_change_password: row.must_change_password === true,
     };
   });
   return NextResponse.json(users);

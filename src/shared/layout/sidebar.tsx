@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CircleUserRound, LogOut, X } from "lucide-react";
+import { Bell, CircleUserRound, LogOut, UserRoundCog, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -69,6 +69,16 @@ export function Sidebar({ open, onClose, onSignOut }: { open: boolean; onClose: 
           <Bell size={18} />
           <span>Notificaciones</span>
           {urgent > 0 && <span className="nav-count">{urgent > 99 ? "99+" : urgent}</span>}
+        </Link>
+        <Link
+          href="/mi-cuenta"
+          className={`nav-link${pathname === "/mi-cuenta" ? " active" : ""}`}
+          aria-current={pathname === "/mi-cuenta" ? "page" : undefined}
+          tabIndex={tabIndex}
+          onClick={onClose}
+        >
+          <UserRoundCog size={18} />
+          <span>Mi cuenta</span>
         </Link>
 
         {/* En teléfono la barra superior solo deja lo indispensable; lo demás vive aquí. */}

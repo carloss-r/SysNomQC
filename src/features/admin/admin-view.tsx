@@ -1,12 +1,12 @@
 "use client";
 
-import { Check, Eye, KeyRound, Pencil, Plus, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
+import { Check, Copy, Eye, KeyRound, Pencil, Plus, LockKeyholeOpen, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
 import { describeError, requestApi } from "@/lib/api-client";
 import { SITES } from "@/lib/employees";
-import { PERMISSIONS, READ_ONLY_AREAS, READ_ONLY_PERMISSIONS, type AdminRole, type AdminUser, type Permission } from "@/lib/permissions";
+import { MIN_PASSWORD_LENGTH, PERMISSIONS, READ_ONLY_AREAS, READ_ONLY_PERMISSIONS, type AdminRole, type AdminUser, type Permission } from "@/lib/permissions";
 import { roleLabel, roleLabels } from "@/lib/roles";
 import { useDialog } from "@/shared/ui/dialog-provider";
 import { RequirePermission } from "@/shared/layout/require-permission";
@@ -20,7 +20,6 @@ type RoleForm = { name: string; description: string; permissions: Permission[]; 
 
 const EMPTY_USER: UserForm = { email: "", username: "", full_name: "", password: "", role_ids: [], active: true, site: "" };
 const EMPTY_ROLE: RoleForm = { name: "", description: "", permissions: [], read_only: false };
-export const MIN_PASSWORD_LENGTH = 12;
 
 // Pantalla de usuarios y roles (solo cuentas con el permiso "users.manage").
 export function AdminView() {
@@ -32,7 +31,7 @@ export function AdminView() {
 }
 
 function AdminDashboard() {
-  const { session } = useAuth();
+  const { session, access } = useAuth();
   const systemDialog = useDialog();
   const sessionRef = useRef(session);
   const [tab, setTab] = useState<Tab>("users");
@@ -47,6 +46,9 @@ function AdminDashboard() {
   const [roleForm, setRoleForm] = useState<RoleForm>(EMPTY_ROLE);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState("");
+  /** Contraseña temporal recién generada: se muestra una sola vez. */
+  const [resetResult, setResetResult] = useState<{ user: AdminUser; password: string; forced: boolean } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     sessionRef.current = session;
@@ -178,6 +180,36 @@ function AdminDashboard() {
     );
   }
 
+  async function resetPassword(user: AdminUser) {
+    if (!session) return;
+    const name = user.full_name || user.email;
+    const ok = await systemDialog.confirm({
+      title: "Restablecer contraseña",
+      message: `Se generará una contraseña temporal para "${name}" y su contraseña actual dejará de funcionar. Al entrar, tendrá que poner una nueva.`,
+      confirmLabel: "Restablecer",
+      cancelLabel: "Cancelar",
+    });
+    if (!ok) return;
+    try {
+      const result = await requestApi<{ password: string; forced: boolean }>(session, `/api/admin/users/${user.user_id}/reset-password`, { method: "POST", body: "{}" });
+      setCopied(false);
+      setResetResult({ user, ...result });
+      await load();
+    } catch (error) {
+      setMessage({ tone: "error", text: describeError(error, "No se pudo restablecer la contraseña.") });
+    }
+  }
+
+  async function copyTemporary() {
+    if (!resetResult) return;
+    try {
+      await navigator.clipboard.writeText(resetResult.password);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   async function remove(kind: "users" | "roles", id: string | number, label: string) {
     if (!session) return;
     const ok = await systemDialog.confirm({
@@ -242,9 +274,12 @@ function AdminDashboard() {
                     <td className="hide-tablet">{user.email}</td>
                     <td className="hide-phone"><span className="role-list">{user.role_names.length ? user.role_names.map((name) => <span key={name} className="role-pill">{roleLabel(name)}</span>) : "Sin rol"}</span></td>
                     <td className="hide-tablet">{user.site ?? <span className="epp-muted">Todas</span>}</td>
-                    <td className="hide-phone"><span className={`status-badge ${user.active ? "status-active" : "status-inactive"}`}><span />{user.active ? "Activo" : "Inactivo"}</span></td>
+                    <td className="hide-phone"><span className={`status-badge ${user.active ? "status-active" : "status-inactive"}`}><span />{user.active ? "Activo" : "Inactivo"}</span>{user.must_change_password && <small className="temp-password-badge" title="Debe cambiar la contraseña temporal al entrar"><KeyRound size={12} /> Contraseña temporal</small>}</td>
                     <td className="row-actions">
                       <button className="icon-button row-edit" onClick={() => openUserModal(user)} aria-label={`Editar ${user.email}`} title="Editar"><Pencil size={16} /></button>
+                      {user.user_id !== access?.user_id && (
+                        <button className="icon-button row-edit" onClick={() => void resetPassword(user)} aria-label={`Restablecer contraseña de ${user.email}`} title="Restablecer contraseña"><LockKeyholeOpen size={16} /></button>
+                      )}
                       <button className="icon-button row-edit" onClick={() => void remove("users", user.user_id, user.email)} aria-label={`Eliminar ${user.email}`} title="Eliminar"><Trash2 size={16} /></button>
                     </td>
                   </tr>
@@ -346,6 +381,39 @@ function AdminDashboard() {
                 <button type="submit" className="button button-gold" disabled={busy}><Check size={17} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : "Guardar"}</button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+
+      {resetResult && (
+        <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setResetResult(null); }}>
+          <section className="modal modal-form" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+            <div className="modal-header">
+              <div className="modal-heading-icon"><LockKeyholeOpen size={19} /></div>
+              <div>
+                <h2 id="reset-title">Contraseña restablecida</h2>
+                <p>{resetResult.user.full_name || resetResult.user.email}</p>
+              </div>
+              <button className="icon-button close-modal" onClick={() => setResetResult(null)} aria-label="Cerrar"><X size={20} /></button>
+            </div>
+            <div className="employee-form">
+              <p>Dale esta contraseña temporal en persona o por un medio privado. <strong>Solo se muestra esta vez.</strong></p>
+              <div className="temp-password">
+                <code>{resetResult.password}</code>
+                <button type="button" className="button button-outline" onClick={() => void copyTemporary()}>
+                  {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? "Copiada" : "Copiar"}
+                </button>
+              </div>
+              <p className="epp-muted">
+                Entra con su {resetResult.user.username ? `usuario "${resetResult.user.username}"` : `correo ${resetResult.user.email}`} y esta contraseña.
+                {resetResult.forced
+                  ? " Al entrar, el sistema le pedirá crear una nueva antes de continuar."
+                  : " Pídele que la cambie en \"Mi cuenta\" (falta correr la migración 202611180001 para obligarlo)."}
+              </p>
+              <div className="modal-actions">
+                <button type="button" className="button button-gold" onClick={() => setResetResult(null)}><Check size={17} /> Listo</button>
+              </div>
+            </div>
           </section>
         </div>
       )}
