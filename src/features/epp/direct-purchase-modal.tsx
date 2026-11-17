@@ -8,6 +8,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { BusyLabel } from "@/shared/ui/loading";
+import { ArticlePicker } from "./article-picker";
 
 type Line = { key: number; article_id: string; quantity: string };
 let lineCounter = 0;
@@ -91,12 +92,14 @@ export function DirectPurchaseModal({
                 return (
                   <div key={line.key} className="epp-line">
                     <Field label="Artículo">
-                      <select value={line.article_id} onChange={(e) => updateLine(line.key, { article_id: e.target.value })}>
-                        <option value="">Selecciona…</option>
-                        {(article && !selectable.includes(article) ? [article, ...selectable] : selectable).map((item) => (
-                          <option key={item.id} value={item.id}>{eppArticleLabel(item.name, item.size)} ({item.unit.toLowerCase()})</option>
-                        ))}
-                      </select>
+                      <ArticlePicker
+                        articles={article && !selectable.includes(article) ? [article, ...selectable] : selectable}
+                        value={line.article_id}
+                        taken={lines.filter((other) => other.key !== line.key).map((other) => other.article_id)}
+                        detail={(item) => `${item.category} · ${item.unit.toLowerCase()}`}
+                        selectedText={(item) => `${eppArticleLabel(item.name, item.size)} (${item.unit.toLowerCase()})`}
+                        onChange={(id) => updateLine(line.key, { article_id: id })}
+                      />
                     </Field>
                     <Field label="Comprado">
                       <input type="number" step={1} min={1} max={100000} inputMode="numeric" value={line.quantity} onChange={(e) => updateLine(line.key, { quantity: e.target.value })} />
