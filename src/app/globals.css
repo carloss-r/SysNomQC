@@ -742,6 +742,7 @@ td.row-actions > * { vertical-align: middle; }
 .epp-status-en_compra { color: var(--blue-text); border-color: var(--blue-line); background: var(--blue-bg); }
 .epp-status-recibida { color: var(--green-text); border-color: var(--green-line); background: var(--green-bg); }
 .epp-status-cancelada { color: var(--ink-soft); border-color: var(--line-strong); background: var(--surface-3); }
+.epp-status-directa { color: var(--purple-text); border-color: var(--purple-line); background: var(--purple-bg); }
 
 /* Aviso especial del encargado de compras */
 .bell-count-purchase { color: #fff; background: #7b4fa8; }

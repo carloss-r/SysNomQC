@@ -55,6 +55,10 @@ export async function POST(request: NextRequest) {
     if (!auth.access.permissions.includes(needed)) {
       return NextResponse.json({ error: "Tu rol no tiene permiso para realizar esta acción." }, { status: 403 });
     }
+    // El material entra solo por compra + conteo ciego; el ingreso manual queda para el SuperAdmin.
+    if (body.kind === "ingreso" && !auth.access.is_super_admin) {
+      return NextResponse.json({ error: "El material entra al inventario solo con una compra y su conteo. Pide a Compras que la registre." }, { status: 403 });
+    }
     // Los ajustes cambian la existencia sin respaldo físico: solo un SuperAdmin los autoriza.
     if (body.kind === "ajuste" && !auth.access.is_super_admin) {
       return NextResponse.json({ error: "Solo un Super administrador puede ajustar el inventario." }, { status: 403 });

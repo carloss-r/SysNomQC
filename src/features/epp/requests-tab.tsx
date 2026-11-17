@@ -35,6 +35,7 @@ export function RequestsTab({
   onAck,
   onPdf,
   onNew,
+  onDirect,
 }: {
   /** Sede elegida arriba: solo se listan sus solicitudes. */
   site: string;
@@ -54,6 +55,8 @@ export function RequestsTab({
   onAck: (request: EppPurchaseRequest) => void;
   onPdf: (requests: EppPurchaseRequest[]) => void;
   onNew?: () => void;
+  /** Compras: compra directa sin solicitud previa. */
+  onDirect?: () => void;
 }) {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("open");
 
@@ -84,6 +87,7 @@ export function RequestsTab({
         <span className="epp-scope">Solicitudes de <strong>{site}</strong></span>
         <div className="epp-push epp-toolbar-actions">
           {canRequest && onNew && <button type="button" className="button button-outline" onClick={onNew}><ShoppingCart size={15} /> Pedir material</button>}
+          {buyer && onDirect && <button type="button" className="button button-outline" onClick={onDirect}><Truck size={15} /> Compra directa</button>}
           {openRows.length > 0 && (
             <button type="button" className="button button-gold" onClick={() => onPdf(openRows)}>
               <FileDown size={15} /> PDF de {openRows.length === 1 ? "la abierta" : `las ${openRows.length} abiertas`} de {site}
@@ -99,7 +103,9 @@ export function RequestsTab({
 
       <ul className="epp-requests">
         {rows.map((row) => {
-          const pieces = row.items.reduce((sum, item) => sum + item.quantity, 0);
+          // Compra directa: no hay cantidad solicitada; Compras ve lo comprado y quien cuenta no ve número.
+          const pieces = row.items.reduce((sum, item) => sum + (item.quantity ?? (buyer ? item.purchased_qty ?? 0 : 0)), 0);
+          const showPieces = !row.direct || buyer;
           const busy = busyId === row.id;
           const purchased = row.status !== "pendiente" && row.status !== "cancelada";
           const uncounted = row.items.filter((item) => item.received_qty === null).length;
@@ -116,16 +122,17 @@ export function RequestsTab({
                   <span className="epp-request-folio">Folio {row.id}</span>
                   <SiteBadge site={row.site} />
                   <span className={`epp-status epp-status-${row.status}`}>{PURCHASE_STATUS_LABELS[row.status]}</span>
+                  {row.direct && <span className="epp-status epp-status-directa" title="Compras la registró sin solicitud previa">Compra directa</span>}
                   {short.length > 0 && !row.shortage_ack_at && <span className="epp-status epp-status-faltante">Llegó menos</span>}
-                  <span className="epp-requester" title="Quién hizo la solicitud"><UserRound size={14} /> Solicitó: <strong>{row.requested_by_name ?? "Sin nombre"}</strong></span>
+                  <span className="epp-requester" title="Quién hizo la solicitud"><UserRound size={14} /> {row.direct ? "Compró" : "Solicitó"}: <strong>{row.requested_by_name ?? "Sin nombre"}</strong></span>
                   <span className="epp-request-meta">
-                    {row.items.length} artículo(s) · {pieces} pza · {formatDateTime(row.created_at)}
+                    {row.items.length} artículo(s){showPieces ? ` · ${pieces} pza` : ""} · {formatDateTime(row.created_at)}
                   </span>
                   <ChevronDown size={16} className="epp-request-chevron" />
                 </summary>
 
                 <div className="epp-request-body">
-                  <p className="epp-request-note epp-request-who">Solicitada por <strong>{row.requested_by_name ?? "Sin nombre"}</strong> para <strong>{row.site}</strong> · {formatDateTime(row.created_at)}</p>
+                  <p className="epp-request-note epp-request-who">{row.direct ? "Compra directa registrada por" : "Solicitada por"} <strong>{row.requested_by_name ?? "Sin nombre"}</strong> para <strong>{row.site}</strong> · {formatDateTime(row.created_at)}</p>
                   <div className="table-scroll">
                     <table className="employee-table">
                       <thead>
@@ -144,7 +151,7 @@ export function RequestsTab({
                           return (
                             <tr key={item.article_id} className={isShort ? "epp-short-row" : ""}>
                               <td><strong>{item.article_name}</strong>{!purchased && <small className="epp-muted show-phone">Había {item.stock_at_request} · mín. {item.min_stock}</small>}</td>
-                              <td><strong>{item.quantity}</strong> <span className="epp-muted">{item.unit.toLowerCase()}</span></td>
+                              <td>{item.quantity === null ? <span className="epp-muted">—</span> : <><strong>{item.quantity}</strong> <span className="epp-muted">{item.unit.toLowerCase()}</span></>}</td>
                               {buyer && purchased && <td>{item.purchased_qty ?? "—"}</td>}
                               {purchased && (
                                 <td>

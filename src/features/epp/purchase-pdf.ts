@@ -146,11 +146,11 @@ export async function downloadPurchasePdf(requests: EppPurchaseRequest[], genera
         item.unit,
         String(item.stock_at_request),
         String(item.min_stock),
-        String(item.quantity),
+        String(item.quantity ?? item.purchased_qty ?? "—"),
       ]),
       "A comprar",
     );
-    const pieces = request.items.reduce((sum, item) => sum + item.quantity, 0);
+    const pieces = request.items.reduce((sum, item) => sum + (item.quantity ?? item.purchased_qty ?? 0), 0);
     text(`Total: ${request.items.length} artículo(s), ${pieces} pieza(s)`, pageW - margin, 9, "bold", INK, "right");
     y += 10;
   }
@@ -162,7 +162,7 @@ export async function downloadPurchasePdf(requests: EppPurchaseRequest[], genera
       for (const item of request.items) {
         const key = `${item.article_name}|${item.unit}`;
         const entry = totals.get(key) ?? { name: item.article_name, unit: item.unit, quantity: 0, sites: new Set<string>() };
-        entry.quantity += item.quantity;
+        entry.quantity += item.quantity ?? item.purchased_qty ?? 0;
         entry.sites.add(request.site);
         totals.set(key, entry);
       }

@@ -55,7 +55,7 @@ export function BuyModal({ request, onClose, onDone }: Props) {
   const { session } = useAuth();
   const notify = useNotify();
   const [values, setValues] = useState<Record<number, string>>(() =>
-    Object.fromEntries(request.items.map((item) => [item.article_id, String(item.purchased_qty ?? item.quantity)])),
+    Object.fromEntries(request.items.map((item) => [item.article_id, String(item.purchased_qty ?? item.quantity ?? "")])),
   );
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -103,7 +103,7 @@ export function BuyModal({ request, onClose, onDone }: Props) {
             <div key={item.article_id} className="epp-line epp-count-line">
               <div>
                 <strong>{item.article_name}</strong>
-                <small className="epp-muted">Se pidieron {item.quantity} {item.unit.toLowerCase()}</small>
+                <small className="epp-muted">{item.quantity === null ? `Compra directa · ${item.unit.toLowerCase()}` : `Se pidieron ${item.quantity} ${item.unit.toLowerCase()}`}</small>
               </div>
               <Field label="Comprado">
                 <input

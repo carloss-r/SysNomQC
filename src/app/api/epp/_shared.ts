@@ -43,6 +43,9 @@ export const purchaseRequestSchema = z.object({
   notes: z.string().trim().max(500).optional(),
 });
 
+/** Compras: compra directa sin solicitud previa (cantidad comprada de cada artículo). */
+export const directPurchaseSchema = purchaseRequestSchema;
+
 // "En compra" sale de registrar la compra y "Recibida" del conteo: aquí solo se cancela.
 export const purchaseStatusSchema = z.object({
   status: z.literal("cancelada"),
