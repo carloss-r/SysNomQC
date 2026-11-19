@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * Registra una factura cuyo PDF ya subió el navegador al bucket privado: lo digitaliza (texto),
- * detecta fecha, folio, emisor y montos, y la guarda como pendiente de pago.
+ * detecta fecha, folio, emisor y montos, y la guarda como enviada y pendiente.
  */
 export async function POST(request: NextRequest) {
   const auth = await getAuthenticatedClient(request, "invoices.manage");
@@ -105,6 +105,7 @@ export async function POST(request: NextRequest) {
         total: fields.total,
         currency: fields.currency,
         status: "pendiente",
+        stage: "enviada",
         text_content: extracted.text,
         text_pages: extracted.pages,
         created_by_name: actor,

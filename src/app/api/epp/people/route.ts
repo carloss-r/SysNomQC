@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { searchTerm } from "@/lib/safe-input";
 import { eppKey, type EppPerson } from "@/lib/permissions";
 import { reportServerIncident } from "@/lib/incidents";
 import { getAuthenticatedClient } from "../../employees/_server";
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
   if ("response" in resolved) return resolved.response;
 
   const key = params.get("key");
-  const tokens = eppKey((params.get("q") ?? "").replace(/[,()*%\\:"']/g, " ").slice(0, 80))
+  const tokens = eppKey(searchTerm(params.get("q"), 80))
     .split(" ")
     .filter(Boolean)
     .slice(0, 6);

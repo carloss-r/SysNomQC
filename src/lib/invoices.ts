@@ -1,18 +1,34 @@
 // Facturas: tipos, lectura de datos del texto del PDF y resúmenes semanales y mensuales.
 // Sin dependencias de servidor ni de navegador: lo usan la API y la pantalla.
 
-export type InvoiceStatus = "pendiente" | "pagada" | "incidente";
+export type InvoiceStatus = "pendiente" | "incidente";
 
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
-  pendiente: "Pendiente de pago",
-  pagada: "Pagada",
+  pendiente: "Pendiente",
   incidente: "Incidente",
 };
 
 export const MAX_INCIDENT_LENGTH = 1000;
 
-/** Pagada o con incidente: la factura queda cerrada y ya no se modifica ni se elimina. */
-export const isInvoiceClosed = (invoice: { status: InvoiceStatus }) => invoice.status !== "pendiente";
+/** Estado del documento (aparte del estatus): nace enviada y solo avanza; cargada la bloquea por completo. */
+export type InvoiceStage = "enviada" | "firmada" | "cargada";
+
+export const INVOICE_STAGE_LABELS: Record<InvoiceStage, string> = {
+  enviada: "Enviada",
+  firmada: "Firmada",
+  cargada: "Cargada",
+};
+
+/** Siguiente estado del documento (null si ya está cargada). */
+export const nextInvoiceStage = (stage: InvoiceStage): InvoiceStage | null =>
+  stage === "enviada" ? "firmada" : stage === "firmada" ? "cargada" : null;
+
+/** Cargada: ya no se modifica nada (ni estado, ni estatus, ni datos). */
+export const isInvoiceLocked = (invoice: { stage: InvoiceStage }) => invoice.stage === "cargada";
+
+/** Con incidente o cargada: la factura queda cerrada y ya no se modifica ni se elimina. */
+export const isInvoiceClosed = (invoice: { status: InvoiceStatus; stage: InvoiceStage }) =>
+  invoice.status !== "pendiente" || isInvoiceLocked(invoice);
 
 export type Invoice = {
   id: number;
@@ -31,12 +47,15 @@ export type Invoice = {
   currency: string;
   notes: string | null;
   status: InvoiceStatus;
-  paid_on: string | null;
-  paid_by_name: string | null;
   /** Solo en estatus "incidente": qué pasó, cuándo y quién lo marcó. */
   incident_description: string | null;
   incident_on: string | null;
   incident_by_name: string | null;
+  stage: InvoiceStage;
+  signed_at: string | null;
+  signed_by_name: string | null;
+  loaded_at: string | null;
+  loaded_by_name: string | null;
   text_pages: number;
   /** Solo viene al pedir una factura (no en la lista). */
   text_content?: string;
@@ -240,12 +259,10 @@ export type Totals = Record<string, number>;
 export type InvoiceSummary = {
   key: string;
   count: number;
-  paidCount: number;
   pendingCount: number;
   incidentCount: number;
   overdueCount: number;
   total: Totals;
-  paid: Totals;
   pending: Totals;
 };
 
@@ -255,15 +272,12 @@ const add = (totals: Totals, currency: string, value: number | null) => {
 };
 
 export function summarize(key: string, invoices: Invoice[], today: string): InvoiceSummary {
-  const summary: InvoiceSummary = { key, count: 0, paidCount: 0, pendingCount: 0, incidentCount: 0, overdueCount: 0, total: {}, paid: {}, pending: {} };
+  const summary: InvoiceSummary = { key, count: 0, pendingCount: 0, incidentCount: 0, overdueCount: 0, total: {}, pending: {} };
   for (const invoice of invoices) {
     summary.count += 1;
     add(summary.total, invoice.currency, invoice.total);
-    if (invoice.status === "pagada") {
-      summary.paidCount += 1;
-      add(summary.paid, invoice.currency, invoice.total);
-    } else if (invoice.status === "incidente") {
-      // Detenida por un problema: no cuenta como pagada ni como pendiente por pagar.
+    if (invoice.status === "incidente") {
+      // Detenida por un problema: no cuenta como pendiente.
       summary.incidentCount += 1;
     } else {
       summary.pendingCount += 1;

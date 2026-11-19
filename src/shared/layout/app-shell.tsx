@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { ForcePasswordScreen } from "@/features/account/force-password-screen";
 import { LoginScreen } from "@/features/auth/login-screen";
 import { useAuth } from "@/features/auth/auth-provider";
 import { NotificationsBell } from "@/features/notifications/notifications-bell";
@@ -64,6 +65,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
+  // Contraseña temporal del administrador: no se entra al sistema hasta poner una propia.
+  if (access?.must_change_password) return <ForcePasswordScreen />;
+
   async function handleSignOut() {
     setSigningOut(true);
     await signOut();
@@ -96,10 +100,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
           </div>
           <div className="topbar-actions">
-            <span className="signed-user" title={access?.full_name ?? ""}>
+            <Link className="signed-user" href="/mi-cuenta" title="Mi cuenta: datos y contraseña">
               <CircleUserRound size={18} />
               <span>{access?.full_name || "Mi cuenta"}</span>
-            </span>
+            </Link>
             <NotificationsBell />
             <ThemeToggle />
             <button className="icon-button logout-button hide-phone" onClick={() => void handleSignOut()} disabled={signingOut} aria-label="Cerrar sesión" title="Cerrar sesión">

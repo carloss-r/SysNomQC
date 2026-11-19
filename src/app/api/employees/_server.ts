@@ -49,10 +49,14 @@ export async function getAuthenticatedClient(
     return { response: NextResponse.json({ error: "Inicia sesión para continuar." }, { status: 401 }) };
   }
 
+  // Con contraseña temporal solo se permite "Mi cuenta" (/api/me…) hasta que la cambie.
+  const lockedToAccount = (access: Access) => access.must_change_password === true && !request.nextUrl.pathname.startsWith("/api/me");
   const denied = (access: Access) =>
-    permission && !access.permissions.includes(permission)
-      ? { response: NextResponse.json({ error: "Tu rol no tiene permiso para realizar esta acción." }, { status: 403 }) }
-      : null;
+    lockedToAccount(access)
+      ? { response: NextResponse.json({ error: "Debes cambiar tu contraseña temporal antes de continuar." }, { status: 403 }) }
+      : permission && !access.permissions.includes(permission)
+        ? { response: NextResponse.json({ error: "Tu rol no tiene permiso para realizar esta acción." }, { status: 403 }) }
+        : null;
 
   try {
     const client = createAuthenticatedSupabaseClient(token);
@@ -60,7 +64,8 @@ export async function getAuthenticatedClient(
     // Acceso ya verificado hace unos segundos con este mismo token: no se vuelve a consultar.
     // Las acciones de administración siempre se verifican contra la base.
     const cached = permission === "users.manage" ? null : getCachedAccess(token);
-    if (cached) return denied(cached) ?? { client, access: cached };
+    // Con contraseña temporal no se usa la caché: al cambiarla, el desbloqueo es inmediato.
+    if (cached && !cached.must_change_password) return denied(cached) ?? { client, access: cached };
 
     const { data: userData, error } = await client.auth.getUser(token);
 
@@ -73,10 +78,14 @@ export async function getAuthenticatedClient(
     // Cuenta y roles adicionales se piden al mismo tiempo (antes, uno después del otro).
     // Roles adicionales: migración 202611080001; si la tabla aún no existe, queda solo el rol principal.
     const [primary, extra] = await Promise.all([
-      lookup("user_id,full_name,site,role:roles(nombre,permisos,es_sistema)"),
+      lookup("user_id,full_name,site,must_change_password,role:roles(nombre,permisos,es_sistema)"),
       client.from("authorized_user_roles").select("role:roles(nombre,permisos,es_sistema)").eq("user_id", userData.user.id),
     ]);
     let { data: authorizedUser, error: authorizationError } = primary;
+    // Sin la migración 202611180001 no existe must_change_password: se lee sin ella.
+    if (authorizationError?.code === "42703") {
+      ({ data: authorizedUser, error: authorizationError } = await lookup("user_id,full_name,site,role:roles(nombre,permisos,es_sistema)"));
+    }
     // Antes de ejecutar la migración de sedes la columna "site" no existe: se sigue entrando (todas las sedes).
     if (authorizationError?.code === "42703") {
       ({ data: authorizedUser, error: authorizationError } = await lookup("user_id,full_name,role:roles(nombre,permisos,es_sistema)"));
@@ -102,7 +111,7 @@ export async function getAuthenticatedClient(
       };
     }
 
-    const row = authorizedUser as unknown as { full_name: string | null; site?: string | null; role: RoleRow | null };
+    const row = authorizedUser as unknown as { full_name: string | null; site?: string | null; must_change_password?: boolean | null; role: RoleRow | null };
 
     if (extra.error && !["42P01", "PGRST205"].includes(extra.error.code ?? "")) {
       console.error("No se pudieron leer los roles adicionales:", extra.error);
@@ -126,6 +135,7 @@ export async function getAuthenticatedClient(
       is_super_admin: isSuperAdmin,
       permissions,
       site: isSuperAdmin ? null : (row.site ?? null),
+      must_change_password: row.must_change_password === true,
     };
 
     setCachedAccess(token, access);
@@ -164,6 +174,11 @@ export function databaseErrorResponse(error: { code?: string; message: string })
       { error: "Ya existe un empleado con ese ID, NSS, CURP o RFC." },
       { status: 409 },
     );
+  }
+
+  // Reglas escritas por nosotros en la base (p. ej. "El ID de empleado no se puede cambiar.").
+  if (error.code === "P0001") {
+    return NextResponse.json({ error: error.message }, { status: 409 });
   }
 
   // Columna, vista o función nueva aún no creada en este entorno (salario de cotización, contadores…).

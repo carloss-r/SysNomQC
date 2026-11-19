@@ -3,7 +3,7 @@ import { recordAudit } from "@/lib/audit";
 import { z } from "zod";
 import { reportServerIncident } from "@/lib/incidents";
 import { BadJsonError, databaseErrorResponse, getAuthenticatedClient, readJson } from "../_server";
-import { employeePatchSchema } from "../validation";
+import { employeePatchSchema, employeeValidationMessage } from "../validation";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -42,10 +42,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
     const input = employeePatchSchema.safeParse(await readJson(request));
     if (!input.success) {
-      return NextResponse.json(
-        { error: "Revisa los campos enviados y sus formatos." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: employeeValidationMessage(input.error) }, { status: 400 });
     }
 
     const { data, error } = await auth.client

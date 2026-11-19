@@ -15,8 +15,8 @@ export const PERMISSIONS = [
   { key: "fuels.scale", label: "Operar báscula y manifiestos (M3)" },
   { key: "fuels.commercial", label: "Tarifas y reportes contables de combustibles (M4)" },
   { key: "fuels.ecology", label: "Capturar consumo de coque y reporte SEMARNAT (M5)" },
-  { key: "invoices.view", label: "Ver facturas, su PDF y los resúmenes de pago" },
-  { key: "invoices.manage", label: "Cargar facturas, corregir sus datos y marcarlas pagadas o pendientes" },
+  { key: "invoices.view", label: "Ver facturas, su PDF y los resúmenes" },
+  { key: "invoices.manage", label: "Cargar facturas, corregir sus datos y cambiar su estado o marcar incidentes" },
   { key: "users.manage", label: "Administrar usuarios y roles" },
 ] as const;
 
@@ -34,6 +34,9 @@ export const READ_ONLY_PERMISSIONS: Permission[] = READ_ONLY_AREAS.map((area) =>
 export const ALL_PERMISSIONS: Permission[] = PERMISSIONS.map((permission) => permission.key);
 
 /** Acceso de la cuenta que inició sesión (lo devuelve /api/me). */
+/** Largo mínimo de una contraseña (alta de usuario, restablecer y "Mi cuenta"). */
+export const MIN_PASSWORD_LENGTH = 12;
+
 export type Access = {
   user_id: string;
   email: string;
@@ -46,6 +49,8 @@ export type Access = {
   permissions: Permission[];
   /** Sede asignada. null = todas las sedes (también SuperAdmin). */
   site: string | null;
+  /** Contraseña temporal puesta por el administrador: debe cambiarla antes de usar el sistema. */
+  must_change_password?: boolean;
 };
 
 export type AdminRole = {
@@ -70,6 +75,19 @@ export type AdminUser = {
   role_names: string[];
   site: string | null;
   created_at: string | null;
+  /** Tiene una contraseña temporal pendiente de cambiar. */
+  must_change_password?: boolean;
+};
+
+/** Datos que cada cuenta ve y edita en "Mi cuenta". */
+export type MyProfile = {
+  email: string;
+  username: string | null;
+  full_name: string | null;
+  phone: string | null;
+  role_names: string[];
+  site: string | null;
+  must_change_password: boolean;
 };
 
 /** Nombre visible de un artículo con su talla: "CAMISOLA · M". Cada talla es un artículo propio. */

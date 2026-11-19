@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { eppArticleLabel, type EppMovement } from "@/lib/permissions";
 import { reportServerIncident } from "@/lib/incidents";
+import { searchTerm } from "@/lib/safe-input";
 import { getAuthenticatedClient } from "../../employees/_server";
 import { eppDatabaseError, resolveSite } from "../_shared";
 
@@ -24,8 +25,9 @@ function toMovement(row: Row): EppMovement {
 }
 
 /** Quita lo que rompería el filtro or() de PostgREST (comas, paréntesis, comodines). */
+// Solo letras, números, espacios y guiones: el texto va dentro de un filtro .or() de PostgREST.
 function cleanTerm(value: string | null) {
-  return (value ?? "").replace(/[,()*%\\:"'.]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  return searchTerm(value);
 }
 
 function monthRange(month: string) {

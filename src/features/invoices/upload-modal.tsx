@@ -10,7 +10,7 @@ import { BusyLabel } from "@/shared/ui/loading";
 
 export type Detected = { invoice_date: boolean; total: boolean; supplier: boolean };
 
-/** Carga de una factura: sube el PDF, el servidor lo digitaliza y la registra como pendiente de pago. */
+/** Carga de una factura: sube el PDF, el servidor lo digitaliza y la registra como enviada y pendiente. */
 export function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded: (invoice: Invoice, detected: Detected) => void }) {
   const { session } = useAuth();
   const [file, setFile] = useState<File | null>(null);
@@ -56,7 +56,7 @@ export function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUp
           <div className="modal-heading-icon"><FileUp size={19} /></div>
           <div>
             <h2 id="invoice-upload-title">Cargar factura</h2>
-            <p>Sube el PDF; se digitaliza su texto, se detectan fecha, folio, emisor y total, y queda como <strong>pendiente de pago</strong>.</p>
+            <p>Sube el PDF; se digitaliza su texto, se detectan fecha, folio, emisor y total, y queda como <strong>enviada</strong> y <strong>pendiente</strong>.</p>
           </div>
           <button className="icon-button close-modal" onClick={onClose} disabled={busy} aria-label="Cerrar"><X size={20} /></button>
         </div>

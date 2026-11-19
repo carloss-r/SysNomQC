@@ -920,6 +920,22 @@ td.row-actions > * { vertical-align: middle; }
 
 /* Facturas */
 .fuel-status-warn { color: var(--gold-text); border-color: var(--gold-line); background: var(--gold-bg); }
+.fuel-status-info { color: var(--blue-text); border-color: var(--blue-line); background: var(--blue-bg); }
+/* Acciones de cada factura: el flujo se acomoda en varias líneas y las herramientas son íconos, sin desplazar la tabla. */
+td.invoice-row-actions { white-space: normal; }
+.invoice-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.invoice-actions-main { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 260px; }
+.invoice-actions-main .button { min-height: 32px; padding: 0 10px; font-size: 12.5px; white-space: nowrap; }
+.invoice-actions-tools { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.invoice-actions-tools .icon-button { width: 32px; height: 32px; }
+.invoice-lock { display: inline-flex; padding: 0 6px; }
+.invoice-badges { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.invoice-badges .fuel-status { white-space: nowrap; }
+@media (max-width: 700px) {
+  .invoice-actions-main { max-width: 150px; }
+  .invoice-actions-main .button { flex: 1 1 auto; justify-content: center; }
+  .employee-table .invoice-actions-main .button { min-height: 32px; }
+}
 .invoice-span-2 { grid-column: span 2; }
 .invoice-drop { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 22px; border: 1px dashed var(--line-strong); border-radius: 10px; background: var(--surface-2); }
 .invoice-month { height: 38px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 7px; color: var(--ink); background: var(--surface); font-size: 13px; }
@@ -971,3 +987,27 @@ td.row-actions > * { vertical-align: middle; }
 
 /* Facturas: descripción del incidente bajo el estatus (máximo dos renglones; completa al pasar el cursor). */
 .invoice-incident { display: -webkit-box; max-width: 220px; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; }
+
+/* Mi cuenta y restablecer contraseña */
+a.signed-user { text-decoration: none; border-radius: 6px; padding: 4px 6px; }
+a.signed-user:hover, a.signed-user:focus-visible { background: rgb(255 255 255 / 10%); color: #fff; }
+.account-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 18px; align-items: start; }
+.account-card { padding: 20px 22px; }
+.account-title { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; color: var(--ink); font-family: var(--font-heading); font-size: 16px; font-weight: 800; }
+.account-title svg { color: var(--brand-text); }
+.account-form { display: flex; flex-direction: column; gap: 14px; }
+.account-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); }
+.account-facts dt { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.account-facts dd { margin: 2px 0 0; color: var(--ink); font-size: 13px; overflow-wrap: anywhere; }
+.account-note { margin: -4px 0 0; font-size: 12px; }
+.account-show { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; }
+.password-checks { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: -4px 0 0; padding: 0; list-style: none; color: var(--faint); font-size: 12px; }
+.password-checks li { display: inline-flex; align-items: center; gap: 5px; }
+.password-checks li.ok { color: var(--green-text); }
+.account-force { width: min(100%, 480px); }
+.account-signout { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 14px; }
+.temp-password { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.temp-password code { flex: 1 1 200px; padding: 12px 14px; border: 1px dashed var(--gold-line); border-radius: 9px; background: var(--gold-bg); color: var(--ink); font-size: 19px; font-weight: 700; letter-spacing: .06em; text-align: center; user-select: all; }
+.temp-password-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; color: var(--gold-text); font-size: 11px; font-weight: 700; white-space: nowrap; }
+/* Campo de solo lectura (p. ej. ID de empleado asignado por el sistema) */
+.field > input.input-locked { background: var(--surface-3); color: var(--muted); cursor: not-allowed; font-weight: 700; letter-spacing: .02em; }

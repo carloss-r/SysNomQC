@@ -3,13 +3,14 @@
 import { Copy, Download, ExternalLink, History, Receipt, Save, ScanText, Undo2, X } from "lucide-react";
 import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { describeError, requestApi } from "@/lib/api-client";
-import { formatMoney, INVOICE_FIELD_LABELS, INVOICE_STATUS_LABELS, type Invoice } from "@/lib/invoices";
+import { formatMoney, INVOICE_FIELD_LABELS, INVOICE_STATUS_LABELS, isInvoiceClosed, isInvoiceLocked, type Invoice } from "@/lib/invoices";
 import { useAuth } from "@/features/auth/auth-provider";
 import { formatDateTime, formatDay } from "@/features/fuels/format";
 import { fileSafe } from "@/shared/reports/report-export";
 import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { downloadText, loadInvoicePreview, openInvoiceFile } from "./files";
+import { StageBadge } from "./stage-badge";
 import type { Detected } from "./upload-modal";
 import { BusyLabel, LoadingState } from "@/shared/ui/loading";
 
@@ -182,9 +183,11 @@ export function InvoiceModal({
             <h2 id="invoice-title">{detected ? "Repaso de la factura cargada" : `Factura ${invoice.folio ?? `#${invoice.id}`}`}</h2>
             <p>
               Compara el PDF con lo capturado y corrige lo que esté mal · {invoice.file_name} ·{" "}
-              <span className={`fuel-status fuel-status-${invoice.status === "pagada" ? "ok" : invoice.status === "incidente" ? "bad" : "warn"}`}>{INVOICE_STATUS_LABELS[invoice.status]}</span>
-              {invoice.status === "pagada" && invoice.paid_on && <> el {formatDay(invoice.paid_on)}{invoice.paid_by_name ? ` · ${invoice.paid_by_name}` : ""}</>}
-              {invoice.status !== "pendiente" && <> · <strong>factura cerrada, solo consulta</strong></>}
+              <span className={`fuel-status fuel-status-${invoice.status === "incidente" ? "bad" : "warn"}`}>{INVOICE_STATUS_LABELS[invoice.status]}</span>
+              {" · "}<StageBadge stage={invoice.stage} />
+              {invoice.stage !== "enviada" && invoice.signed_at && <> firmada el {formatDay(invoice.signed_at.slice(0, 10))}{invoice.signed_by_name ? ` · ${invoice.signed_by_name}` : ""}</>}
+              {invoice.stage === "cargada" && invoice.loaded_at && <> · cargada el {formatDay(invoice.loaded_at.slice(0, 10))}{invoice.loaded_by_name ? ` · ${invoice.loaded_by_name}` : ""}</>}
+              {isInvoiceClosed(invoice) && <> · <strong>{isInvoiceLocked(invoice) ? "factura bloqueada (cargada), solo consulta" : "factura cerrada, solo consulta"}</strong></>}
               {invoice.status === "incidente" && (
                 <>
                   {invoice.incident_on && <> desde el {formatDay(invoice.incident_on)}</>}
