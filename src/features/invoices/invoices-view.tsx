@@ -354,7 +354,7 @@ function InvoicesScreen() {
             <div className="table-scroll">
               <table className="employee-table">
                 <thead>
-                  <tr><th>Fecha</th><th>Emisor / folio</th><th className="hide-phone">Total</th><th className="hide-tablet">Vence</th><th>Estado</th><th>Estatus</th><th>Acciones</th></tr>
+                  <tr><th>Fecha</th><th>Emisor / folio</th><th className="hide-phone">Total</th><th className="hide-tablet">Vence</th><th>Estado / pago</th><th>Acciones</th></tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => (
@@ -367,45 +367,59 @@ function InvoicesScreen() {
                       <td className="hide-phone"><strong>{formatMoney(row.total, row.currency)}</strong></td>
                       <td className="hide-tablet">{formatDay(row.due_date)}</td>
                       <td>
-                        <StageBadge stage={row.stage} />
-                        {row.stage === "firmada" && row.signed_at && <><br /><small className="epp-muted">{formatDay(row.signed_at.slice(0, 10))}</small></>}
-                        {row.stage === "cargada" && row.loaded_at && <><br /><small className="epp-muted">{formatDay(row.loaded_at.slice(0, 10))}</small></>}
+                        {/* Estado del documento y estatus de pago, uno debajo del otro. */}
+                        <div className="invoice-badges">
+                          <div>
+                            <StageBadge stage={row.stage} />
+                            {row.stage === "firmada" && row.signed_at && <small className="epp-muted"> {formatDay(row.signed_at.slice(0, 10))}</small>}
+                            {row.stage === "cargada" && row.loaded_at && <small className="epp-muted"> {formatDay(row.loaded_at.slice(0, 10))}</small>}
+                          </div>
+                          <div>
+                            <StatusBadge invoice={row} today={today} />
+                            {row.status === "pagada" && row.paid_on && <small className="epp-muted"> {formatDay(row.paid_on)}</small>}
+                          </div>
+                          {row.status === "incidente" && row.incident_description && (
+                            <small className="epp-muted invoice-incident" title={row.incident_description}>{row.incident_description}</small>
+                          )}
+                        </div>
                       </td>
-                      <td>
-                        <StatusBadge invoice={row} today={today} />
-                        {row.status === "pagada" && row.paid_on && <><br /><small className="epp-muted">{formatDay(row.paid_on)}</small></>}
-                        {row.status === "incidente" && row.incident_description && (
-                          <><br /><small className="epp-muted invoice-incident" title={row.incident_description}>{row.incident_description}</small></>
-                        )}
-                      </td>
-                      <td className="row-actions">
-                        <div className="epp-actions">
-                          {busyId === row.id && <RowBusy />}
-                          {canManage && !isInvoiceLocked(row) && (
-                            <button className="button button-outline" onClick={() => void advanceStage(row)} disabled={busyId === row.id}>
-                              {row.stage === "enviada" ? <><PenLine size={14} /> Marcar firmada</> : <><FileCheck2 size={14} /> Marcar cargada</>}
-                            </button>
+                      <td className="row-actions invoice-row-actions">
+                        <div className="invoice-actions">
+                          {/* Flujo de la factura: se acomoda en varias líneas en lugar de ensanchar la tabla. */}
+                          {canManage && (!isInvoiceLocked(row) || !isInvoiceClosed(row)) && (
+                            <div className="invoice-actions-main">
+                              {!isInvoiceLocked(row) && (
+                                <button className="button button-outline" onClick={() => void advanceStage(row)} disabled={busyId === row.id} title={row.stage === "enviada" ? "Marcar como firmada" : "Marcar como cargada (bloquea la factura)"}>
+                                  {row.stage === "enviada" ? <><PenLine size={14} /> Firmada</> : <><FileCheck2 size={14} /> Cargada</>}
+                                </button>
+                              )}
+                              {!isInvoiceClosed(row) && (
+                                <>
+                                  <button className="button button-gold" onClick={() => setDialog({ type: "pay", invoice: row })} disabled={busyId === row.id} title="Marcar como pagada"><CheckCircle2 size={14} /> Pagada</button>
+                                  <button className="button button-outline" onClick={() => void markIncident(row)} disabled={busyId === row.id} title="Marcar con incidente"><TriangleAlert size={14} /> Incidente</button>
+                                </>
+                              )}
+                            </div>
                           )}
-                          {canManage && !isInvoiceClosed(row) && (
-                            <>
-                              <button className="button button-gold" onClick={() => setDialog({ type: "pay", invoice: row })} disabled={busyId === row.id}><CheckCircle2 size={14} /> Marcar pagada</button>
-                              <button className="button button-outline" onClick={() => void markIncident(row)} disabled={busyId === row.id}><TriangleAlert size={14} /> Incidente</button>
-                            </>
-                          )}
-                          <button className="button button-outline" onClick={() => setDialog({ type: "detail", invoice: row })}>
-                            {canManage && !isInvoiceClosed(row) ? <><Pencil size={14} /> Repasar</> : <><Receipt size={14} /> Ver</>}
-                          </button>
-                          <button className="button button-outline" onClick={() => void viewPdf(row)}><FileText size={14} /> PDF</button>
-                          {isInvoiceClosed(row) && <span className="epp-muted" title={isInvoiceLocked(row) ? "Factura cargada: bloqueada por completo" : "Factura cerrada: ya no se puede modificar"}><Lock size={14} /></span>}
-                          {canDelete(row) && (
-                            <button className="icon-button row-edit" onClick={() => void remove(row)} disabled={busyId === row.id} aria-label="Eliminar factura" title="Eliminar">{busyId === row.id ? <Spinner /> : <Trash2 size={16} />}</button>
-                          )}
+                          <div className="invoice-actions-tools">
+                            {busyId === row.id && <RowBusy />}
+                            {isInvoiceClosed(row) && <span className="epp-muted invoice-lock" title={isInvoiceLocked(row) ? "Factura cargada: bloqueada por completo" : "Factura cerrada: ya no se puede modificar"}><Lock size={14} /></span>}
+                            {canManage && !isInvoiceClosed(row) ? (
+                              <button className="icon-button" onClick={() => setDialog({ type: "detail", invoice: row })} aria-label="Repasar factura" title="Repasar"><Pencil size={16} /></button>
+                            ) : (
+                              <button className="icon-button" onClick={() => setDialog({ type: "detail", invoice: row })} aria-label="Ver factura" title="Ver"><Receipt size={16} /></button>
+                            )}
+                            <button className="icon-button" onClick={() => void viewPdf(row)} aria-label="Abrir PDF" title="Abrir PDF"><FileText size={16} /></button>
+                            {canDelete(row) && (
+                              <button className="icon-button row-edit" onClick={() => void remove(row)} disabled={busyId === row.id} aria-label="Eliminar factura" title="Eliminar">{busyId === row.id ? <Spinner /> : <Trash2 size={16} />}</button>
+                            )}
+                          </div>
                         </div>
                       </td>
                     </tr>
                   ))}
                   {rows.length === 0 && (
-                    <tr><td colSpan={7} className="epp-empty">{invoices.length ? "Ninguna factura coincide con el filtro." : canManage ? "Aún no hay facturas. Carga la primera con «Cargar factura»." : "Aún no hay facturas."}</td></tr>
+                    <tr><td colSpan={6} className="epp-empty">{invoices.length ? "Ninguna factura coincide con el filtro." : canManage ? "Aún no hay facturas. Carga la primera con «Cargar factura»." : "Aún no hay facturas."}</td></tr>
                   )}
                 </tbody>
               </table>
