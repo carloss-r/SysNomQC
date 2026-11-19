@@ -1,4 +1,4 @@
-"use client";
+ "use client";
 
 import type { Session } from "@supabase/supabase-js";
 import type { ReactNode } from "react";
@@ -22,8 +22,6 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   retry: () => void;
-  /** Vuelve a leer la cuenta (nombre, contraseña pendiente…) sin pantalla de carga. */
-  refreshAccess: (patch?: Partial<Access>) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -247,27 +245,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAttempt((value) => value + 1);
   }, []);
 
-  const refreshAccess = useCallback(async (patch?: Partial<Access>) => {
-    const current = sessionRef.current;
-    if (!current) return;
-    try {
-      const fresh = await requestApi<Access>(current, "/api/me");
-      setAccess({ ...fresh, ...patch });
-    } catch (error) {
-      // Si no se pudo releer, al menos se aplica lo que ya se sabe que cambió.
-      if (patch) setAccess((previous) => (previous ? { ...previous, ...patch } : previous));
-      else throw error;
-    }
-  }, []);
-
   const can = useCallback(
     (permission: Permission) => access?.permissions.includes(permission) ?? false,
     [access],
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, session, access, authError, signingIn, can, signIn, signOut, retry, refreshAccess }),
-    [status, session, access, authError, signingIn, can, signIn, signOut, retry, refreshAccess],
+    () => ({ status, session, access, authError, signingIn, can, signIn, signOut, retry }),
+    [status, session, access, authError, signingIn, can, signIn, signOut, retry],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

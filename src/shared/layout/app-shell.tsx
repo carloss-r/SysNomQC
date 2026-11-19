@@ -12,6 +12,7 @@ import { NotificationsBell } from "@/features/notifications/notifications-bell";
 import { NotificationsProvider } from "@/features/notifications/notifications-provider";
 import { ThemeToggle } from "@/shared/ui/theme-toggle";
 import { Sidebar } from "./sidebar";
+import { SystemSwitcher } from "./system-switcher";
 import { Spinner } from "@/shared/ui/loading";
 
 function Splash({ message }: { message: string }) {
@@ -104,6 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <CircleUserRound size={18} />
               <span>{access?.full_name || "Mi cuenta"}</span>
             </Link>
+            <SystemSwitcher buttonClassName="topbar-icon" />
             <NotificationsBell />
             <ThemeToggle />
             <button className="icon-button logout-button hide-phone" onClick={() => void handleSignOut()} disabled={signingOut} aria-label="Cerrar sesión" title="Cerrar sesión">

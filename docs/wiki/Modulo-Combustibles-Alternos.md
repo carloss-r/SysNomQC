@@ -53,3 +53,15 @@ Se implementa en `src/lib/fuels.ts` (pantalla y reportes) y en `fuel_month_summa
 ## Almacenamiento
 
 Bucket privado `fuel-permits` (PDF de hasta 10 MB).
+
+## Sistema SCA (ruta alterna `/sca`)
+
+Versión independiente del módulo con presentación propia (menú lateral fijo, tema grafito/naranja).
+No aparece en el menú del sistema principal: se entra con el enlace directo `/sca` o con el botón **?**
+de la barra superior ("Cambiar de sistema"), visible para cuentas con `fuels.view`.
+
+- Mismas cuentas, sesión, permisos y API (`/api/fuels/*`) que el módulo original; mismas reglas en la base.
+- Pantallas: Panel de control (`/sca`), Báscula (`/sca/bascula`), Programación (`/sca/programacion`),
+  Proveedores (`/sca/proveedores`), Comercial (`/sca/comercial`, requiere `fuels.commercial`) y Ecología (`/sca/ecologia`).
+- Código: `src/features/fuels-system/` (marco, datos compartidos, pantallas) y `src/app/sca/` (rutas y `sca.css`).
+- Datos de prueba: `supabase/migrations/202611190003_combustibles_datos_prueba.sql` (incluye cómo borrarlos).
