@@ -1,6 +1,6 @@
 "use client";
 
-import { AlarmClock, CalendarDays, CalendarRange, CheckCircle2, Clock, FileCheck2, FileText, FileUp, Lock, PenLine, Pencil, Receipt, Search, Trash2, TriangleAlert, X } from "lucide-react";
+import { AlarmClock, CalendarDays, CalendarRange, Clock, FileCheck2, FileText, FileUp, Lock, PenLine, Pencil, Receipt, Search, Trash2, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { describeError, requestApi } from "@/lib/api-client";
 import { plantToday } from "@/lib/fuels";
@@ -25,7 +25,6 @@ import { RequirePermission } from "@/shared/layout/require-permission";
 import { ExportButtons } from "@/shared/reports/export-buttons";
 import type { Report } from "@/shared/reports/report-export";
 import { StatCard } from "@/shared/ui/badges";
-import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { useDialog } from "@/shared/ui/dialog-provider";
 import { PageHeader } from "@/shared/ui/page-header";
@@ -33,18 +32,16 @@ import { openInvoiceFile } from "./files";
 import { InvoiceModal } from "./invoice-modal";
 import { StageBadge } from "./stage-badge";
 import { UploadModal, type Detected } from "./upload-modal";
-import { BusyLabel, LoadingState, RowBusy, Spinner } from "@/shared/ui/loading";
+import { LoadingState, RowBusy, Spinner } from "@/shared/ui/loading";
 
 const SUBTITLE = "Finanzas · Facturas";
 
 type Data = { today: string; invoices: Invoice[] };
 type Tab = "list" | "weekly" | "monthly";
-type Filter = "all" | "pendiente" | "pagada" | "incidente" | "vencida";
-type StatusChange = { status: "pagada"; paidOn: string } | { status: "incidente"; description: string };
+type Filter = "all" | "pendiente" | "incidente" | "vencida";
 type Dialog =
   | { type: "upload" }
   | { type: "detail"; invoice: Invoice; detected?: Detected }
-  | { type: "pay"; invoice: Invoice }
   | null;
 
 export function InvoicesView() {
@@ -59,9 +56,8 @@ const isOverdue = (invoice: Invoice, today: string) => invoice.status === "pendi
 const weekLabel = (monday: string) => `${formatDay(monday)} al ${formatDay(addDays(monday, 6))}`;
 
 function StatusBadge({ invoice, today }: { invoice: Invoice; today: string }) {
-  if (invoice.status === "pagada") return <span className="fuel-status fuel-status-ok">Pagada</span>;
   if (invoice.status === "incidente") return <span className="fuel-status fuel-status-bad">Incidente</span>;
-  return isOverdue(invoice, today) ? <span className="fuel-status fuel-status-bad">Vencida · pendiente</span> : <span className="fuel-status fuel-status-warn">Pendiente de pago</span>;
+  return isOverdue(invoice, today) ? <span className="fuel-status fuel-status-bad">Vencida · pendiente</span> : <span className="fuel-status fuel-status-warn">Pendiente</span>;
 }
 
 function InvoicesScreen() {
@@ -121,7 +117,7 @@ function InvoicesScreen() {
     return invoices.filter((row) => {
       if (month && !row.invoice_date.startsWith(month)) return false;
       if (filter === "vencida" && !isOverdue(row, today)) return false;
-      if ((filter === "pendiente" || filter === "pagada" || filter === "incidente") && row.status !== filter) return false;
+      if ((filter === "pendiente" || filter === "incidente") && row.status !== filter) return false;
       if (!term) return true;
       return [row.folio, row.uuid, row.supplier_name, row.supplier_rfc, row.file_name, row.notes, row.incident_description].join(" ").toLowerCase().includes(term);
     });
@@ -130,24 +126,18 @@ function InvoicesScreen() {
   const weekly = useMemo(() => groupSummaries(invoices, (row) => weekStart(row.invoice_date), today), [invoices, today]);
   const monthly = useMemo(() => groupSummaries(invoices, (row) => row.invoice_date.slice(0, 7), today), [invoices, today]);
 
-  async function setStatus(invoice: Invoice, change: StatusChange) {
+  async function setIncident(invoice: Invoice, description: string) {
     if (!session) return;
     setBusyId(invoice.id);
     try {
       await requestApi(session, `/api/invoices/${invoice.id}`, {
         method: "PATCH",
-        body: JSON.stringify({
-          action: "status",
-          status: change.status,
-          paid_on: change.status === "pagada" ? change.paidOn : null,
-          incident_description: change.status === "incidente" ? change.description : null,
-        }),
+        body: JSON.stringify({ action: "status", status: "incidente", incident_description: description }),
       });
-      notify("success", change.status === "pagada" ? "Factura marcada como pagada" : "Incidente registrado en la factura", "La factura quedó cerrada.");
-      setDialog(null);
+      notify("success", "Incidente registrado en la factura", "La factura quedó cerrada.");
       await load();
     } catch (err) {
-      notify("error", "No se pudo cambiar el estatus", describeError(err, "Inténtalo de nuevo."));
+      notify("error", "No se pudo registrar el incidente", describeError(err, "Inténtalo de nuevo."));
     } finally {
       setBusyId(null);
     }
@@ -173,7 +163,7 @@ function InvoicesScreen() {
       validate: (value) => (value.trim().length < 5 ? "Describe el incidente (al menos 5 caracteres)." : null),
     });
     if (description === null) return;
-    await setStatus(invoice, { status: "incidente", description: description.trim() });
+    await setIncident(invoice, description.trim());
   }
 
   // Avanza el estado del documento; "cargada" bloquea la factura por completo y no se puede deshacer.
@@ -188,7 +178,7 @@ function InvoicesScreen() {
           {invoice.supplier_name ?? invoice.file_name}{invoice.folio ? ` · folio ${invoice.folio}` : ""} · {formatMoney(invoice.total, invoice.currency)}
           <br />
           {stage === "cargada"
-            ? <><strong>La factura quedará bloqueada por completo:</strong> ya no se podrá cambiar su estado, su estatus de pago ni sus datos.</>
+            ? <><strong>La factura quedará bloqueada por completo:</strong> ya no se podrá cambiar su estado, marcar incidente ni corregir sus datos.</>
             : "El estado solo avanza: después ya no podrá regresar a enviada."}
         </>
       ),
@@ -239,17 +229,17 @@ function InvoicesScreen() {
       subtitle: SUBTITLE,
       title: "Relación de facturas",
       info: [["Periodo", month ? monthLabel(month) : "Todas"], ["Estatus", filter === "all" ? "Todos" : filter === "vencida" ? "Vencidas" : INVOICE_STATUS_LABELS[filter]]],
-      summary: [["Facturas", summary.count], ["Pagado", formatTotals(summary.paid)], ["Pendiente", formatTotals(summary.pending)], ["Con incidente", summary.incidentCount]],
+      summary: [["Facturas", summary.count], ["Pendiente", formatTotals(summary.pending)], ["Con incidente", summary.incidentCount]],
       sections: [{
         title: "Facturas",
         columns: [
           { header: "Fecha", width: 12 }, { header: "Folio", width: 16 }, { header: "Emisor", width: 34 }, { header: "RFC", width: 15 },
-          { header: "Total", width: 16, align: "right" }, { header: "Vence", width: 12 }, { header: "Estado", width: 11 }, { header: "Estatus", width: 16 }, { header: "Pagada el", width: 12 },
+          { header: "Total", width: 16, align: "right" }, { header: "Vence", width: 12 }, { header: "Estado", width: 11 }, { header: "Estatus", width: 16 },
           { header: "Incidente", width: 34 },
         ],
         rows: rows.map((row) => [
           formatDay(row.invoice_date), row.folio ?? "—", row.supplier_name ?? "—", row.supplier_rfc ?? "—", formatMoney(row.total, row.currency),
-          formatDay(row.due_date), INVOICE_STAGE_LABELS[row.stage], isOverdue(row, today) ? "Vencida" : INVOICE_STATUS_LABELS[row.status], formatDay(row.paid_on),
+          formatDay(row.due_date), INVOICE_STAGE_LABELS[row.stage], isOverdue(row, today) ? "Vencida" : INVOICE_STATUS_LABELS[row.status],
           row.incident_description ?? "—",
         ]),
         empty: "Sin facturas.",
@@ -269,10 +259,11 @@ function InvoicesScreen() {
         title: kind === "weekly" ? "Por semana (lunes a domingo)" : "Por mes",
         columns: [
           { header: kind === "weekly" ? "Semana" : "Mes", width: 26 }, { header: "Facturas", width: 10, align: "right" },
-          { header: "Total facturado", width: 22, align: "right" }, { header: "Pagadas", width: 10, align: "right" },
-          { header: "Pagado", width: 22, align: "right" }, { header: "Pendientes", width: 11, align: "right" }, { header: "Pendiente", width: 22, align: "right" },
+          { header: "Total facturado", width: 22, align: "right" },
+          { header: "Pendientes", width: 11, align: "right" }, { header: "Pendiente", width: 22, align: "right" },
+          { header: "Vencidas", width: 10, align: "right" }, { header: "Con incidente", width: 13, align: "right" },
         ],
-        rows: list.map((item) => [label(item.key), item.count, formatTotals(item.total), item.paidCount, formatTotals(item.paid), item.pendingCount, formatTotals(item.pending)]),
+        rows: list.map((item) => [label(item.key), item.count, formatTotals(item.total), item.pendingCount, formatTotals(item.pending), item.overdueCount, item.incidentCount]),
         empty: "Sin facturas.",
       }],
       generatedBy,
@@ -291,20 +282,19 @@ function InvoicesScreen() {
       <PageHeader
         eyebrow="Finanzas"
         title="Facturas"
-        description="Carga las facturas en PDF, consulta su texto digitalizado y lleva el seguimiento de lo pagado y lo pendiente por semana y por mes."
+        description="Carga las facturas en PDF, consulta su texto digitalizado y lleva el seguimiento de su estado y de lo pendiente por semana y por mes."
         actions={canManage ? <button className="button button-gold" onClick={() => setDialog({ type: "upload" })}><FileUp size={17} /> Cargar factura</button> : undefined}
       >
         <div className="stats-grid">
-          <StatCard label="Pendientes de pago" count={stats.pending.count} tone="gold" icon={<Clock size={16} />} />
+          <StatCard label="Pendientes" count={stats.pending.count} tone="gold" icon={<Clock size={16} />} />
           <StatCard label="Vencidas" count={stats.pending.overdueCount} tone={stats.pending.overdueCount ? "red" : "green"} icon={<AlarmClock size={16} />} />
           <StatCard label={`Facturas de ${monthLabel(currentMonth)}`} count={stats.thisMonth.count} tone="blue" icon={<CalendarDays size={16} />} />
-          <StatCard label="Pagadas este mes" count={stats.thisMonth.paidCount} tone="green" icon={<CheckCircle2 size={16} />} />
+          <StatCard label="Con incidente" count={stats.incidents} tone={stats.incidents ? "red" : "green"} icon={<TriangleAlert size={16} />} />
         </div>
         {data && (
           <p className="epp-muted fuel-today">
-            Por pagar: <strong>{formatTotals(stats.pending.pending)}</strong> · Este mes: {formatTotals(stats.thisMonth.total)} facturado, {formatTotals(stats.thisMonth.paid)} pagado ·
+            Pendiente: <strong>{formatTotals(stats.pending.pending)}</strong> · Este mes: {formatTotals(stats.thisMonth.total)} facturado ·
             Esta semana: {formatTotals(stats.thisWeek.total)} en {stats.thisWeek.count} factura(s)
-            {stats.incidents > 0 && <> · <strong>{stats.incidents} con incidente</strong></>}
           </p>
         )}
       </PageHeader>
@@ -336,7 +326,7 @@ function InvoicesScreen() {
           <>
             <div className="directory-toolbar">
               <div className="site-tabs" role="tablist">
-                {([["all", "Todas"], ["pendiente", "Pendientes"], ["vencida", "Vencidas"], ["pagada", "Pagadas"], ["incidente", "Incidentes"]] as const).map(([key, label]) => (
+                {([["all", "Todas"], ["pendiente", "Pendientes"], ["vencida", "Vencidas"], ["incidente", "Incidentes"]] as const).map(([key, label]) => (
                   <button key={key} role="tab" aria-selected={filter === key} className={`site-tab${filter === key ? " active" : ""}`} onClick={() => setFilter(key)}>{label}</button>
                 ))}
               </div>
@@ -354,7 +344,7 @@ function InvoicesScreen() {
             <div className="table-scroll">
               <table className="employee-table">
                 <thead>
-                  <tr><th>Fecha</th><th>Emisor / folio</th><th className="hide-phone">Total</th><th className="hide-tablet">Vence</th><th>Estado / pago</th><th>Acciones</th></tr>
+                  <tr><th>Fecha</th><th>Emisor / folio</th><th className="hide-phone">Total</th><th className="hide-tablet">Vence</th><th>Estado / estatus</th><th>Acciones</th></tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => (
@@ -367,17 +357,14 @@ function InvoicesScreen() {
                       <td className="hide-phone"><strong>{formatMoney(row.total, row.currency)}</strong></td>
                       <td className="hide-tablet">{formatDay(row.due_date)}</td>
                       <td>
-                        {/* Estado del documento y estatus de pago, uno debajo del otro. */}
+                        {/* Estado del documento y estatus, uno debajo del otro. */}
                         <div className="invoice-badges">
                           <div>
                             <StageBadge stage={row.stage} />
                             {row.stage === "firmada" && row.signed_at && <small className="epp-muted"> {formatDay(row.signed_at.slice(0, 10))}</small>}
                             {row.stage === "cargada" && row.loaded_at && <small className="epp-muted"> {formatDay(row.loaded_at.slice(0, 10))}</small>}
                           </div>
-                          <div>
-                            <StatusBadge invoice={row} today={today} />
-                            {row.status === "pagada" && row.paid_on && <small className="epp-muted"> {formatDay(row.paid_on)}</small>}
-                          </div>
+                          <StatusBadge invoice={row} today={today} />
                           {row.status === "incidente" && row.incident_description && (
                             <small className="epp-muted invoice-incident" title={row.incident_description}>{row.incident_description}</small>
                           )}
@@ -395,7 +382,6 @@ function InvoicesScreen() {
                               )}
                               {!isInvoiceClosed(row) && (
                                 <>
-                                  <button className="button button-gold" onClick={() => setDialog({ type: "pay", invoice: row })} disabled={busyId === row.id} title="Marcar como pagada"><CheckCircle2 size={14} /> Pagada</button>
                                   <button className="button button-outline" onClick={() => void markIncident(row)} disabled={busyId === row.id} title="Marcar con incidente"><TriangleAlert size={14} /> Incidente</button>
                                 </>
                               )}
@@ -446,7 +432,7 @@ function InvoicesScreen() {
         <UploadModal
           onClose={() => setDialog(null)}
           onUploaded={(invoice, detected) => {
-            notify("success", "Factura cargada", "Quedó como enviada y pendiente de pago.");
+            notify("success", "Factura cargada", "Quedó como enviada y pendiente.");
             setDialog({ type: "detail", invoice, detected });
             void load();
           }}
@@ -454,9 +440,6 @@ function InvoicesScreen() {
       )}
       {dialog?.type === "detail" && (
         <InvoiceModal invoice={dialog.invoice} detected={dialog.detected} canEdit={canManage && !isInvoiceClosed(dialog.invoice)} onClose={() => setDialog(null)} onSaved={load} />
-      )}
-      {dialog?.type === "pay" && (
-        <PayModal invoice={dialog.invoice} today={today} busy={busyId === dialog.invoice.id} onClose={() => setDialog(null)} onConfirm={(paidOn) => void setStatus(dialog.invoice, { status: "pagada", paidOn })} />
       )}
     </main>
   );
@@ -490,7 +473,7 @@ function SummaryTable({
           <thead>
             <tr>
               <th>{kind === "weekly" ? "Semana" : "Mes"}</th><th>Facturas</th><th className="hide-phone">Total facturado</th>
-              <th>Pagado</th><th>Pendiente</th><th className="hide-tablet">Vencidas</th>
+              <th>Pendiente</th><th className="hide-tablet">Vencidas</th><th className="hide-tablet">Con incidente</th>
             </tr>
           </thead>
           <tbody>
@@ -502,9 +485,9 @@ function SummaryTable({
                 </td>
                 <td>{item.count}</td>
                 <td className="hide-phone"><strong>{formatTotals(item.total)}</strong></td>
-                <td>{formatTotals(item.paid)}<br /><small className="epp-muted">{item.paidCount} pagada(s)</small></td>
                 <td>{formatTotals(item.pending)}<br /><small className="epp-muted">{item.pendingCount} pendiente(s)</small></td>
                 <td className="hide-tablet">{item.overdueCount ? <span className="fuel-status fuel-status-bad">{item.overdueCount}</span> : "—"}</td>
+                <td className="hide-tablet">{item.incidentCount ? <span className="fuel-status fuel-status-bad">{item.incidentCount}</span> : "—"}</td>
               </tr>
             ))}
             {list.length === 0 && <tr><td colSpan={6} className="epp-empty">Aún no hay facturas para resumir.</td></tr>}
@@ -512,33 +495,5 @@ function SummaryTable({
         </table>
       </div>
     </>
-  );
-}
-
-function PayModal({ invoice, today, busy, onClose, onConfirm }: { invoice: Invoice; today: string; busy: boolean; onClose: () => void; onConfirm: (paidOn: string) => void }) {
-  const [paidOn, setPaidOn] = useState(today);
-  const invalid = !paidOn || paidOn > today;
-  return (
-    <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
-      <section className="modal modal-form fuel-modal-small" role="dialog" aria-modal="true" aria-labelledby="invoice-pay-title">
-        <div className="modal-header">
-          <div className="modal-heading-icon"><CheckCircle2 size={19} /></div>
-          <div>
-            <h2 id="invoice-pay-title">Marcar como pagada</h2>
-            <p>{invoice.supplier_name ?? invoice.file_name}{invoice.folio ? ` · folio ${invoice.folio}` : ""} · <strong>{formatMoney(invoice.total, invoice.currency)}</strong></p>
-          </div>
-          <button className="icon-button close-modal" onClick={onClose} disabled={busy} aria-label="Cerrar"><X size={20} /></button>
-        </div>
-        <form className="employee-form" onSubmit={(event) => { event.preventDefault(); if (!invalid) onConfirm(paidOn); }}>
-          <Field label="Fecha de pago" required><input type="date" value={paidOn} max={today} onChange={(event) => setPaidOn(event.target.value)} /></Field>
-          {paidOn > today && <p className="inline-error" role="alert">La fecha de pago no puede ser futura.</p>}
-          <p className="field-hint">Al confirmar, la factura queda cerrada: ya no se podrá cambiar su estatus, corregir sus datos ni eliminarla.</p>
-          <div className="modal-actions">
-            <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cancelar</button>
-            <button type="submit" className="button button-gold" disabled={busy || invalid}><CheckCircle2 size={17} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : "Confirmar pago y cerrar"}</button>
-          </div>
-        </form>
-      </section>
-    </div>
   );
 }

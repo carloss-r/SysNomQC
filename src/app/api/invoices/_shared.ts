@@ -9,7 +9,7 @@ export const MAX_INVOICE_BYTES = 10 * 1024 * 1024;
 
 /** Columnas de la lista (sin el texto completo, que solo se pide al abrir una factura). */
 export const LIST_COLUMNS =
-  "id,file_path,file_name,file_size,invoice_date,due_date,folio,uuid,supplier_name,supplier_rfc,subtotal,tax,total,currency,notes,status,paid_on,paid_by_name,incident_description,incident_on,incident_by_name,stage,signed_at,signed_by_name,loaded_at,loaded_by_name,text_pages,has_text,created_at,created_by_name,updated_at,updated_by_name";
+  "id,file_path,file_name,file_size,invoice_date,due_date,folio,uuid,supplier_name,supplier_rfc,subtotal,tax,total,currency,notes,status,incident_description,incident_on,incident_by_name,stage,signed_at,signed_by_name,loaded_at,loaded_by_name,text_pages,has_text,created_at,created_by_name,updated_at,updated_by_name";
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida.");
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional().transform((value) => value || null);
@@ -36,11 +36,10 @@ export const editSchema = z.object({
   notes: optionalText(500),
 });
 
-// Solo se sale de "pendiente": pagada e incidente cierran la factura.
+// Solo se sale de "pendiente": el incidente cierra la factura.
 export const statusSchema = z.object({
   action: z.literal("status"),
-  status: z.enum(["pagada", "incidente"]),
-  paid_on: day.nullable().optional(),
+  status: z.literal("incidente"),
   // Obligatoria al marcar incidente; se escribe a mano.
   incident_description: z.string().trim().max(MAX_INCIDENT_LENGTH).nullable().optional().transform((value) => value || null),
 });
@@ -71,9 +70,9 @@ export function toInvoice(row: Record<string, unknown>): Invoice {
 }
 
 /**
- * Si la factura ya está cerrada (pagada, con incidente o cargada), la respuesta de error; si no, null.
+ * Si la factura ya está cerrada (con incidente o cargada), la respuesta de error; si no, null.
  * Con allowSuperAdmin (solo al eliminar) el Super administrador sí puede continuar.
- * Con nextStage (avanzar el estado del documento) una factura pagada o con incidente sí puede avanzar,
+ * Con nextStage (avanzar el estado del documento) una factura con incidente sí puede avanzar,
  * pero solo al siguiente estado y nunca si ya está cargada.
  */
 export async function closedInvoiceResponse(
@@ -95,7 +94,7 @@ export async function closedInvoiceResponse(
     }
     return null;
   }
-  if (status === "pagada" || status === "incidente") return closedMessage(status === "pagada" ? "pagada" : "con incidente");
+  if (status === "incidente") return closedMessage("con incidente");
   return null;
 }
 
@@ -111,7 +110,7 @@ export function invoiceDatabaseError(error: { code?: string; message: string }, 
   if (error.code === "42501") return NextResponse.json({ error: "Tu rol no tiene permiso para realizar esta acción." }, { status: 403 });
   if (["42P01", "PGRST205", "42703", "PGRST204"].includes(error.code ?? "")) {
     return NextResponse.json(
-      { error: "Faltan migraciones de facturas en Supabase (202611110002_facturas.sql, 202611120001_facturas_incidente.sql y 202611190001_facturas_etapas.sql)." },
+      { error: "Faltan migraciones de facturas en Supabase (202611110002_facturas.sql, 202611120001_facturas_incidente.sql, 202611190001_facturas_etapas.sql y 202611190002_facturas_sin_pagada.sql)." },
       { status: 503 },
     );
   }

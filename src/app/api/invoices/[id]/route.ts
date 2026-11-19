@@ -27,7 +27,7 @@ export async function GET(request: NextRequest, context: Context) {
   return NextResponse.json({ ...toInvoice(data as unknown as Record<string, unknown>), edits: edits.data ?? [] });
 }
 
-/** Corrige los datos de la factura, cambia su estatus de pago o avanza el estado del documento. */
+/** Corrige los datos de la factura, la marca con incidente o avanza el estado del documento. */
 export async function PATCH(request: NextRequest, context: Context) {
   const auth = await getAuthenticatedClient(request, "invoices.manage");
   if ("response" in auth) return auth.response;
@@ -50,20 +50,14 @@ export async function PATCH(request: NextRequest, context: Context) {
         ? { stage: "firmada", signed_at: now, signed_by_name: actor }
         : { stage: "cargada", loaded_at: now, loaded_by_name: actor };
     } else if (input.data.action === "status") {
-      const paid = input.data.status === "pagada";
-      const incident = input.data.status === "incidente";
-      const paidOn = input.data.paid_on ?? today;
-      if (paid && paidOn > today) return NextResponse.json({ error: "La fecha de pago no puede ser futura." }, { status: 400 });
-      if (incident && !input.data.incident_description) {
+      if (!input.data.incident_description) {
         return NextResponse.json({ error: "Describe el incidente de la factura." }, { status: 400 });
       }
       changes = {
         status: input.data.status,
-        paid_on: paid ? paidOn : null,
-        paid_by_name: paid ? actor : null,
-        incident_description: incident ? input.data.incident_description : null,
-        incident_on: incident ? today : null,
-        incident_by_name: incident ? actor : null,
+        incident_description: input.data.incident_description,
+        incident_on: today,
+        incident_by_name: actor,
       };
     } else {
       const { action: _action, ...fields } = input.data;
