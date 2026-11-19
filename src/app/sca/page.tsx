@@ -1,5 +1,7 @@
-import { PanelScreen } from "@/features/fuels-system/screens";
+import { redirect } from "next/navigation";
+import { SCA_HOME } from "@/features/fuels-system/navigation";
 
+// El SCA abre directamente en Proveedores.
 export default function Page() {
-  return <PanelScreen />;
+  redirect(SCA_HOME);
 }

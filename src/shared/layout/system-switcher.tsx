@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
-import { SCA_BASE } from "@/features/fuels-system/navigation";
+import { SCA_BASE, SCA_HOME } from "@/features/fuels-system/navigation";
 
 // Botón "?" de la barra superior: cambia entre el sistema principal y el de combustibles alternos (SCA).
 // El SCA no aparece en ningún menú; solo se llega por aquí o con el enlace directo.
@@ -34,7 +34,7 @@ export function SystemSwitcher({ buttonClassName = "" }: { buttonClassName?: str
 
   const systems = [
     { href: "/", label: "Gestión de Personal", hint: "Empleados, EPP, facturas y administración", icon: UsersRound, current: !inSca, show: true },
-    { href: SCA_BASE, label: "Combustibles Alternos · SCA", hint: "Báscula, agenda, proveedores y semáforo SEMARNAT", icon: Flame, current: inSca, show: can("fuels.view") },
+    { href: SCA_HOME, label: "Combustibles Alternos · SCA", hint: "Báscula, agenda, proveedores y semáforo SEMARNAT", icon: Flame, current: inSca, show: can("fuels.view") },
   ].filter((item) => item.show);
 
   return (

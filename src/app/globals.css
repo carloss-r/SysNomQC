@@ -1020,7 +1020,7 @@ a.signed-user:hover, a.signed-user:focus-visible { background: rgb(255 255 255 /
 .system-switcher-item:hover { background: var(--hover); }
 .system-switcher-item.current { border-color: var(--line-strong); background: var(--surface-2); }
 .system-switcher-icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: 8px; color: var(--brand-text); background: var(--green-bg); }
-.system-switcher-item[href="/sca"] .system-switcher-icon { color: #fff; background: linear-gradient(135deg, #ff8a3d, #e5480f); }
+.system-switcher-item[href^="/sca"] .system-switcher-icon { color: var(--blue-text); background: var(--blue-bg); }
 .system-switcher-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 2px; }
 .system-switcher-copy strong { font-size: 13.5px; }
 .system-switcher-copy small { color: var(--muted); font-size: 12px; line-height: 1.35; }
