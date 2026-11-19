@@ -11,8 +11,25 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
 
 export const MAX_INCIDENT_LENGTH = 1000;
 
-/** Pagada o con incidente: la factura queda cerrada y ya no se modifica ni se elimina. */
-export const isInvoiceClosed = (invoice: { status: InvoiceStatus }) => invoice.status !== "pendiente";
+/** Estado del documento (aparte del pago): nace enviada y solo avanza; cargada la bloquea por completo. */
+export type InvoiceStage = "enviada" | "firmada" | "cargada";
+
+export const INVOICE_STAGE_LABELS: Record<InvoiceStage, string> = {
+  enviada: "Enviada",
+  firmada: "Firmada",
+  cargada: "Cargada",
+};
+
+/** Siguiente estado del documento (null si ya está cargada). */
+export const nextInvoiceStage = (stage: InvoiceStage): InvoiceStage | null =>
+  stage === "enviada" ? "firmada" : stage === "firmada" ? "cargada" : null;
+
+/** Cargada: ya no se modifica nada (ni estado, ni pago, ni datos). */
+export const isInvoiceLocked = (invoice: { stage: InvoiceStage }) => invoice.stage === "cargada";
+
+/** Pagada, con incidente o cargada: la factura queda cerrada y ya no se modifica ni se elimina. */
+export const isInvoiceClosed = (invoice: { status: InvoiceStatus; stage: InvoiceStage }) =>
+  invoice.status !== "pendiente" || isInvoiceLocked(invoice);
 
 export type Invoice = {
   id: number;
@@ -37,6 +54,11 @@ export type Invoice = {
   incident_description: string | null;
   incident_on: string | null;
   incident_by_name: string | null;
+  stage: InvoiceStage;
+  signed_at: string | null;
+  signed_by_name: string | null;
+  loaded_at: string | null;
+  loaded_by_name: string | null;
   text_pages: number;
   /** Solo viene al pedir una factura (no en la lista). */
   text_content?: string;

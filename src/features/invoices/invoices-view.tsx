@@ -1,6 +1,6 @@
 "use client";
 
-import { AlarmClock, CalendarDays, CalendarRange, CheckCircle2, Clock, FileText, FileUp, Lock, Pencil, Receipt, Search, Trash2, TriangleAlert, X } from "lucide-react";
+import { AlarmClock, CalendarDays, CalendarRange, CheckCircle2, Clock, FileCheck2, FileText, FileUp, Lock, PenLine, Pencil, Receipt, Search, Trash2, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { describeError, requestApi } from "@/lib/api-client";
 import { plantToday } from "@/lib/fuels";
@@ -8,9 +8,12 @@ import {
   formatMoney,
   formatTotals,
   groupSummaries,
+  INVOICE_STAGE_LABELS,
   INVOICE_STATUS_LABELS,
   isInvoiceClosed,
+  isInvoiceLocked,
   MAX_INCIDENT_LENGTH,
+  nextInvoiceStage,
   summarize,
   weekStart,
   type Invoice,
@@ -28,6 +31,7 @@ import { useDialog } from "@/shared/ui/dialog-provider";
 import { PageHeader } from "@/shared/ui/page-header";
 import { openInvoiceFile } from "./files";
 import { InvoiceModal } from "./invoice-modal";
+import { StageBadge } from "./stage-badge";
 import { UploadModal, type Detected } from "./upload-modal";
 import { BusyLabel, LoadingState, RowBusy, Spinner } from "@/shared/ui/loading";
 
@@ -172,11 +176,43 @@ function InvoicesScreen() {
     await setStatus(invoice, { status: "incidente", description: description.trim() });
   }
 
+  // Avanza el estado del documento; "cargada" bloquea la factura por completo y no se puede deshacer.
+  async function advanceStage(invoice: Invoice) {
+    if (!session) return;
+    const stage = nextInvoiceStage(invoice.stage);
+    if (!stage) return;
+    const ok = await systemDialog.confirm({
+      title: stage === "cargada" ? "Marcar factura como cargada" : "Marcar factura como firmada",
+      message: (
+        <>
+          {invoice.supplier_name ?? invoice.file_name}{invoice.folio ? ` · folio ${invoice.folio}` : ""} · {formatMoney(invoice.total, invoice.currency)}
+          <br />
+          {stage === "cargada"
+            ? <><strong>La factura quedará bloqueada por completo:</strong> ya no se podrá cambiar su estado, su estatus de pago ni sus datos.</>
+            : "El estado solo avanza: después ya no podrá regresar a enviada."}
+        </>
+      ),
+      confirmLabel: stage === "cargada" ? "Marcar cargada y bloquear" : "Marcar firmada",
+      tone: stage === "cargada" ? "danger" : undefined,
+    });
+    if (!ok) return;
+    setBusyId(invoice.id);
+    try {
+      await requestApi(session, `/api/invoices/${invoice.id}`, { method: "PATCH", body: JSON.stringify({ action: "stage", stage }) });
+      notify("success", stage === "cargada" ? "Factura marcada como cargada" : "Factura marcada como firmada", stage === "cargada" ? "La factura quedó bloqueada." : undefined);
+      await load();
+    } catch (err) {
+      notify("error", "No se pudo cambiar el estado", describeError(err, "Inténtalo de nuevo."));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function remove(invoice: Invoice) {
     if (!session) return;
     const ok = await systemDialog.confirm({
       title: "Eliminar factura",
-      message: `¿Eliminar la factura ${invoice.folio ?? invoice.file_name}?${isInvoiceClosed(invoice) ? ` Está cerrada (${INVOICE_STATUS_LABELS[invoice.status].toLowerCase()}).` : ""} Se borra también el PDF y no se puede deshacer.`,
+      message: `¿Eliminar la factura ${invoice.folio ?? invoice.file_name}?${isInvoiceClosed(invoice) ? ` Está cerrada (${isInvoiceLocked(invoice) ? "cargada" : INVOICE_STATUS_LABELS[invoice.status].toLowerCase()}).` : ""} Se borra también el PDF y no se puede deshacer.`,
       confirmLabel: "Eliminar",
       tone: "danger",
     });
@@ -208,12 +244,12 @@ function InvoicesScreen() {
         title: "Facturas",
         columns: [
           { header: "Fecha", width: 12 }, { header: "Folio", width: 16 }, { header: "Emisor", width: 34 }, { header: "RFC", width: 15 },
-          { header: "Total", width: 16, align: "right" }, { header: "Vence", width: 12 }, { header: "Estatus", width: 16 }, { header: "Pagada el", width: 12 },
+          { header: "Total", width: 16, align: "right" }, { header: "Vence", width: 12 }, { header: "Estado", width: 11 }, { header: "Estatus", width: 16 }, { header: "Pagada el", width: 12 },
           { header: "Incidente", width: 34 },
         ],
         rows: rows.map((row) => [
           formatDay(row.invoice_date), row.folio ?? "—", row.supplier_name ?? "—", row.supplier_rfc ?? "—", formatMoney(row.total, row.currency),
-          formatDay(row.due_date), isOverdue(row, today) ? "Vencida" : INVOICE_STATUS_LABELS[row.status], formatDay(row.paid_on),
+          formatDay(row.due_date), INVOICE_STAGE_LABELS[row.stage], isOverdue(row, today) ? "Vencida" : INVOICE_STATUS_LABELS[row.status], formatDay(row.paid_on),
           row.incident_description ?? "—",
         ]),
         empty: "Sin facturas.",
@@ -318,7 +354,7 @@ function InvoicesScreen() {
             <div className="table-scroll">
               <table className="employee-table">
                 <thead>
-                  <tr><th>Fecha</th><th>Emisor / folio</th><th className="hide-phone">Total</th><th className="hide-tablet">Vence</th><th>Estatus</th><th>Acciones</th></tr>
+                  <tr><th>Fecha</th><th>Emisor / folio</th><th className="hide-phone">Total</th><th className="hide-tablet">Vence</th><th>Estado</th><th>Estatus</th><th>Acciones</th></tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => (
@@ -331,6 +367,11 @@ function InvoicesScreen() {
                       <td className="hide-phone"><strong>{formatMoney(row.total, row.currency)}</strong></td>
                       <td className="hide-tablet">{formatDay(row.due_date)}</td>
                       <td>
+                        <StageBadge stage={row.stage} />
+                        {row.stage === "firmada" && row.signed_at && <><br /><small className="epp-muted">{formatDay(row.signed_at.slice(0, 10))}</small></>}
+                        {row.stage === "cargada" && row.loaded_at && <><br /><small className="epp-muted">{formatDay(row.loaded_at.slice(0, 10))}</small></>}
+                      </td>
+                      <td>
                         <StatusBadge invoice={row} today={today} />
                         {row.status === "pagada" && row.paid_on && <><br /><small className="epp-muted">{formatDay(row.paid_on)}</small></>}
                         {row.status === "incidente" && row.incident_description && (
@@ -340,6 +381,11 @@ function InvoicesScreen() {
                       <td className="row-actions">
                         <div className="epp-actions">
                           {busyId === row.id && <RowBusy />}
+                          {canManage && !isInvoiceLocked(row) && (
+                            <button className="button button-outline" onClick={() => void advanceStage(row)} disabled={busyId === row.id}>
+                              {row.stage === "enviada" ? <><PenLine size={14} /> Marcar firmada</> : <><FileCheck2 size={14} /> Marcar cargada</>}
+                            </button>
+                          )}
                           {canManage && !isInvoiceClosed(row) && (
                             <>
                               <button className="button button-gold" onClick={() => setDialog({ type: "pay", invoice: row })} disabled={busyId === row.id}><CheckCircle2 size={14} /> Marcar pagada</button>
@@ -350,7 +396,7 @@ function InvoicesScreen() {
                             {canManage && !isInvoiceClosed(row) ? <><Pencil size={14} /> Repasar</> : <><Receipt size={14} /> Ver</>}
                           </button>
                           <button className="button button-outline" onClick={() => void viewPdf(row)}><FileText size={14} /> PDF</button>
-                          {isInvoiceClosed(row) && <span className="epp-muted" title="Factura cerrada: ya no se puede modificar"><Lock size={14} /></span>}
+                          {isInvoiceClosed(row) && <span className="epp-muted" title={isInvoiceLocked(row) ? "Factura cargada: bloqueada por completo" : "Factura cerrada: ya no se puede modificar"}><Lock size={14} /></span>}
                           {canDelete(row) && (
                             <button className="icon-button row-edit" onClick={() => void remove(row)} disabled={busyId === row.id} aria-label="Eliminar factura" title="Eliminar">{busyId === row.id ? <Spinner /> : <Trash2 size={16} />}</button>
                           )}
@@ -359,7 +405,7 @@ function InvoicesScreen() {
                     </tr>
                   ))}
                   {rows.length === 0 && (
-                    <tr><td colSpan={6} className="epp-empty">{invoices.length ? "Ninguna factura coincide con el filtro." : canManage ? "Aún no hay facturas. Carga la primera con «Cargar factura»." : "Aún no hay facturas."}</td></tr>
+                    <tr><td colSpan={7} className="epp-empty">{invoices.length ? "Ninguna factura coincide con el filtro." : canManage ? "Aún no hay facturas. Carga la primera con «Cargar factura»." : "Aún no hay facturas."}</td></tr>
                   )}
                 </tbody>
               </table>
@@ -386,7 +432,7 @@ function InvoicesScreen() {
         <UploadModal
           onClose={() => setDialog(null)}
           onUploaded={(invoice, detected) => {
-            notify("success", "Factura cargada", "Quedó como pendiente de pago.");
+            notify("success", "Factura cargada", "Quedó como enviada y pendiente de pago.");
             setDialog({ type: "detail", invoice, detected });
             void load();
           }}

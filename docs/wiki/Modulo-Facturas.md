@@ -19,6 +19,8 @@ La migración crea el rol sugerido **Cuentas por pagar** con ambos permisos (se 
 4. **Repaso**: al cargarla (y con **Repasar** en la lista) se abre el PDF original junto a los datos capturados para compararlos y corregir lo que no coincida. Cada corrección se guarda en `invoice_edits` con quién la hizo, cuándo y el valor anterior y nuevo de cada dato (pestaña **Correcciones**). Requiere `202611110003_facturas_ediciones.sql`.
 5. **Marcar pagada** pide la fecha de pago (no futura) y guarda quién la marcó; **Pendiente** la regresa.
 
+6. **Estado del documento** (aparte del pago, migración `202611190001_facturas_etapas.sql`): toda factura nace **Enviada** y solo avanza a **Firmada** y después a **Cargada** (botones *Marcar firmada* / *Marcar cargada*; se guarda quién y cuándo). Puede avanzar aunque ya esté pagada o con incidente. **Cargada bloquea la factura por completo**: ya no se cambia su estado, su estatus de pago ni sus datos (la base lo impide con el trigger `invoices_lock_closed`); igual que las cerradas, solo el Super administrador puede eliminarla.
+
 Un PDF escaneado como imagen no trae texto: queda marcado como *PDF sin texto* y los datos se capturan a mano (no hay OCR).
 
 ## Resúmenes
@@ -34,5 +36,5 @@ Un PDF escaneado como imagen no trae texto: queda marcado como *PDF sin texto* y
 | GET | `/api/invoices` | `invoices.view` | Lista (sin texto); `?from=YYYY-MM-DD`, las pendientes siempre se incluyen |
 | POST | `/api/invoices` | `invoices.manage` | Registra un PDF ya subido: `{ file_path, file_name }` |
 | GET | `/api/invoices/:id` | `invoices.view` | Factura con `text_content` |
-| PATCH | `/api/invoices/:id` | `invoices.manage` | `{ action: "edit", ... }` o `{ action: "status", status, paid_on }` |
+| PATCH | `/api/invoices/:id` | `invoices.manage` | `{ action: "edit", ... }`, `{ action: "status", status, paid_on }` o `{ action: "stage", stage: "firmada" \| "cargada" }` |
 | DELETE | `/api/invoices/:id` | `invoices.manage` | Elimina la factura y su PDF |

@@ -27,7 +27,7 @@ export async function GET(request: NextRequest, context: Context) {
   return NextResponse.json({ ...toInvoice(data as unknown as Record<string, unknown>), edits: edits.data ?? [] });
 }
 
-/** Corrige los datos de la factura o cambia su estatus de pago. */
+/** Corrige los datos de la factura, cambia su estatus de pago o avanza el estado del documento. */
 export async function PATCH(request: NextRequest, context: Context) {
   const auth = await getAuthenticatedClient(request, "invoices.manage");
   if ("response" in auth) return auth.response;
@@ -36,14 +36,20 @@ export async function PATCH(request: NextRequest, context: Context) {
   try {
     const input = patchSchema.safeParse(await readJson(request));
     if (!input.success) return NextResponse.json({ error: "Revisa los datos de la factura." }, { status: 400 });
-    const closed = await closedInvoiceResponse(auth.client, id);
+    const closed = await closedInvoiceResponse(auth.client, id, { nextStage: input.data.action === "stage" ? input.data.stage : undefined });
     if (closed) return closed;
     const actor = actorName(auth.access);
     const today = plantToday();
 
     let changes: Record<string, unknown>;
     let diff: Record<string, { from: unknown; to: unknown }> | null = null;
-    if (input.data.action === "status") {
+    if (input.data.action === "stage") {
+      // Firmada guarda quién y cuándo; cargada además bloquea la factura por completo.
+      const now = new Date().toISOString();
+      changes = input.data.stage === "firmada"
+        ? { stage: "firmada", signed_at: now, signed_by_name: actor }
+        : { stage: "cargada", loaded_at: now, loaded_by_name: actor };
+    } else if (input.data.action === "status") {
       const paid = input.data.status === "pagada";
       const incident = input.data.status === "incidente";
       const paidOn = input.data.paid_on ?? today;
@@ -95,10 +101,13 @@ export async function PATCH(request: NextRequest, context: Context) {
         reportServerIncident("api · facturas · bitácora de correcciones", logged.error);
       }
     }
-    await recordAudit(request, auth.access, input.data.action === "status" ? "invoices.status" : "invoices.update", id, {
-      ...(input.data.action === "status"
-        ? { status: input.data.status, ...(input.data.incident_description ? { incident: input.data.incident_description } : {}) }
-        : { fields: Object.keys(diff ?? {}) }),
+    const auditAction = input.data.action === "stage" ? "invoices.stage" : input.data.action === "status" ? "invoices.status" : "invoices.update";
+    await recordAudit(request, auth.access, auditAction, id, {
+      ...(input.data.action === "stage"
+        ? { stage: input.data.stage }
+        : input.data.action === "status"
+          ? { status: input.data.status, ...(input.data.incident_description ? { incident: input.data.incident_description } : {}) }
+          : { fields: Object.keys(diff ?? {}) }),
     });
     return NextResponse.json(toInvoice(data as unknown as Record<string, unknown>));
   } catch (error) {
@@ -116,7 +125,7 @@ export async function DELETE(request: NextRequest, context: Context) {
   if (!id) return NextResponse.json({ error: "Factura no válida." }, { status: 400 });
   try {
     // Una factura cerrada solo la puede eliminar el Super administrador.
-    const closed = await closedInvoiceResponse(auth.client, id, auth.access.is_super_admin);
+    const closed = await closedInvoiceResponse(auth.client, id, { allowSuperAdmin: auth.access.is_super_admin });
     if (closed) return closed;
     const { data, error } = await auth.client.from("invoices").delete().eq("id", id).select("id,file_path,folio,status").maybeSingle();
     if (error) return invoiceDatabaseError(error, "eliminar");

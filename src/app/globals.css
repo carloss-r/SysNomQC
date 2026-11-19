@@ -920,6 +920,7 @@ td.row-actions > * { vertical-align: middle; }
 
 /* Facturas */
 .fuel-status-warn { color: var(--gold-text); border-color: var(--gold-line); background: var(--gold-bg); }
+.fuel-status-info { color: var(--blue-text); border-color: var(--blue-line); background: var(--blue-bg); }
 .invoice-span-2 { grid-column: span 2; }
 .invoice-drop { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 22px; border: 1px dashed var(--line-strong); border-radius: 10px; background: var(--surface-2); }
 .invoice-month { height: 38px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 7px; color: var(--ink); background: var(--surface); font-size: 13px; }

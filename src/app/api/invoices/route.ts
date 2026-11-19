@@ -105,6 +105,7 @@ export async function POST(request: NextRequest) {
         total: fields.total,
         currency: fields.currency,
         status: "pendiente",
+        stage: "enviada",
         text_content: extracted.text,
         text_pages: extracted.pages,
         created_by_name: actor,
