@@ -1,6 +1,6 @@
 # Módulo Combustibles alternos
 
-Pantalla `/combustibles` (menú **Ecología → Combustibles alternos**). Código en `src/features/fuels/`, API en `/api/fuels`, cálculo en `src/lib/fuels.ts`. Especificación original: `Archivos/ModuloCoque.txt`.
+Ya no forma parte del sistema principal: vive en el **SCA** (`/sca`, ver abajo). Componentes en `src/features/fuels/`, API en `/api/fuels`, cálculo en `src/lib/fuels.ts`. Especificación original: `Archivos/ModuloCoque.txt`.
 
 ## Semáforo SEMARNAT
 
@@ -57,8 +57,10 @@ Bucket privado `fuel-permits` (PDF de hasta 10 MB).
 ## Sistema SCA (ruta alterna `/sca`)
 
 Versión independiente del módulo con presentación propia (menú lateral fijo, tema grafito/naranja).
-No aparece en el menú del sistema principal: se entra con el enlace directo `/sca` o con el botón **?**
-de la barra superior ("Cambiar de sistema"), visible para cuentas con `fuels.view`.
+No aparece en el menú del sistema principal: se entra con el enlace directo `/sca` (abre en Proveedores) o con
+el botón **?** de la barra superior ("Cambiar de sistema"), que solo ven las cuentas con `fuels.view`.
+Tiene su propio login con los mismos usuarios del sistema principal; quien no tenga `fuels.view` no puede entrar.
+Una cuenta que solo tiene permisos de combustibles es enviada al SCA al entrar al sistema principal.
 
 - Mismas cuentas, sesión, permisos y API (`/api/fuels/*`) que el módulo original; mismas reglas en la base.
 - Pantallas: Panel de control (`/sca`), Báscula (`/sca/bascula`), Programación (`/sca/programacion`),

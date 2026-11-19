@@ -9,6 +9,7 @@ import { SCA_BASE, SCA_HOME } from "@/features/fuels-system/navigation";
 
 // Botón "?" de la barra superior: cambia entre el sistema principal y el de combustibles alternos (SCA).
 // El SCA no aparece en ningún menú; solo se llega por aquí o con el enlace directo.
+// El botón solo existe para cuentas con el rol de combustibles (fuels.view).
 export function SystemSwitcher({ buttonClassName = "" }: { buttonClassName?: string }) {
   const { can } = useAuth();
   const pathname = usePathname();
@@ -31,6 +32,8 @@ export function SystemSwitcher({ buttonClassName = "" }: { buttonClassName?: str
       window.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  if (!can("fuels.view")) return null;
 
   const systems = [
     { href: "/", label: "Gestión de Personal", hint: "Empleados, EPP, facturas y administración", icon: UsersRound, current: !inSca, show: true },
@@ -73,7 +76,6 @@ export function SystemSwitcher({ buttonClassName = "" }: { buttonClassName?: str
               </Link>
             );
           })}
-          {systems.length === 1 && <p className="system-switcher-empty">Tu rol no tiene acceso a otros sistemas.</p>}
         </div>
       )}
     </div>

@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { FileText, Flame, HardHat, ShieldCheck, UsersRound } from "lucide-react";
+import { FileText, HardHat, ShieldCheck, UsersRound } from "lucide-react";
 import type { Permission } from "@/lib/permissions";
 
 // Para agregar una pantalla nueva:
@@ -27,10 +27,6 @@ export const NAVIGATION: NavSection[] = [
   {
     title: "Seguridad e higiene",
     items: [{ href: "/epp", label: "EPP", icon: HardHat, permission: "epp.view" }],
-  },
-  {
-    title: "Ecología",
-    items: [{ href: "/combustibles", label: "Combustibles alternos", icon: Flame, permission: "fuels.view" }],
   },
   {
     title: "Finanzas",

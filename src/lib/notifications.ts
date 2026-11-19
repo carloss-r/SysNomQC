@@ -289,7 +289,7 @@ export function fuelNotifications(semaphore: FuelSemaphoreRow | null, permits: F
       detail: red
         ? `${semaphore.month} · Se alcanzó el límite SEMARNAT del 30 %. La agenda bloquea nuevas cargas del mes.`
         : `${semaphore.month} · Dosifica la logística semanal. Proyección con lo programado: ${pctText(semaphore.projected_pct)}.`,
-      href: "/combustibles",
+      href: "/sca/ecologia",
     });
   } else if (semaphore && semaphore.projected_level === "rojo") {
     items.push({
@@ -298,7 +298,7 @@ export function fuelNotifications(semaphore: FuelSemaphoreRow | null, permits: F
       severity: "important",
       title: `La agenda proyecta rebasar el 30 %: ${pctText(semaphore.projected_pct)}`,
       detail: `${semaphore.month} · Hoy va en ${pctText(semaphore.pct)}; revisa las recepciones programadas.`,
-      href: "/combustibles",
+      href: "/sca/programacion",
     });
   }
   for (const row of permits) {
@@ -312,7 +312,7 @@ export function fuelNotifications(semaphore: FuelSemaphoreRow | null, permits: F
       detail: expired
         ? `Venció el ${day}. No se le puede programar ni recibir material hasta renovarlo.`
         : `Vence el ${day} (en ${row.days} día${row.days === 1 ? "" : "s"}). Solicita la renovación.`,
-      href: "/combustibles",
+      href: "/sca/proveedores",
     });
   }
   return items;
