@@ -702,6 +702,9 @@ td.row-actions > * { vertical-align: middle; }
 .epp-site-bar strong { color: var(--ink); }
 .epp-state-none { color: var(--ink-soft); border-color: var(--line-strong); background: var(--surface-3); }
 .epp-requested { display: inline-flex; margin-left: 6px; padding: 3px 8px; border: 1px dashed var(--purple-line); border-radius: 999px; color: var(--purple-text); background: var(--purple-bg); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.epp-results button.epp-blocked { cursor: not-allowed; background: var(--surface-2); opacity: .75; }
+.epp-results button.epp-blocked strong { color: var(--muted); }
+.epp-results small.epp-blocked-reason { color: var(--red-text); font-weight: 700; white-space: normal; }
 .epp-notice { padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--gold-text, var(--muted)); background: var(--surface-2); font-size: 12px; font-weight: 700; list-style: none; }
 .epp-result-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .epp-result-title strong { flex: 1 1 auto; min-width: 0; }

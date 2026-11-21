@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarDays, Check, ClipboardCheck, PackagePlus, Plus, Scale, Search, Trash2, X } from "lucide-react";
-import { useDeferredValue, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useDeferredValue, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import { eppArticleLabel, eppKey, type EppArticle, type EppEmployee, type EppLedgerPage } from "@/lib/permissions";
 import { describeError, requestApi } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -76,13 +76,18 @@ export function MovementModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const selectable = useMemo(
-    // Un artículo con una compra sin contar no se mueve hasta el conteo (la base también lo bloquea).
-    () =>
-      articles.filter(
-        (item) => item.pending_count === null && (kind === "ajuste" ? true : item.active) && (kind !== "entrega" || item.stock > 0),
-      ),
-    [articles, kind],
+  // Todos los artículos de la sede salen en el buscador; los que no se pueden mover aquí salen en gris
+  // con la razón (antes se ocultaban y parecía que no existían).
+  const selectable = articles;
+  const blockedReason = useCallback(
+    (item: EppArticle) => {
+      // Un artículo con una compra sin contar no se mueve hasta el conteo (la base también lo bloquea).
+      if (item.pending_count !== null) return `compra folio ${item.pending_count} sin contar; haz el conteo en Solicitudes`;
+      if (kind !== "ajuste" && !item.active) return "artículo desactivado";
+      if (kind === "entrega" && item.stock <= 0) return "sin existencia (hay 0)";
+      return null;
+    },
+    [kind],
   );
   // Solo trabajadores de la sede del inventario (el servidor ya los filtra; esto es una segunda barrera).
   const siteEmployees = useMemo(() => employees.filter((item) => item.site === site), [employees, site]);
@@ -244,6 +249,7 @@ export function MovementModal({
                     <Field label="Artículo">
                       <ArticlePicker
                         articles={selectable}
+                        blocked={blockedReason}
                         value={line.article_id}
                         taken={lines.filter((other) => other.key !== line.key).map((other) => other.article_id)}
                         onChange={(id) => updateLine(line.key, { article_id: id })}

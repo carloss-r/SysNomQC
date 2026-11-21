@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, EyeOff, Plus, Trash2, Truck, X } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent } from "react";
 import { eppArticleLabel, type EppArticle } from "@/lib/permissions";
 import { describeError, requestApi } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -33,8 +33,17 @@ export function DirectPurchaseModal({
 }) {
   const { session } = useAuth();
   const notify = useNotify();
-  const byId = useMemo(() => new Map(articles.map((item) => [item.id, item])), [articles]);
-  const selectable = useMemo(() => articles.filter((item) => item.active && !openRequests.has(item.id)), [articles, openRequests]);
+  // Todos salen en el buscador; los ya pedidos o desactivados, en gris con la razón.
+  const selectable = articles;
+  const blockedReason = useCallback(
+    (item: EppArticle) => {
+      const folio = openRequests.get(item.id);
+      if (folio) return `ya tiene una solicitud abierta (folio ${folio})`;
+      if (!item.active) return "artículo desactivado";
+      return null;
+    },
+    [openRequests],
+  );
   const [lines, setLines] = useState<Line[]>(() => [{ key: ++lineCounter, article_id: "", quantity: "" }]);
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -88,12 +97,12 @@ export function DirectPurchaseModal({
             <h3>¿Qué se compró?</h3>
             <div className="epp-lines">
               {lines.map((line) => {
-                const article = byId.get(Number(line.article_id));
                 return (
                   <div key={line.key} className="epp-line">
                     <Field label="Artículo">
                       <ArticlePicker
-                        articles={article && !selectable.includes(article) ? [article, ...selectable] : selectable}
+                        articles={selectable}
+                        blocked={(item) => (String(item.id) === line.article_id ? null : blockedReason(item))}
                         value={line.article_id}
                         taken={lines.filter((other) => other.key !== line.key).map((other) => other.article_id)}
                         detail={(item) => `${item.category} · ${item.unit.toLowerCase()}`}
