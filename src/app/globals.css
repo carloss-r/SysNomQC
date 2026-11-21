@@ -479,7 +479,7 @@ body:has(.network-bar.saving) { cursor: progress; }
 /* Buscadores de EPP: la lista flota sobre el formulario (no lo empuja) y los textos largos no lo ensanchan. */
 .epp-combo { position: relative; min-width: 0; }
 .epp-combo .search-box { width: 100%; }
-.epp-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30; margin: 0; box-shadow: 0 10px 24px rgb(0 0 0 / 14%); background: var(--surface); }
+.epp-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30; max-height: min(60vh, 460px); overflow-y: auto; margin: 0; box-shadow: 0 10px 24px rgb(0 0 0 / 14%); background: var(--surface); }
 .epp-results li, .epp-results button, .epp-selected > div { min-width: 0; }
 .epp-results strong, .epp-results small, .epp-selected strong, .epp-selected small { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .epp-line > *, .epp-meta > * { min-width: 0; }
@@ -702,6 +702,10 @@ td.row-actions > * { vertical-align: middle; }
 .epp-site-bar strong { color: var(--ink); }
 .epp-state-none { color: var(--ink-soft); border-color: var(--line-strong); background: var(--surface-3); }
 .epp-requested { display: inline-flex; margin-left: 6px; padding: 3px 8px; border: 1px dashed var(--purple-line); border-radius: 999px; color: var(--purple-text); background: var(--purple-bg); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.epp-results button.epp-blocked { cursor: not-allowed; background: var(--surface-2); opacity: .75; }
+.epp-results button.epp-blocked strong { color: var(--muted); }
+.epp-results small.epp-blocked-reason { color: var(--red-text); font-weight: 700; white-space: normal; }
+.epp-notice { padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--gold-text, var(--muted)); background: var(--surface-2); font-size: 12px; font-weight: 700; list-style: none; }
 .epp-result-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .epp-result-title strong { flex: 1 1 auto; min-width: 0; }
 .epp-size-strong { flex: none; margin-left: 0; color: var(--green-text, var(--ink)); border-color: var(--green-line); background: var(--green-bg); }

@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarDays, Check, ClipboardCheck, PackagePlus, Plus, Scale, Search, Trash2, X } from "lucide-react";
-import { useDeferredValue, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useDeferredValue, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import { eppArticleLabel, eppKey, type EppArticle, type EppEmployee, type EppLedgerPage } from "@/lib/permissions";
 import { describeError, requestApi } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -76,13 +76,17 @@ export function MovementModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const selectable = useMemo(
-    // Un artículo con una compra sin contar no se mueve hasta el conteo (la base también lo bloquea).
-    () =>
-      articles.filter(
-        (item) => item.pending_count === null && (kind === "ajuste" ? true : item.active) && (kind !== "entrega" || item.stock > 0),
-      ),
-    [articles, kind],
+  // Todos los artículos de la sede salen en el buscador; los que no se pueden mover aquí salen en gris
+  // con la razón (antes se ocultaban y parecía que no existían).
+  const selectable = articles;
+  const blockedReason = useCallback(
+    (item: EppArticle) => {
+      // Si hay existencia se entrega siempre (aunque tenga una compra sin contar o esté desactivado).
+      if (kind === "entrega") return item.stock > 0 ? null : "sin existencia (hay 0)";
+      if (kind === "ingreso" && !item.active) return "artículo desactivado";
+      return null;
+    },
+    [kind],
   );
   // Solo trabajadores de la sede del inventario (el servidor ya los filtra; esto es una segunda barrera).
   const siteEmployees = useMemo(() => employees.filter((item) => item.site === site), [employees, site]);
@@ -155,8 +159,6 @@ export function MovementModal({
     if (items.some((item) => !Number.isFinite(item.quantity) || item.quantity === 0)) return setError("Escribe una cantidad válida.");
     if (kind !== "ajuste" && items.some((item) => item.quantity < 0)) return setError("Las cantidades deben ser mayores a cero.");
     if (new Set(items.map((item) => item.article_id)).size !== items.length) return setError("Un artículo está repetido; únelo en un solo renglón.");
-    const locked = items.map((item) => byId.get(item.article_id)).find((item) => item?.pending_count);
-    if (locked) return setError(`${eppArticleLabel(locked.name, locked.size)} tiene pendiente el conteo de la compra folio ${locked.pending_count}. Haz el conteo antes de moverlo.`);
     if (kind === "entrega") {
       const short = items.find((item) => item.quantity > (byId.get(item.article_id)?.stock ?? 0));
       if (short) return setError(`Solo hay ${byId.get(short.article_id)?.stock ?? 0} de ${eppArticleLabel(byId.get(short.article_id)?.name, byId.get(short.article_id)?.size)}.`);
@@ -244,6 +246,7 @@ export function MovementModal({
                     <Field label="Artículo">
                       <ArticlePicker
                         articles={selectable}
+                        blocked={blockedReason}
                         value={line.article_id}
                         taken={lines.filter((other) => other.key !== line.key).map((other) => other.article_id)}
                         onChange={(id) => updateLine(line.key, { article_id: id })}

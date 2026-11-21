@@ -103,7 +103,7 @@ export function InventoryTab({
                   <td>
                     <span className="epp-stock">{item.stock}</span> <span className={`epp-state epp-state-${state}`}>{STATE_LABELS[state]}</span>
                     {item.pending_count ? (
-                      <span className="epp-requested epp-locked" title="Llegó una compra: hay que contarla antes de entregar o mover este artículo">Por contar · folio {item.pending_count}</span>
+                      <span className="epp-requested epp-locked" title="Llegó una compra que falta contar; lo que ya hay en existencia se puede entregar">Por contar · folio {item.pending_count}</span>
                     ) : folio ? (
                       <span className="epp-requested" title="Ya se pidió a compras">Pedido · folio {folio}</span>
                     ) : null}
@@ -116,7 +116,7 @@ export function InventoryTab({
                       {canRequest && needsRequest(item, openRequests) && (
                         <button className="button button-gold" onClick={() => onRequest([item.id])} aria-label={`Pedir más ${eppArticleLabel(item.name, item.size)}`} title="Pedir más a compras"><ShoppingCart size={14} /> <span className="hide-phone">Pedir más</span></button>
                       )}
-                      {canDeliver && item.active && item.stock > 0 && !item.pending_count && (
+                      {canDeliver && item.stock > 0 && (
                         <button className="button button-outline" onClick={() => onDeliver(item.id)} aria-label={`Entregar ${eppArticleLabel(item.name, item.size)}`} title="Entregar"><ClipboardCheck size={14} /> <span className="hide-phone">Entregar</span></button>
                       )}
                       {canManage && (

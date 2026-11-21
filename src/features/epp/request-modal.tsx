@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, Send, ShoppingCart, Trash2, X } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
 import type { EppArticle } from "@/lib/permissions";
 import { describeError, requestApi } from "@/lib/api-client";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -37,7 +37,17 @@ export function RequestModal({
   const { session } = useAuth();
   const notify = useNotify();
   const byId = useMemo(() => new Map(articles.map((item) => [item.id, item])), [articles]);
-  const selectable = useMemo(() => articles.filter((item) => item.active && !openRequests.has(item.id)), [articles, openRequests]);
+  // Todos salen en el buscador; los ya pedidos o desactivados, en gris con la razón.
+  const selectable = articles;
+  const blockedReason = useCallback(
+    (item: EppArticle) => {
+      const folio = openRequests.get(item.id);
+      if (folio) return `ya tiene una solicitud abierta (folio ${folio})`;
+      if (!item.active) return "artículo desactivado";
+      return null;
+    },
+    [openRequests],
+  );
   const [lines, setLines] = useState<Line[]>(() => {
     const preset = presetIds.map((id) => byId.get(id)).filter((item): item is EppArticle => Boolean(item) && !openRequests.has(item!.id));
     if (preset.length === 0) return [{ key: ++lineCounter, article_id: "", quantity: "1" }];
@@ -96,7 +106,8 @@ export function RequestModal({
                   <div key={line.key} className="epp-line">
                     <Field label="Artículo">
                       <ArticlePicker
-                        articles={article && !selectable.includes(article) ? [article, ...selectable] : selectable}
+                        articles={selectable}
+                        blocked={(item) => (String(item.id) === line.article_id ? null : blockedReason(item))}
                         value={line.article_id}
                         taken={lines.filter((other) => other.key !== line.key).map((other) => other.article_id)}
                         detail={(item) => `${item.category} · hay ${item.stock}, mín. ${item.min_stock}`}
@@ -118,7 +129,7 @@ export function RequestModal({
             <button type="button" className="button button-outline" onClick={() => setLines((current) => [...current, { key: ++lineCounter, article_id: "", quantity: "1" }])} disabled={lines.length >= 80}>
               <Plus size={15} /> Agregar otro artículo
             </button>
-            {openRequests.size > 0 && <p className="epp-muted epp-note">{openRequests.size} artículo(s) ya tienen una solicitud abierta y no aparecen en la lista.</p>}
+            {openRequests.size > 0 && <p className="epp-muted epp-note">{openRequests.size} artículo(s) ya tienen una solicitud abierta: salen en gris en la búsqueda.</p>}
           </div>
 
           <div className="form-grid epp-meta-wide">
