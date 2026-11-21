@@ -35,7 +35,7 @@ const SIZE_ALIASES: Record<string, string> = {
 const LETTER_SIZES = ["xxs", "xs", "s", "m", "l", "xl", "xxl", "xxxl", "xxxxl", "xxxxxl"];
 
 const canonicalSize = (value: string) => {
-  const token = fold(value).replace(/[\s-]/g, "");
+  const token = fold(value).replace(/[\s.-]/g, "").replace(/^(talla|tall|tal|t)(?=x*[sml]$|x*l$|\d)/, "");
   return SIZE_ALIASES[token] ?? token;
 };
 const looksLikeSize = (token: string) => LETTER_SIZES.includes(canonicalSize(token)) || /^\d+(\.\d+)?$/.test(token);
@@ -103,10 +103,15 @@ export function scoreArticle(article: SearchableArticle, query: Query): number |
   return score;
 }
 
-/** Filtra y ordena artículos según lo escrito. Sin texto, devuelve la lista tal cual. */
-export function searchArticles<T extends SearchableArticle>(articles: T[], raw: string): T[] {
-  const query = parseArticleQuery(raw);
-  if (query.text.length + query.sizes.length === 0) return articles;
+export type ArticleSearch<T> = {
+  items: T[];
+  /** Talla que se pidió y no hay ("L"): se muestran las demás opciones de ese artículo. */
+  missingSize: string | null;
+  /** No hubo coincidencia completa: se muestran los parecidos (solo con la primera palabra). */
+  loose: boolean;
+};
+
+function rank<T extends SearchableArticle>(articles: T[], query: Query): T[] {
   const scored: { item: T; score: number }[] = [];
   for (const item of articles) {
     const score = scoreArticle(item, query);
@@ -120,4 +125,36 @@ export function searchArticles<T extends SearchableArticle>(articles: T[], raw: 
         sizeOrder(a.item.size) - sizeOrder(b.item.size),
     )
     .map((entry) => entry.item);
+}
+
+/**
+ * Busca con respaldo para que nunca quede vacío sin razón:
+ *   1. Nombre + talla exacta ("camisola l" → CAMISOLA · L).
+ *   2. Si esa talla no está, todas las tallas del artículo ("camisola l" → CAMISOLA · S, M, XL…).
+ *   3. Si aun así nada, lo que coincida con la primera palabra ("camisola azul" → camisolas).
+ */
+export function searchArticlesDetailed<T extends SearchableArticle>(articles: T[], raw: string): ArticleSearch<T> {
+  const query = parseArticleQuery(raw);
+  if (query.text.length + query.sizes.length === 0) return { items: articles, missingSize: null, loose: false };
+
+  const exact = rank(articles, query);
+  if (exact.length > 0) return { items: exact, missingSize: null, loose: false };
+
+  if (query.sizes.length > 0 && query.text.length > 0) {
+    const anySize = rank(articles, { text: query.text, sizes: [] });
+    if (anySize.length > 0) return { items: anySize, missingSize: query.sizes.join(" ").toUpperCase(), loose: false };
+  }
+
+  const first = query.text[0] ?? query.sizes[0];
+  if (first && query.text.length + query.sizes.length > 1) {
+    const loose = rank(articles, { text: [first], sizes: [] });
+    if (loose.length > 0) return { items: loose, missingSize: null, loose: true };
+  }
+
+  return { items: [], missingSize: null, loose: false };
+}
+
+/** Filtra y ordena artículos según lo escrito (con respaldo). Sin texto, devuelve la lista tal cual. */
+export function searchArticles<T extends SearchableArticle>(articles: T[], raw: string): T[] {
+  return searchArticlesDetailed(articles, raw).items;
 }

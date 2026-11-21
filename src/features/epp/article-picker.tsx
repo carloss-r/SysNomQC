@@ -3,7 +3,7 @@
 import { Search } from "lucide-react";
 import { useId, useMemo, useState, type KeyboardEvent } from "react";
 import { eppArticleLabel, type EppArticle } from "@/lib/permissions";
-import { searchArticles } from "@/lib/epp-search";
+import { searchArticlesDetailed } from "@/lib/epp-search";
 
 // Alcanza para ver todas las tallas de una prenda (S a XXXXL) sin seguir escribiendo.
 const MAX_RESULTS = 8;
@@ -38,9 +38,17 @@ export function ArticlePicker({
   const [highlight, setHighlight] = useState(0);
   const listId = useId();
   const selected = articles.find((item) => String(item.id) === value) ?? null;
-  const { matches, extra } = useMemo(() => {
-    const found = searchArticles(articles.filter((item) => !taken.includes(String(item.id))), query);
-    return { matches: found.slice(0, MAX_RESULTS), extra: Math.max(0, found.length - MAX_RESULTS) };
+  const { matches, extra, notice } = useMemo(() => {
+    const result = searchArticlesDetailed(articles.filter((item) => !taken.includes(String(item.id))), query);
+    const found = result.items;
+    const notice = result.missingSize
+      ? `No hay talla ${result.missingSize} aquí. Estas son las demás opciones:`
+      : result.loose
+        ? "Sin coincidencia exacta. Opciones parecidas:"
+        : "";
+    // Si no hubo coincidencia exacta se muestran todas las opciones (pocas) para elegir sin volver a escribir.
+    const limit = notice ? Math.max(MAX_RESULTS, 12) : MAX_RESULTS;
+    return { matches: found.slice(0, limit), extra: Math.max(0, found.length - limit), notice };
   }, [articles, query, taken]);
 
   function choose(item: EppArticle) {
@@ -86,6 +94,7 @@ export function ArticlePicker({
       </div>
       {open && (
         <ul id={listId} className="epp-results epp-dropdown" role="listbox">
+          {notice && matches.length > 0 && <li className="epp-notice">{notice}</li>}
           {matches.length === 0 && <li className="epp-empty">{articles.length === 0 ? "No hay artículos disponibles en esta sede." : "Sin coincidencias."}</li>}
           {matches.map((item, index) => (
             <li key={item.id}>
