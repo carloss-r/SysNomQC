@@ -702,6 +702,9 @@ td.row-actions > * { vertical-align: middle; }
 .epp-site-bar strong { color: var(--ink); }
 .epp-state-none { color: var(--ink-soft); border-color: var(--line-strong); background: var(--surface-3); }
 .epp-requested { display: inline-flex; margin-left: 6px; padding: 3px 8px; border: 1px dashed var(--purple-line); border-radius: 999px; color: var(--purple-text); background: var(--purple-bg); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.epp-result-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.epp-result-title strong { flex: 1 1 auto; min-width: 0; }
+.epp-size-strong { flex: none; margin-left: 0; color: var(--green-text, var(--ink)); border-color: var(--green-line); background: var(--green-bg); }
 .epp-size { display: inline-flex; margin-left: 6px; padding: 1px 7px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--ink-soft); background: var(--surface-3); font-size: 11px; font-weight: 700; white-space: nowrap; }
 .epp-locked { border-style: solid; color: var(--red-text); border-color: var(--red-line); background: var(--red-bg); }
 .epp-status-faltante { color: var(--red-text); border-color: var(--red-line); background: var(--red-bg); }

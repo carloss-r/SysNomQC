@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { eppArticleLabel, type EppMovement } from "@/lib/permissions";
 import { reportServerIncident } from "@/lib/incidents";
 import { searchTerm } from "@/lib/safe-input";
+import { searchArticles } from "@/lib/epp-search";
 import { getAuthenticatedClient } from "../../employees/_server";
 import { eppDatabaseError, resolveSite } from "../_shared";
 
@@ -94,16 +95,15 @@ async function readPage(client: SupabaseClient, site: string, params: URLSearchP
   let query = client.from("epp_movements").select(COLUMNS, { count: "exact" }).eq("site", site);
   if (kind && (KINDS as readonly string[]).includes(kind)) query = query.eq("kind", kind);
   if (term) {
-    // El nombre del artículo vive en epp_articles: se buscan sus ids y se suman al filtro.
+    // El nombre del artículo vive en epp_articles: se buscan sus ids con el mismo buscador de la pantalla
+    // ("camisola l", "camisola talla l", "botas 27") y se suman al filtro. El catálogo de una sede es chico.
     const like = `*${term}*`;
-    const { data: matches, error } = await client
-      .from("epp_articles")
-      .select("id")
-      .eq("site", site)
-      .or(`name.ilike.${like},size.ilike.${like}`)
-      .limit(200);
+    const { data: catalog, error } = await client.from("epp_articles").select("id,name,size,category").eq("site", site).limit(2000);
     if (error) return eppDatabaseError(error, "buscar artículos");
-    const ids = (matches ?? []).map((item) => item.id as number);
+    const raw = (params.get("q") ?? "").slice(0, 60);
+    const ids = searchArticles((catalog ?? []) as { id: number; name: string; size: string | null; category: string | null }[], raw)
+      .slice(0, 200)
+      .map((item) => item.id);
     const filters = [
       `employee_name.ilike.${like}`,
       `employee_code.ilike.${like}`,
