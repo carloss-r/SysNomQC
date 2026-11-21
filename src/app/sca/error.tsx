@@ -3,5 +3,5 @@
 import { RouteError } from "@/shared/layout/route-error";
 
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  return <RouteError area="combustibles alternos" error={error} reset={reset} />;
+  return <RouteError area="SCA · combustibles alternos" error={error} reset={reset} />;
 }

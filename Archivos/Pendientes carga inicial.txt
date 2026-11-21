@@ -4,22 +4,24 @@ PENDIENTES DE LA CARGA INICIAL DE EPP - CAMPECHE (conteo del 17/11/2026)
 Ya cargado:
   * supabase/migrations/202611170002_epp_carga_inicial_campeche.sql            (18 renglones, 504 unidades)
   * supabase/migrations/202611170003_epp_carga_inicial_campeche_variantes.sql  (5 renglones, 145 unidades)
+  * supabase/migrations/202611210001_epp_carga_inicial_campeche_camisolas.sql   (Camisola L 3, M 3, S 1 = 7)
 
 Falta solo lo que se maneja por talla. Cuando lleguen las tallas, se cargan con
 "Ingreso de material" en EPP (Campeche) o se hace un script como los anteriores.
 
-Total pendiente: 4 renglones, 23 unidades.
+Total pendiente: 4 renglones, 16 unidades.
 
 
 FALTA LA TALLA (el artículo se maneja por talla)
 ------------------------------------------------
 Conteo                         Cantidad   Artículo oficial                          Tallas que existen
-Camisola                       13         CAMISOLA DE MEZCLILLA CON REFLEJANTE      S, M, L, XL, XXL, XXXL, XXXXL
+Camisola                       6 (de 13)  CAMISOLA DE MEZCLILLA CON REFLEJANTE      S, M, L, XL, XXL, XXXL, XXXXL
 Overoles                       7          OVEROL NARANJA CON REFLEJANTE             S, M, L, XL, XXL, XXXL
 Botas altas                    1          ¿BOTAS CON CASQUILLO?                     25 a 30 (medios números)
 Botas dieléctricas             2          BOTAS DIELÉCTRICAS                        24, 24.5, 25, 25.5, 26
 
-   Pendiente: desglose por talla (ej. Camisola M 5, L 8).
+   Pendiente: desglose por talla. Camisola: el conteo decía 13 y solo se desglosaron 7
+   (L 3, M 3, S 1); confirmar si faltan 6 o si el 13 estaba mal.
    Botas altas: confirmar si son BOTAS CON CASQUILLO o es otro artículo.
 
 

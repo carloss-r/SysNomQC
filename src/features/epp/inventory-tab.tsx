@@ -3,6 +3,7 @@
 import { ClipboardCheck, Pencil, Search, ShoppingCart, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { eppArticleLabel, type EppArticle } from "@/lib/permissions";
+import { searchArticles } from "@/lib/epp-search";
 import { formatDateTime } from "./format";
 import { Pager } from "./pager";
 
@@ -53,13 +54,12 @@ export function InventoryTab({
 
   const categories = useMemo(() => Array.from(new Set(articles.map((item) => item.category))).sort(), [articles]);
   const rows = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    return articles.filter((item) => {
+    const filtered = articles.filter((item) => {
       if (category && item.category !== category) return false;
       const state = stockState(item);
-      if (onlyLow && state !== "out" && state !== "low") return false;
-      return !term || `${item.name} ${item.size ?? ""} ${item.category}`.toLowerCase().includes(term);
+      return !onlyLow || state === "out" || state === "low";
     });
+    return searchArticles(filtered, query);
   }, [articles, query, category, onlyLow]);
   // Al cambiar un filtro se regresa a la primera página; si la lista se achica, a la última que exista.
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -78,7 +78,7 @@ export function InventoryTab({
 
         <label className="search-box">
           <Search size={15} />
-          <input value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} placeholder="Buscar artículo o talla" />
+          <input value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} placeholder="Buscar: camisola l, botas 27…" />
           {query && <button type="button" onClick={() => { setQuery(""); setPage(0); }} aria-label="Limpiar búsqueda"><X size={14} /></button>}
         </label>
         {canRequest && missing.length > 0 && (

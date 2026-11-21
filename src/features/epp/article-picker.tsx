@@ -3,15 +3,17 @@
 import { Search } from "lucide-react";
 import { useId, useMemo, useState, type KeyboardEvent } from "react";
 import { eppArticleLabel, type EppArticle } from "@/lib/permissions";
-import { normalize } from "./people";
+import { searchArticles } from "@/lib/epp-search";
 
-const MAX_RESULTS = 5;
+// Alcanza para ver todas las tallas de una prenda (S a XXXXL) sin seguir escribiendo.
+const MAX_RESULTS = 8;
 
 const label = (item: EppArticle) => eppArticleLabel(item.name, item.size);
 
 /**
- * Buscador de artículos: se escribe parte del nombre (o talla o categoría) y van apareciendo las
- * coincidencias (máximo 5). Flechas para moverse, Enter para elegir, Esc para cerrar.
+ * Buscador de artículos: basta con el inicio del nombre y la talla ("camisola l", "camisola talla l",
+ * "botas 27"); ver lib/epp-search. Muestra hasta 8 coincidencias. Flechas para moverse, Enter para
+ * elegir, Esc para cerrar.
  */
 export function ArticlePicker({
   articles,
@@ -36,23 +38,10 @@ export function ArticlePicker({
   const [highlight, setHighlight] = useState(0);
   const listId = useId();
   const selected = articles.find((item) => String(item.id) === value) ?? null;
-  const indexed = useMemo(
-    () => articles.map((item) => ({ item, text: normalize(`${item.name} ${item.size ?? ""} ${item.category}`) })),
-    [articles],
-  );
   const { matches, extra } = useMemo(() => {
-    const tokens = normalize(query).split(" ").filter(Boolean);
-    const found = indexed
-      .filter((entry) => !taken.includes(String(entry.item.id)))
-      .filter((entry) => tokens.every((token) => entry.text.includes(token)))
-      .map((entry) => entry.item)
-      .sort((a, b) => {
-        const first = tokens[0] ?? "";
-        const rank = (item: EppArticle) => (normalize(item.name).startsWith(first) ? 0 : 1);
-        return rank(a) - rank(b) || a.name.localeCompare(b.name, "es");
-      });
+    const found = searchArticles(articles.filter((item) => !taken.includes(String(item.id))), query);
     return { matches: found.slice(0, MAX_RESULTS), extra: Math.max(0, found.length - MAX_RESULTS) };
-  }, [indexed, query, taken]);
+  }, [articles, query, taken]);
 
   function choose(item: EppArticle) {
     onChange(String(item.id));
@@ -87,12 +76,13 @@ export function ArticlePicker({
           onFocus={() => { setQuery(""); setOpen(true); }}
           onBlur={() => setOpen(false)}
           onKeyDown={onKey}
-          placeholder={selected ? label(selected) : "Escribe el nombre del artículo"}
+          placeholder={selected ? label(selected) : "Ej. camisola l, botas 27, guantes"}
           title={selected ? label(selected) : undefined}
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}
         />
+        {!open && selected?.size && <span className="epp-size epp-size-strong">Talla {selected.size}</span>}
       </div>
       {open && (
         <ul id={listId} className="epp-results epp-dropdown" role="listbox">
@@ -106,7 +96,10 @@ export function ArticlePicker({
                 onMouseEnter={() => setHighlight(index)}
                 onClick={() => choose(item)}
               >
-                <strong title={label(item)}>{label(item)}</strong>
+                <span className="epp-result-title">
+                  <strong title={label(item)}>{item.name}</strong>
+                  {item.size && <span className="epp-size epp-size-strong">Talla {item.size}</span>}
+                </span>
                 <small>{detail(item)}</small>
               </button>
             </li>

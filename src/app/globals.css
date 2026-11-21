@@ -702,6 +702,9 @@ td.row-actions > * { vertical-align: middle; }
 .epp-site-bar strong { color: var(--ink); }
 .epp-state-none { color: var(--ink-soft); border-color: var(--line-strong); background: var(--surface-3); }
 .epp-requested { display: inline-flex; margin-left: 6px; padding: 3px 8px; border: 1px dashed var(--purple-line); border-radius: 999px; color: var(--purple-text); background: var(--purple-bg); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.epp-result-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.epp-result-title strong { flex: 1 1 auto; min-width: 0; }
+.epp-size-strong { flex: none; margin-left: 0; color: var(--green-text, var(--ink)); border-color: var(--green-line); background: var(--green-bg); }
 .epp-size { display: inline-flex; margin-left: 6px; padding: 1px 7px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--ink-soft); background: var(--surface-3); font-size: 11px; font-weight: 700; white-space: nowrap; }
 .epp-locked { border-style: solid; color: var(--red-text); border-color: var(--red-line); background: var(--red-bg); }
 .epp-status-faltante { color: var(--red-text); border-color: var(--red-line); background: var(--red-bg); }
@@ -1011,3 +1014,21 @@ a.signed-user:hover, a.signed-user:focus-visible { background: rgb(255 255 255 /
 .temp-password-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; color: var(--gold-text); font-size: 11px; font-weight: 700; white-space: nowrap; }
 /* Campo de solo lectura (p. ej. ID de empleado asignado por el sistema) */
 .field > input.input-locked { background: var(--surface-3); color: var(--muted); cursor: not-allowed; font-weight: 700; letter-spacing: .02em; }
+
+/* ---- Botón "?" para cambiar de sistema (principal ↔ combustibles alternos / SCA) ---- */
+.system-switcher { position: relative; }
+.system-switcher-menu { position: absolute; top: calc(100% + 12px); right: 0; z-index: 60; display: flex; width: 330px; max-width: calc(100vw - 24px); flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: var(--surface); box-shadow: 0 18px 50px rgb(0 0 0 / 25%); }
+.system-switcher-title { margin: 4px 8px 6px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.system-switcher-item { display: flex; align-items: center; gap: 11px; padding: 10px; border: 1px solid transparent; border-radius: 9px; color: var(--ink); text-decoration: none; }
+.system-switcher-item:hover { background: var(--hover); }
+.system-switcher-item.current { border-color: var(--line-strong); background: var(--surface-2); }
+.system-switcher-icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: 8px; color: var(--brand-text); background: var(--green-bg); }
+.system-switcher-item[href^="/sca"] .system-switcher-icon { color: var(--blue-text); background: var(--blue-bg); }
+.system-switcher-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 2px; }
+.system-switcher-copy strong { font-size: 13.5px; }
+.system-switcher-copy small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.system-switcher-check { color: var(--green-accent); }
+.system-switcher-empty { margin: 4px 8px 6px; color: var(--faint); font-size: 12px; }
+:root[data-system="sca"] .system-switcher-menu { border-radius: 6px; }
+:root[data-system="sca"] .system-switcher-item { border-radius: 4px; }
+:root[data-system="sca"] .system-switcher-check { color: var(--sca-accent); }

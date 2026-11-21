@@ -10,7 +10,7 @@ src/
     (app)/page.tsx          Empleados            ->  /
     (app)/admin/            Usuarios y roles     ->  /admin
     (app)/epp/              EPP                  ->  /epp
-    (app)/combustibles/     Combustibles         ->  /combustibles
+    sca/                    Combustibles (SCA)   ->  /sca  (sistema aparte, ver Módulo Combustibles)
     (app)/facturas/         Facturas             ->  /facturas
     (app)/notificaciones/   Notificaciones       ->  /notificaciones
     api/                    API del servidor (valida sesión, permisos y datos)

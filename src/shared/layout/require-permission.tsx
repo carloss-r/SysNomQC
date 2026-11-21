@@ -6,12 +6,16 @@ import { useEffect } from "react";
 import type { Permission } from "@/lib/permissions";
 import { useAuth } from "@/features/auth/auth-provider";
 import { NAVIGATION } from "@/shared/config/navigation";
+import { SCA_HOME } from "@/features/fuels-system/navigation";
 
-/** Primera pantalla del menú a la que la cuenta tiene acceso (si no tiene ninguna, sus notificaciones). */
+/**
+ * Primera pantalla del menú a la que la cuenta tiene acceso. Si no tiene ninguna pero sí el rol de
+ * combustibles, se manda al SCA; si tampoco, a sus notificaciones.
+ */
 export function useHomePath(): string {
   const { can } = useAuth();
   const first = NAVIGATION.flatMap((section) => section.items).find((item) => !item.permission || can(item.permission));
-  return first?.href ?? "/notificaciones";
+  return first?.href ?? (can("fuels.view") ? SCA_HOME : "/notificaciones");
 }
 
 // Protección de pantalla (solo experiencia de uso). La seguridad real está en la API y en las
