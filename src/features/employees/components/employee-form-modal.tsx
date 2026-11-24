@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
 import { ApiError, describeError, requestApi } from "@/lib/api-client";
 import {
+  catalogFor,
   CONTRACT_TYPES,
   EMPTY_EMPLOYEE_FORM,
   employeeToForm,
@@ -14,6 +15,7 @@ import {
   MARITAL_STATUSES,
   SITES,
   type Employee,
+  type EmployeeCatalog,
   type EmployeeFormValues,
   type EmployeeInput,
 } from "@/lib/employees";
@@ -42,13 +44,14 @@ function FormSection({ title, icon, children }: { title: string; icon: ReactNode
 export function EmployeeFormModal({
   editing,
   suggestedCode,
-  positionSuggestions,
+  catalog,
   onClose,
   onSaved,
 }: {
   editing: Employee | null;
   suggestedCode: string;
-  positionSuggestions: string[];
+  /** Áreas globales, puestos y asignaciones existentes (para elegir de la lista). */
+  catalog: EmployeeCatalog;
   onClose: () => void;
   onSaved: (saved: Employee, isEdit: boolean) => void;
 }) {
@@ -74,6 +77,17 @@ export function EmployeeFormModal({
 
   function updateForm<K extends keyof EmployeeFormValues>(key: K, value: EmployeeFormValues[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  // Áreas globales de la sede elegida (Campeche: CYM y CAL). Si la sede tiene áreas, el área es obligatoria.
+  const siteAreas = catalog.areas.filter((area) => area.site === form.site);
+  const areaId = form.area_id ? Number(form.area_id) : null;
+  const positionOptions = catalogFor(catalog.positions, form.site, areaId);
+  const assignmentOptions = catalogFor(catalog.assignments, form.site, areaId);
+
+  // Al cambiar de sede el área anterior ya no aplica (cada área pertenece a una sede).
+  function changeSite(site: string) {
+    setForm((current) => ({ ...current, site, area_id: catalog.areas.some((area) => area.site === site && String(area.id) === current.area_id) ? current.area_id : "" }));
   }
 
   function requestClose() {
@@ -203,24 +217,45 @@ export function EmployeeFormModal({
               </Field>
               <Field label="Nombre completo" required><input value={form.full_name} onChange={(event) => updateForm("full_name", event.target.value)} maxLength={150} required /></Field>
               <Field label="Sede asignada" required>
-                <select value={form.site} onChange={(event) => updateForm("site", event.target.value)} required>{SITES.map((site) => <option key={site}>{site}</option>)}</select>
+                <select value={form.site} onChange={(event) => changeSite(event.target.value)} required>{SITES.map((site) => <option key={site}>{site}</option>)}</select>
               </Field>
+              {siteAreas.length > 0 && (
+                <Field label="Área global" required>
+                  <select value={form.area_id} onChange={(event) => updateForm("area_id", event.target.value)} required>
+                    <option value="">Selecciona el área…</option>
+                    {siteAreas.map((area) => <option key={area.id} value={String(area.id)}>{area.code}{area.responsible ? ` · ${area.responsible}` : ""}</option>)}
+                  </select>
+                </Field>
+              )}
               <Field label="Fecha de contratación" required><input type="date" value={form.hire_date} onChange={(event) => updateForm("hire_date", event.target.value)} required /></Field>
-              <Field label="Área / departamento / puesto" required>
+              <Field label="Puesto (categoría)" required>
                 <input
-                  list="position-suggestions"
+                  list="position-options"
                   value={form.position}
-                  onChange={(event) => updateForm("position", event.target.value)}
+                  onChange={(event) => updateForm("position", event.target.value.toUpperCase())}
                   maxLength={150}
-                  placeholder="Ej. Operaciones - Operador Especializado"
+                  placeholder={siteAreas.length > 0 && !form.area_id ? "Primero elige el área" : "Elige de la lista o escribe uno nuevo"}
                   autoComplete="off"
                   required
                 />
-                <datalist id="position-suggestions">
-                  {positionSuggestions.map((position) => <option key={position} value={position} />)}
+                <datalist id="position-options">
+                  {positionOptions.map((item) => <option key={item.id} value={item.name} />)}
                 </datalist>
               </Field>
-              <Field label="Asignación"><input value={form.assignment} onChange={(event) => updateForm("assignment", event.target.value)} maxLength={150} placeholder="Opcional" /></Field>
+              <Field label="Asignación">
+                <input
+                  list="assignment-options"
+                  value={form.assignment}
+                  onChange={(event) => updateForm("assignment", event.target.value.toUpperCase())}
+                  maxLength={150}
+                  placeholder="Opcional · elige de la lista o escribe una nueva"
+                  autoComplete="off"
+                />
+                <datalist id="assignment-options">
+                  {assignmentOptions.map((item) => <option key={item.id} value={item.name} />)}
+                </datalist>
+                <span className="field-hint">Un puesto o asignación que no esté en la lista se agrega al catálogo de {form.site}{siteAreas.length > 0 && form.area_id ? ` · ${siteAreas.find((area) => String(area.id) === form.area_id)?.code ?? ""}` : ""}.</span>
+              </Field>
               <Field label="Tipo de contrato" required>
                 <select value={form.contract_type} onChange={(event) => updateForm("contract_type", event.target.value)} required>{CONTRACT_TYPES.map((contract) => <option key={contract}>{contract}</option>)}</select>
               </Field>

@@ -1,0 +1,136 @@
+**ASIGNACIÓN:** ING. JOSÉ LUIS BADILLO SERRANO
+
+---
+
+### **1. ÁREA: ELÉCTRICA**
+
+
+
+| No. | Puesto | Nombre |
+| --- | --- | --- |
+| 1 | OFICIAL ELÉCTRICO | JESÚS ALEJANDRO PUGA MAY
+
+ |
+| 2 | OFICIAL ELÉCTRICO | JOSÉ CANDELARIO MAY TUN
+
+ |
+| 3 | OFICIAL ELÉCTRICO | ROMÁN PUGA MAY
+
+ |
+| 4 | AUXILIAR ELÉCTRICO | JUAN DE DIOS PACHECO GARMAS
+
+ |
+| 5 | AUXILIAR ELÉCTRICO | JESÚS SEBASTIÁN RUZ PIMIENTA
+
+ |
+
+---
+
+### **2. ÁREA: MECÁNICA (Bloque 1)**
+
+
+
+| No. | Puesto | Nombre |
+| --- | --- | --- |
+| 6 | OFICIAL SOLDADOR | EDUARDO JOSUÉ PACHECO MATU
+
+ |
+| 7 | OFICIAL SOLDADOR | LUIS ENRIQUE CANUL CHI
+
+ |
+| 8 | AUXILIAR GENERAL | LUIS FELIPE NARVÁEZ SÁENZ
+
+ |
+| 9 | AUXILIAR GENERAL | JUAN RICARDO PUCH DZULUB
+
+ |
+| 10 | AUXILIAR GENERAL | JOSÉ ÁNGEL UC CAHUICH
+
+ |
+| 11 | AUXILIAR GENERAL | AMIR JESÚS DE ATOCHA FUENTES
+
+ |
+
+---
+
+### **3. ÁREA: CIVIL**
+
+
+
+| No. | Puesto | Nombre |
+| --- | --- | --- |
+| 12 | OFICIAL ALBAÑIL | LUIS ALFREDO DZULUB PECH
+
+ |
+| 13 | OFICIAL ALBAÑIL | MARTÍN MUT CEBALLOS
+
+ |
+| 14 | OFICIAL ALBAÑIL | CALIXTO LAUREANO GÓMEZ
+
+ |
+| 15 | OFICIAL ALBAÑIL | OSCAR HILERA MORALES
+
+ |
+| 16 | OFICIAL ALBAÑIL | LAURIANO ANTONIO LARA DE LA CRUZ
+
+ |
+| 17 | AUXILIAR GENERAL | JOSÉ ENRIQUE MUT CANUL
+
+ |
+| 18 | AUXILIAR GENERAL | PEDRO DEL JESÚS UC CAHUICH
+
+ |
+
+---
+
+### **4. ÁREA: MECÁNICA (Bloque 2)**
+
+
+
+| No. | Puesto | Nombre |
+| --- | --- | --- |
+| 19 | OFICIAL PAILERO | JAVIER ALFONSO ROCHA QUE
+
+ |
+| 20 | OFICIAL SOLDADOR | LUIS EDUARDO PECH FLORES
+
+ |
+| 21 | MECÁNICO | JESÚS ANTONIO CHE MAY
+
+ |
+
+---
+
+### **5. ÁREA: OPERADOR**
+
+
+
+| No. | Puesto | Nombre |
+| --- | --- | --- |
+| 22 | OPERADOR | RICARDO DE ATOCHA CANDELERO
+
+ |
+
+---
+
+### **6. SIN ÁREA ESPECIFICADA (Tabla inferior)**
+
+
+
+| No. | Puesto | Nombre |
+| --- | --- | --- |
+| 23 | PAILERO | LUIS GÓNGORA NOH
+
+ |
+| 24 | SOLDADOR | YAHIR EDUARDO CHI PÉREZ
+
+ |
+| 25 | PAILERO | WILLIAM ARLIN SILVA CANUL
+
+ |
+| 26 | AUXILIAR | ALEJANDRO ANTONIO COCÓN CASTRO
+
+ |
+| 27 | AUXILIAR | MAURICIO GONZALES COLIS
+
+ |

@@ -13,6 +13,21 @@ Pantalla principal (`/`, menú **Personal → Empleados**). Código en `src/feat
 
 Clave de empleado, nombre, sede (`Campeche`, `Lagunas`, `Cruz Azul`, `El Carmen`), fecha de ingreso, puesto, **asignación** (texto libre, opcional; vacío en los registros anteriores, migración `202611130005_empleados_asignacion.sql`), tipo de contrato, **salario base** (el salario que ya tenía cada trabajador), **salario de cotización** (vacío hasta capturarlo), cuenta bancaria, estado activo, género, NSS, CURP, RFC, estado civil, fecha de nacimiento, créditos, correo, teléfono, estado de residencia, domicilio y foto. NSS, CURP y RFC son únicos.
 
+## Áreas globales, puestos y asignaciones
+
+Migración `202611240001_empleados_areas_puestos_asignaciones.sql`.
+
+- **Área global** (`employee_areas`): agrupa a los trabajadores de una sede. Campeche tiene **CYM** (responsable: Ing. José Luis Badillo Serrano) y **CAL**. En Campeche el área es obligatoria; las otras sedes no tienen áreas.
+- **Puesto** (`employee_positions`) y **asignación** (`employee_assignments`): catálogos por sede y área. Un mismo nombre en CYM y en CAL son dos registros distintos (p. ej. «AUXILIAR GENERAL»).
+- `employees.area_id`, `position_id` y `assignment_id` son llaves a esos catálogos. `position` y `assignment` se conservan como copia del nombre (las usan EPP, el buscador y los reportes) y las mantiene la base: el trigger `employees_sync_catalog` liga el nombre al catálogo de la sede y el área del trabajador y, si no existe, lo agrega. Los nombres se guardan en mayúsculas.
+- La carga inicial acomodó a los 103 trabajadores de Campeche según las listas `CAMPECHE_CAL.TXT` (76) y `CAMPECHECYM.TXT` (27). En CYM la asignación es el área de trabajo (Eléctrica, Mecánica, Civil, Operador); los 5 de «sin área especificada» quedaron sin asignación.
+
+### Pantalla
+
+- Pestañas **Activos**, **Bajas** (las más recientes primero, con fecha y motivo) y **Seguimiento de expedientes**.
+- Filtros: sede, área global (CYM / CAL, con su número de trabajadores), **puesto** y **asignación** (cada opción con cuántos trabajadores tiene en la vista actual; la asignación incluye «Sin asignación») y búsqueda por ID, nombre, puesto, asignación o correo.
+- Los números de los filtros salen de `/api/employees/catalog` (catálogos + vista `employee_group_counts`) en una sola carga; la lista sigue paginada en el servidor y cada filtro usa un índice.
+
 ## Seguimiento de expedientes
 
 - Cada expediente tiene el cuadro **Observaciones** (hasta 1000 caracteres): lo que le falta o cualquier detalle a dar seguimiento.

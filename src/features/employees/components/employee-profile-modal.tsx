@@ -89,7 +89,7 @@ export function EmployeeProfileModal({
                 <StatusBadge active={employee.active} />
               </div>
               <p>{employee.position}</p>
-              <div className="profile-tags"><span><FileText size={13} /> {employee.employee_code}</span><span><MapPin size={13} /> {employee.site}</span></div>
+              <div className="profile-tags"><span><FileText size={13} /> {employee.employee_code}</span><span><MapPin size={13} /> {employee.site}{employee.area ? ` · ${employee.area.code}` : ""}</span></div>
             </div>
           </div>
           <div className="profile-body">
@@ -104,7 +104,9 @@ export function EmployeeProfileModal({
             )}
             <ProfileSection title="Información laboral" icon={<BriefcaseBusiness size={16} />}>
               <ProfileValue label="Fecha de contratación">{formatDate(employee.hire_date)}</ProfileValue>
-              <ProfileValue label="Asignación">{employee.assignment ?? ""}</ProfileValue>
+              {employee.area && <ProfileValue label="Área global">{employee.area.code}{employee.area.responsible ? ` · ${employee.area.responsible}` : ""}</ProfileValue>}
+              <ProfileValue label="Puesto">{employee.position}</ProfileValue>
+              <ProfileValue label="Asignación">{employee.assignment ?? "Sin asignación"}</ProfileValue>
               <ProfileValue label="Tipo de contrato">{employee.contract_type}</ProfileValue>
               <ProfileValue label="Salario base">{formatCurrency(employee.salary)}</ProfileValue>
               <ProfileValue label="Salario de cotización">{employee.contribution_salary === null ? "Sin capturar" : formatCurrency(employee.contribution_salary)}</ProfileValue>

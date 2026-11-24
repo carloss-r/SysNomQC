@@ -1036,3 +1036,14 @@ a.signed-user:hover, a.signed-user:focus-visible { background: rgb(255 255 255 /
 :root[data-system="sca"] .system-switcher-menu { border-radius: 6px; }
 :root[data-system="sca"] .system-switcher-item { border-radius: 4px; }
 :root[data-system="sca"] .system-switcher-check { color: var(--sca-accent); }
+
+/* Directorio: área global (CYM / CAL), puesto / asignación y filtros por catálogo. */
+.directory-filters { flex-wrap: wrap; min-height: 0; gap: 12px; }
+.directory-filters .filter-select select { max-width: 260px; }
+.site-area { display: inline-flex; align-items: center; gap: 5px; }
+.area-badge { display: inline-flex; padding: 3px 7px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--ink-soft); background: var(--surface-2); font-size: 10.5px; font-weight: 800; letter-spacing: .03em; }
+.assignment-line { display: block; color: var(--muted); font-size: 11.5px; }
+.site-count-muted { color: var(--ink-soft); background: var(--line); }
+@media (max-width: 760px) {
+  .directory-filters .filter-select select { max-width: none; }
+}

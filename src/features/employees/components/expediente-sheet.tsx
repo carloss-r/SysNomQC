@@ -43,7 +43,8 @@ export function ExpedienteSheet({ employee, photoUrl }: { employee: Employee; ph
         {rows([
           ["ID empleado", employee.employee_code],
           ["Sede", employee.site],
-          ["Área / puesto", employee.position],
+          ["Área global", employee.area?.code ?? "—"],
+          ["Puesto", employee.position],
           ["Asignación", employee.assignment ?? ""],
           ["Fecha de contratación", formatDate(employee.hire_date)],
           ["Tipo de contrato", employee.contract_type],

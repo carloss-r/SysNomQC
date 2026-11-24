@@ -26,7 +26,8 @@ Las rutas de `/api/admin` usan además `requireAdmin` (límite de 60 peticiones 
 
 | Ruta | Métodos | Permiso |
 | --- | --- | --- |
-| `/api/employees` | GET / POST | `employees.view` / `employees.create` |
+| `/api/employees` | GET / POST | `employees.view` / `employees.create` · filtros `site`, `estatus=activos\|bajas`, `area`, `puesto`, `asignacion` (id o `sin`), `search` |
+| `/api/employees/catalog` | GET | `employees.view` · áreas globales, puestos, asignaciones y conteos para los filtros |
 | `/api/employees/[id]` | GET / PATCH / DELETE | `employees.view` / `employees.edit` / `employees.delete` |
 
 ### EPP

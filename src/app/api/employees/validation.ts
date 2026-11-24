@@ -13,6 +13,7 @@ export const EMPLOYEE_FIELD_LABELS: Record<string, string> = {
   full_name: "Nombre completo",
   site: "Sede",
   hire_date: "Fecha de ingreso",
+  area_id: "Área global",
   position: "Puesto",
   assignment: "Asignación",
   contract_type: "Tipo de contrato",
@@ -59,6 +60,9 @@ const employeeFields = z.object({
   full_name: safeText(150, { min: 1 }),
   site: z.enum(SITES),
   hire_date: z.iso.date(),
+  // Área global (CYM / CAL). La base valida que sea de la misma sede y que no falte si la sede tiene áreas.
+  area_id: z.number().int().positive().nullable().optional(),
+  // Puesto y asignación se mandan por nombre: la base los liga a su catálogo (y los da de alta si son nuevos).
   position: safeText(150, { min: 1 }),
   assignment: nullableText(150).optional(),
   contract_type: z.enum(CONTRACT_TYPES),

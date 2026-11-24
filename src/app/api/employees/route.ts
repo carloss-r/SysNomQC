@@ -1,17 +1,23 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { recordAudit } from "@/lib/audit";
 import { reportServerIncident } from "@/lib/incidents";
-import { EMPLOYEE_FOLLOWUP_COLUMNS, EMPLOYEE_LIST_COLUMNS, SITES } from "@/lib/employees";
+import { EMPLOYEE_DETAIL_SELECT, EMPLOYEE_FOLLOWUP_COLUMNS, EMPLOYEE_LIST_COLUMNS, SITES } from "@/lib/employees";
 import { BadJsonError, databaseErrorResponse, getAuthenticatedClient, readJson } from "./_server";
 import { searchTerm } from "@/lib/safe-input";
 import { employeeInputSchema, employeeValidationMessage } from "./validation";
+
+/** Id numérico de catálogo (área, puesto, asignación) leído de la URL; null si no viene o no es válido. */
+function catalogId(raw: string | null) {
+  if (!raw || !/^\d{1,12}$/.test(raw)) return null;
+  return Number(raw);
+}
 
 // Filtro de texto para .or(): searchTerm deja solo letras, números, espacios y guiones, así lo escrito
 // por el usuario no puede alterar la consulta (comas, paréntesis, puntos y comodines quedan fuera).
 function searchFilter(raw: string | null) {
   const text = searchTerm(raw);
   if (!text) return null;
-  return ["full_name", "employee_code", "position", "email"]
+  return ["full_name", "employee_code", "position", "assignment", "email"]
     .map((column) => `${column}.ilike.%${text}%`)
     .join(",");
 }
@@ -60,17 +66,34 @@ export async function GET(request: NextRequest) {
 
     // ?seguimiento=1 → solo expedientes con observaciones, con el texto y quién lo escribió.
     const followUp = params.get("seguimiento") === "1";
+    // ?estatus=activos | bajas → solo activos o solo dados de baja (sin el parámetro: todos).
+    const status = params.get("estatus");
+    // ?area=<id> · ?puesto=<id> · ?asignacion=<id> | sin → filtros por catálogo (todos usan índice).
+    const area = catalogId(params.get("area"));
+    const position = catalogId(params.get("puesto"));
+    const assignmentParam = params.get("asignacion");
+    const assignment = catalogId(assignmentParam);
+
     let query = auth.client
       .from("employees")
       .select(followUp ? EMPLOYEE_FOLLOWUP_COLUMNS : EMPLOYEE_LIST_COLUMNS, { count: withCount ? "exact" : undefined });
     if (site && (SITES as readonly string[]).includes(site)) query = query.eq("site", site);
+    if (status === "activos") query = query.eq("active", true);
+    if (status === "bajas") query = query.eq("active", false);
+    if (area !== null) query = query.eq("area_id", area);
+    if (position !== null) query = query.eq("position_id", position);
+    if (assignment !== null) query = query.eq("assignment_id", assignment);
+    if (assignmentParam === "sin") query = query.is("assignment_id", null);
     if (textFilter) query = query.or(textFilter);
     if (followUp) query = query.not("observations", "is", null);
 
-    const { data, error, count } = await (followUp
+    // Bajas: las más recientes primero. Seguimiento: la observación más reciente primero.
+    const ordered = followUp
       ? query.order("observations_updated_at", { ascending: false, nullsFirst: false }).order("id")
-      : query.order("full_name").order("id")
-    ).range(offset, offset + limit - 1);
+      : status === "bajas"
+        ? query.order("termination_date", { ascending: false, nullsFirst: false }).order("full_name").order("id")
+        : query.order("full_name").order("id");
+    const { data, error, count } = await ordered.range(offset, offset + limit - 1);
 
     if (error) return databaseErrorResponse(error);
     return NextResponse.json(withCount ? { data, total: count ?? 0 } : data);
@@ -100,7 +123,7 @@ export async function POST(request: NextRequest) {
       saved = await auth.client
         .from("employees")
         .insert({ ...input.data, employee_code: nextCode as string })
-        .select("*")
+        .select(EMPLOYEE_DETAIL_SELECT)
         .single();
       const codeTaken = saved.error?.code === "23505" && /employee_code/.test(saved.error.message);
       if (!codeTaken) break;
