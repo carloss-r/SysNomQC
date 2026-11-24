@@ -8,9 +8,9 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { invoiceFileProblem, uploadInvoiceFile } from "./files";
 import { BusyLabel } from "@/shared/ui/loading";
 
-export type Detected = { invoice_date: boolean; total: boolean; supplier: boolean };
+export type Detected = { invoice_date: boolean; total: boolean; uuid: boolean };
 
-/** Carga de una factura: sube el PDF, el servidor lo digitaliza y la registra como enviada y pendiente. */
+/** Carga de una factura: sube el PDF, el servidor lo digitaliza y la registra como enviada con folio del sistema. */
 export function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded: (invoice: Invoice, detected: Detected) => void }) {
   const { session } = useAuth();
   const [file, setFile] = useState<File | null>(null);
@@ -56,7 +56,10 @@ export function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUp
           <div className="modal-heading-icon"><FileUp size={19} /></div>
           <div>
             <h2 id="invoice-upload-title">Cargar factura</h2>
-            <p>Sube el PDF; se digitaliza su texto, se detectan fecha, folio, emisor y total, y queda como <strong>enviada</strong> y <strong>pendiente</strong>.</p>
+            <p>
+              Sube el PDF: se digitaliza su texto, se detectan fecha, UUID, subtotal, IVA y total (moneda nacional) y queda como <strong>enviada</strong> con folio del sistema.
+              <br /><strong>Lo que se cargue ya no se puede modificar.</strong> Si te equivocas de archivo, elimínala antes de firmarla y vuelve a cargarla.
+            </p>
           </div>
           <button className="icon-button close-modal" onClick={onClose} disabled={busy} aria-label="Cerrar"><X size={20} /></button>
         </div>

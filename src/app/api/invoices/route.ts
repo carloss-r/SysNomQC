@@ -5,20 +5,11 @@ import { reportServerIncident } from "@/lib/incidents";
 import { parseInvoiceText } from "@/lib/invoices";
 import { BadJsonError, getAuthenticatedClient, readJson } from "../employees/_server";
 import { readAll } from "../fuels/_shared";
-import { InvalidPdfError, pdfToText } from "./_extract";
-import {
-  actorName,
-  INVOICE_BUCKET,
-  invoiceDatabaseError,
-  LIST_COLUMNS,
-  MAX_INVOICE_BYTES,
-  toInvoice,
-  uploadSchema,
-} from "./_shared";
+import { actorName, invoiceDatabaseError, LIST_COLUMNS, readUploadedPdf, removeFile, toInvoice, uploadSchema } from "./_shared";
 
 export const runtime = "nodejs";
 
-/** Lista de facturas (sin el texto completo). ?from=YYYY-MM-DD acota por fecha de factura. */
+/** Lista de facturas (sin los textos). ?from=YYYY-MM-DD acota por fecha de carga; las que no están pagadas van siempre. */
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedClient(request, "invoices.view");
   if ("response" in auth) return auth.response;
@@ -30,11 +21,13 @@ export async function GET(request: NextRequest) {
       auth.client
         .from("invoices")
         .select(LIST_COLUMNS)
-        // Las pendientes y las que tienen incidente se incluyen siempre, aunque sean anteriores a "from".
-        .or(`invoice_date.gte.${from},status.in.(pendiente,incidente)`)
-        .order("invoice_date", { ascending: false })
+        // Las que siguen en proceso (sin complemento de pago) se incluyen siempre, aunque sean anteriores a "from".
+        .or(`created_at.gte.${from},complement_path.is.null`)
+        .order("created_at", { ascending: false })
         .order("id", { ascending: false })
-        .range(a, b),
+        .range(a, b)
+        // Con tantas columnas el analizador de tipos de supabase-js se rinde: se declara la fila.
+        .overrideTypes<Record<string, unknown>[], { merge: false }>(),
     );
     if (result.error) return invoiceDatabaseError(result.error, "leer");
     return NextResponse.json({ today, from, invoices: result.rows.map(toInvoice) });
@@ -45,8 +38,9 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Registra una factura cuyo PDF ya subió el navegador al bucket privado: lo digitaliza (texto),
- * detecta fecha, folio, emisor y montos, y la guarda como enviada y pendiente.
+ * Registra una factura cuyo PDF ya subió el navegador al bucket privado: lo digitaliza (texto), detecta fecha,
+ * folio del PDF, UUID y montos, y la guarda como enviada. La base le pone el folio del sistema (FAC-00001) y la
+ * moneda nacional. Lo detectado ya no se modifica.
  */
 export async function POST(request: NextRequest) {
   const auth = await getAuthenticatedClient(request, "invoices.manage");
@@ -61,78 +55,52 @@ export async function POST(request: NextRequest) {
   }
   if (!input.success) return NextResponse.json({ error: "Archivo no válido." }, { status: 400 });
   const { file_path, file_name } = input.data;
-  const discard = () => client.storage.from(INVOICE_BUCKET).remove([file_path]).then(() => undefined, () => undefined);
 
   try {
-    const download = await client.storage.from(INVOICE_BUCKET).download(file_path);
-    if (download.error || !download.data) {
-      return NextResponse.json({ error: "No se encontró el PDF subido. Vuelve a intentarlo." }, { status: 404 });
-    }
-    if (download.data.size > MAX_INVOICE_BYTES) {
-      await discard();
-      return NextResponse.json({ error: "El PDF pesa más de 10 MB." }, { status: 400 });
-    }
-    const bytes = new Uint8Array(await download.data.arrayBuffer());
+    const pdf = await readUploadedPdf(client, file_path);
+    if ("response" in pdf) return pdf.response;
 
-    let extracted: { text: string; plain: string; pages: number };
-    try {
-      extracted = await pdfToText(bytes);
-    } catch (error) {
-      if (error instanceof InvalidPdfError) {
-        await discard();
-        return NextResponse.json({ error: error.message }, { status: 400 });
-      }
-      throw error;
-    }
-
-    const fields = parseInvoiceText(extracted.plain);
-    const today = plantToday();
+    const fields = parseInvoiceText(pdf.plain);
     const actor = actorName(access);
     const { data, error } = await client
       .from("invoices")
       .insert({
         file_path,
         file_name,
-        file_size: bytes.length,
-        invoice_date: fields.invoice_date ?? today,
+        file_size: pdf.bytes,
+        invoice_date: fields.invoice_date ?? plantToday(),
         due_date: fields.due_date,
-        folio: fields.folio,
+        pdf_folio: fields.folio,
         uuid: fields.uuid,
-        supplier_name: fields.supplier_name,
-        supplier_rfc: fields.supplier_rfc,
         subtotal: fields.subtotal,
         tax: fields.tax,
         total: fields.total,
-        currency: fields.currency,
+        currency: "MXN",
         status: "pendiente",
         stage: "enviada",
-        text_content: extracted.text,
-        text_pages: extracted.pages,
+        text_content: pdf.text,
+        text_pages: pdf.pages,
         created_by_name: actor,
         updated_by_name: actor,
       })
       .select(LIST_COLUMNS)
       .single();
     if (error) {
-      await discard();
+      await removeFile(client, file_path);
       return invoiceDatabaseError(error, "registrar");
     }
     const invoice = toInvoice(data as unknown as Record<string, unknown>);
-    await recordAudit(request, access, "invoices.create", invoice.id, { pages: extracted.pages, has_text: invoice.has_text });
+    await recordAudit(request, access, "invoices.create", invoice.id, { folio: invoice.folio, pages: pdf.pages, has_text: invoice.has_text });
     return NextResponse.json(
       {
         invoice,
-        // Qué datos se detectaron en el PDF (para pedir al usuario que revise los demás).
-        detected: {
-          invoice_date: fields.invoice_date !== null,
-          total: fields.total !== null,
-          supplier: fields.supplier_name !== null || fields.supplier_rfc !== null,
-        },
+        // Qué datos se encontraron en el PDF (lo que falte queda vacío: ya no se captura a mano).
+        detected: { invoice_date: fields.invoice_date !== null, total: fields.total !== null, uuid: fields.uuid !== null },
       },
       { status: 201 },
     );
   } catch (error) {
-    await discard();
+    await removeFile(client, file_path);
     reportServerIncident("api · facturas · registrar", error);
     return NextResponse.json({ error: "No se pudo registrar la factura." }, { status: 500 });
   }
