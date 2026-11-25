@@ -93,7 +93,11 @@ export function invoiceDatabaseError(error: { code?: string; message: string }, 
       { status: 503 },
     );
   }
+  // .single() sin fila: la factura no se pudo leer después de guardarla (normalmente, permisos de lectura).
+  if (error.code === "PGRST116") return NextResponse.json({ error: "La factura no existe o tu rol no puede verla." }, { status: 404 });
   console.error(`Error de facturas (${context}):`, error);
   reportServerIncident(`api · facturas · ${context}`, error);
-  return NextResponse.json({ error: "No se pudo completar la operación." }, { status: 500 });
+  // El código y el mensaje de la base ayudan a diagnosticar (solo lo ven usuarios con sesión y permiso de facturas).
+  const detail = [error.code, error.message?.slice(0, 160)].filter(Boolean).join(": ");
+  return NextResponse.json({ error: `No se pudo completar la operación (${context}${detail ? ` · ${detail}` : ""}).` }, { status: 500 });
 }
