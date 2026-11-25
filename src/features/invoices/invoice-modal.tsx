@@ -1,160 +1,95 @@
 "use client";
 
-import { Copy, Download, ExternalLink, History, Receipt, Save, ScanText, Undo2, X } from "lucide-react";
-import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { Copy, Download, ExternalLink, History, Lock, Receipt, Save, ScanText, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { describeError, requestApi } from "@/lib/api-client";
-import { formatMoney, INVOICE_FIELD_LABELS, INVOICE_STATUS_LABELS, isInvoiceClosed, isInvoiceLocked, type Invoice } from "@/lib/invoices";
+import { formatMoney, INVOICE_EVENT_LABELS, type Invoice, type InvoiceEvent } from "@/lib/invoices";
 import { useAuth } from "@/features/auth/auth-provider";
 import { formatDateTime, formatDay } from "@/features/fuels/format";
 import { fileSafe } from "@/shared/reports/report-export";
-import { Field } from "@/shared/ui/field";
 import { useNotify } from "@/shared/ui/notice-provider";
-import { downloadText, loadInvoicePreview, openInvoiceFile } from "./files";
-import { StageBadge } from "./stage-badge";
+import { LoadingState } from "@/shared/ui/loading";
+import { downloadText, openInvoiceFile } from "./files";
+import { PdfPages } from "./pdf-pages";
+import { PaymentBadge, StageSquares } from "./stage-badge";
 import type { Detected } from "./upload-modal";
-import { BusyLabel, LoadingState } from "@/shared/ui/loading";
 
-type FormKey = "invoice_date" | "due_date" | "folio" | "uuid" | "supplier_name" | "supplier_rfc" | "subtotal" | "tax" | "total" | "currency" | "notes";
-type Form = Record<FormKey, string>;
+type Doc = "invoice" | "receipt" | "complement";
 
-const money = (value: number | null) => (value === null ? "" : value.toFixed(2));
-const toAmount = (value: string): number | null | "bad" => {
-  const clean = value.replace(/[$,\s]/g, "");
-  if (!clean) return null;
-  const number = Number(clean);
-  return Number.isFinite(number) && number >= 0 ? Math.round(number * 100) / 100 : "bad";
-};
+const DOC_LABELS: Record<Doc, string> = { invoice: "Factura", receipt: "Contrarecibo", complement: "Complemento" };
 
-const formOf = (invoice: Invoice): Form => ({
-  invoice_date: invoice.invoice_date,
-  due_date: invoice.due_date ?? "",
-  folio: invoice.folio ?? "",
-  uuid: invoice.uuid ?? "",
-  supplier_name: invoice.supplier_name ?? "",
-  supplier_rfc: invoice.supplier_rfc ?? "",
-  subtotal: money(invoice.subtotal),
-  tax: money(invoice.tax),
-  total: money(invoice.total),
-  currency: invoice.currency,
-  notes: invoice.notes ?? "",
-});
+function Value({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="invoice-value">
+      <span>{label}</span>
+      <strong>{children ?? "—"}</strong>
+    </div>
+  );
+}
 
-/** Valor de la bitácora legible: fechas dd/mm/aaaa, montos con dos decimales, vacío como "—". */
-function showValue(key: string, value: string | number | null): string {
-  if (value === null || value === "") return "—";
-  if (typeof value === "number") return value.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (key.endsWith("_date")) return formatDay(value);
-  return value;
+function eventDetail(event: InvoiceEvent): string {
+  const detail = event.detail ?? {};
+  const parts: string[] = [];
+  if (typeof detail.archivo === "string") parts.push(detail.archivo);
+  if (typeof detail.fecha_pago === "string") parts.push(`cobro previsto ${formatDay(detail.fecha_pago)}`);
+  if (detail.verificado === true) parts.push("UUID verificado");
+  if (detail.verificado === false) parts.push("no menciona el UUID de la factura");
+  return parts.join(" · ");
 }
 
 /**
- * Repaso de una factura: el PDF real a un lado y los datos capturados al otro, para comparar y corregir.
- * Cada corrección guarda quién la hizo y qué valor tenía antes (pestaña «Correcciones»).
+ * Consulta de una factura (solo lectura): los PDF (factura, contrarecibo y complemento), los datos que se
+ * detectaron al cargarla, su texto y su historial. Nada se modifica aquí.
  */
 export function InvoiceModal({
-  invoice: initial,
+  invoice,
   detected,
-  canEdit,
   onClose,
-  onSaved,
+  onSave,
+  onDiscard,
 }: {
   invoice: Invoice;
+  /** Solo al acabar de cargarla: qué datos se encontraron en el PDF. */
   detected?: Detected;
-  canEdit: boolean;
   onClose: () => void;
-  onSaved: () => void | Promise<void>;
+  /** Recién cargada: confirma que se guarda tal como se leyó del PDF. */
+  onSave?: () => void;
+  /** Recién cargada: la elimina para volver a cargar el PDF correcto (pide confirmación). */
+  onDiscard?: () => void;
 }) {
   const { session } = useAuth();
   const notify = useNotify();
-  const [invoice, setInvoice] = useState<Invoice>(initial);
   const [full, setFull] = useState<Invoice | null>(null);
   const [fullError, setFullError] = useState("");
-  const [tab, setTab] = useState<"data" | "text" | "edits">("data");
-  const [form, setForm] = useState<Form>(() => formOf(initial));
-  const [preview, setPreview] = useState<string | null>(null);
-  const [previewError, setPreviewError] = useState(false);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<"data" | "text" | "history">("data");
+  const [doc, setDoc] = useState<Doc>("invoice");
 
-  // PDF para la vista previa (se descarga del bucket privado; la URL local se libera al cerrar).
-  useEffect(() => {
-    let url: string | null = null;
-    let cancelled = false;
-    loadInvoicePreview(initial.file_path)
-      .then((value) => {
-        if (cancelled) URL.revokeObjectURL(value);
-        else setPreview((url = value));
-      })
-      .catch(() => { if (!cancelled) setPreviewError(true); });
-    return () => {
-      cancelled = true;
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [initial.file_path]);
+  const paths: Record<Doc, string | null> = { invoice: invoice.file_path, receipt: invoice.receipt_path, complement: invoice.complement_path };
+  const docPath = paths[doc];
 
-  // Texto digitalizado y bitácora de correcciones.
+  // Texto digitalizado e historial.
   const loadFull = useCallback(async () => {
     if (!session) return;
     try {
-      setFull(await requestApi<Invoice>(session, `/api/invoices/${initial.id}`));
+      setFull(await requestApi<Invoice>(session, `/api/invoices/${invoice.id}`));
       setFullError("");
     } catch (err) {
       setFullError(describeError(err, "No se pudo leer el detalle de la factura."));
     }
-  }, [session, initial.id]);
+  }, [session, invoice.id]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadFull(), 0);
     return () => window.clearTimeout(timer);
   }, [loadFull]);
 
-  const saved = formOf(invoice);
-  const dirty = (Object.keys(form) as FormKey[]).filter((key) => form[key].trim() !== saved[key].trim());
-  const edits = full?.edits ?? [];
-  const corrected = new Set(edits.flatMap((edit) => Object.keys(edit.changes)));
-  const text = full?.text_content ?? null;
-  const missing = detected ? [!detected.invoice_date && "fecha", !detected.total && "total", !detected.supplier && "emisor"].filter(Boolean) : [];
-
-  const set = (key: FormKey) => (value: string) => setForm((current) => ({ ...current, [key]: value }));
-  const fieldClass = (key: FormKey) => (dirty.includes(key) ? "invoice-field-dirty" : corrected.has(key) ? "invoice-field-corrected" : undefined);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!session || busy || !canEdit) return;
-    if (dirty.length === 0) return setError("No hay cambios que guardar.");
-    const amounts = { subtotal: toAmount(form.subtotal), tax: toAmount(form.tax), total: toAmount(form.total) };
-    if (Object.values(amounts).includes("bad")) return setError("Revisa los montos: deben ser números positivos.");
-    if (!form.invoice_date) return setError("Indica la fecha de la factura.");
-    if (form.due_date && form.due_date < form.invoice_date) return setError("El vencimiento no puede ser anterior a la fecha de la factura.");
-    if (!/^[A-Za-z]{3}$/.test(form.currency.trim())) return setError("La moneda debe ser de 3 letras (MXN, USD, EUR).");
-    setBusy(true);
-    setError("");
-    try {
-      const updated = await requestApi<Invoice>(session, `/api/invoices/${invoice.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          action: "edit",
-          invoice_date: form.invoice_date,
-          due_date: form.due_date || null,
-          folio: form.folio,
-          uuid: form.uuid,
-          supplier_name: form.supplier_name,
-          supplier_rfc: form.supplier_rfc,
-          ...amounts,
-          currency: form.currency.trim().toUpperCase(),
-          notes: form.notes,
-        }),
-      });
-      setInvoice(updated);
-      setForm(formOf(updated));
-      notify("success", "Corrección guardada", `Quedó registrado quién la hizo (${dirty.length} dato(s)).`);
-      await Promise.all([onSaved(), loadFull()]);
-    } catch (err) {
-      setError(describeError(err, "No se pudo guardar la factura."));
-    } finally {
-      setBusy(false);
-    }
+  function showDoc(next: Doc) {
+    if (next !== doc) setDoc(next);
   }
+
+  const text = full?.text_content ?? null;
+  const events = full?.events ?? [];
+  const missing = detected ? [!detected.invoice_date && "fecha", !detected.total && "total", !detected.uuid && "UUID"].filter(Boolean) : [];
 
   async function copyText() {
     try {
@@ -166,63 +101,66 @@ export function InvoiceModal({
   }
 
   async function openTab() {
-    if (!(await openInvoiceFile(invoice.file_path))) notify("error", "No se pudo abrir el PDF");
+    if (docPath && !(await openInvoiceFile(docPath))) notify("error", "No se pudo abrir el PDF");
   }
 
-  const readOnly = !canEdit;
-  const input = (key: FormKey, props: Record<string, unknown> = {}) => (
-    <input className={fieldClass(key)} value={form[key]} onChange={(e) => set(key)(e.target.value)} disabled={readOnly} {...props} />
-  );
-
   return (
-    <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
+    <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="modal modal-form invoice-review-modal" role="dialog" aria-modal="true" aria-labelledby="invoice-title">
         <div className="modal-header">
           <div className="modal-heading-icon"><Receipt size={19} /></div>
           <div>
-            <h2 id="invoice-title">{detected ? "Repaso de la factura cargada" : `Factura ${invoice.folio ?? `#${invoice.id}`}`}</h2>
+            <h2 id="invoice-title">{onSave ? `Revisa y guarda la factura ${invoice.folio}` : `Factura ${invoice.folio}`}</h2>
             <p>
-              Compara el PDF con lo capturado y corrige lo que esté mal · {invoice.file_name} ·{" "}
-              <span className={`fuel-status fuel-status-${invoice.status === "incidente" ? "bad" : "warn"}`}>{INVOICE_STATUS_LABELS[invoice.status]}</span>
-              {" · "}<StageBadge stage={invoice.stage} />
-              {invoice.stage !== "enviada" && invoice.signed_at && <> firmada el {formatDay(invoice.signed_at.slice(0, 10))}{invoice.signed_by_name ? ` · ${invoice.signed_by_name}` : ""}</>}
-              {invoice.stage === "cargada" && invoice.loaded_at && <> · cargada el {formatDay(invoice.loaded_at.slice(0, 10))}{invoice.loaded_by_name ? ` · ${invoice.loaded_by_name}` : ""}</>}
-              {isInvoiceClosed(invoice) && <> · <strong>{isInvoiceLocked(invoice) ? "factura bloqueada (cargada), solo consulta" : "factura cerrada, solo consulta"}</strong></>}
-              {invoice.status === "incidente" && (
-                <>
-                  {invoice.incident_on && <> desde el {formatDay(invoice.incident_on)}</>}
-                  {invoice.incident_by_name && <> · {invoice.incident_by_name}</>}
-                  {invoice.incident_description && <><br /><strong>Incidente:</strong> {invoice.incident_description}</>}
-                </>
-              )}
+              <StageSquares invoice={invoice} /> · <PaymentBadge invoice={invoice} />
+              <br />
+              <Lock size={12} />{" "}
+              {onSave
+                ? "Compara el PDF con los datos leídos. Al guardarla queda como enviada y ya no se modifica."
+                : "Solo consulta: lo cargado del PDF no se modifica."}
             </p>
           </div>
-          <button className="icon-button close-modal" onClick={onClose} disabled={busy} aria-label="Cerrar"><X size={20} /></button>
+          <button className="icon-button close-modal" onClick={onClose} aria-label="Cerrar"><X size={20} /></button>
         </div>
 
         <div className="invoice-review">
           <div className="invoice-review-pdf">
             <div className="invoice-review-pdf-bar">
-              <strong>PDF original</strong>
-              <button type="button" className="text-button" onClick={() => void openTab()}><ExternalLink size={13} /> Abrir en otra pestaña</button>
+              <div className="site-tabs" role="tablist" aria-label="Documento">
+                {(Object.keys(DOC_LABELS) as Doc[]).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={doc === key}
+                    className={`site-tab${doc === key ? " active" : ""}`}
+                    onClick={() => showDoc(key)}
+                    disabled={!paths[key]}
+                    title={paths[key] ? undefined : "Aún no se carga"}
+                  >
+                    {DOC_LABELS[key]}
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="text-button" onClick={() => void openTab()} disabled={!docPath}><ExternalLink size={13} /> Abrir en otra pestaña</button>
             </div>
-            {preview ? (
-              <iframe src={preview} title={`PDF de la factura ${invoice.folio ?? invoice.id}`} />
+            {docPath ? (
+              <PdfPages key={docPath} path={docPath} title={`${DOC_LABELS[doc]} de la factura ${invoice.folio}`} />
             ) : (
-              previewError ? <p className="epp-empty">No se pudo mostrar el PDF aquí. Ábrelo en otra pestaña.</p> : <LoadingState label="Cargando PDF…" />
+              <p className="epp-empty">Aún no se carga este documento.</p>
             )}
           </div>
 
-          <form className="employee-form invoice-review-data" onSubmit={submit} noValidate>
+          <div className="employee-form invoice-review-data">
             <div className="site-tabs fuel-form-tabs" role="tablist">
               <button type="button" role="tab" aria-selected={tab === "data"} className={`site-tab${tab === "data" ? " active" : ""}`} onClick={() => setTab("data")}>
-                <Receipt size={14} /> Datos capturados
+                <Receipt size={14} /> Datos
               </button>
               <button type="button" role="tab" aria-selected={tab === "text"} className={`site-tab${tab === "text" ? " active" : ""}`} onClick={() => setTab("text")}>
                 <ScanText size={14} /> Texto {invoice.has_text ? `(${invoice.text_pages} pág.)` : "(sin texto)"}
               </button>
-              <button type="button" role="tab" aria-selected={tab === "edits"} className={`site-tab${tab === "edits" ? " active" : ""}`} onClick={() => setTab("edits")}>
-                <History size={14} /> Correcciones{full ? ` (${edits.length})` : ""}
+              <button type="button" role="tab" aria-selected={tab === "history"} className={`site-tab${tab === "history" ? " active" : ""}`} onClick={() => setTab("history")}>
+                <History size={14} /> Historial{full ? ` (${events.length})` : ""}
               </button>
             </div>
 
@@ -231,30 +169,42 @@ export function InvoiceModal({
                 {detected && (
                   <p className={missing.length || !invoice.has_text ? "inline-error" : "field-hint"} role="status">
                     {!invoice.has_text
-                      ? "El PDF no trae texto (parece escaneado como imagen): captura los datos viendo el PDF."
+                      ? "El PDF no trae texto (parece escaneado como imagen): no se pudieron leer sus datos."
                       : missing.length
-                        ? `No se encontró en el PDF: ${missing.join(", ")}. Complétalo viendo el PDF.`
-                        : "Datos detectados automáticamente. Compáralos con el PDF y corrige lo que no coincida."}
+                        ? `No se encontró en el PDF: ${missing.join(", ")}. Si el archivo es incorrecto, elimínala y vuelve a cargarla.`
+                        : "Datos leídos del PDF. Compáralos; si el archivo es incorrecto, elimínala y vuelve a cargarla antes de firmarla."}
                   </p>
                 )}
-                <div className="form-grid invoice-review-grid">
-                  <Field label="Fecha de la factura" required>{input("invoice_date", { type: "date" })}</Field>
-                  <Field label="Vencimiento">{input("due_date", { type: "date" })}</Field>
-                  <Field label="Folio">{input("folio", { maxLength: 60 })}</Field>
-                  <Field label="Moneda">{input("currency", { maxLength: 3, onChange: (e: ChangeEvent<HTMLInputElement>) => set("currency")(e.target.value.toUpperCase()) })}</Field>
-                  <div className="fuel-span-3"><Field label="Emisor (proveedor)">{input("supplier_name", { maxLength: 160 })}</Field></div>
-                  <Field label="RFC del emisor">{input("supplier_rfc", { maxLength: 13, onChange: (e: ChangeEvent<HTMLInputElement>) => set("supplier_rfc")(e.target.value.toUpperCase()) })}</Field>
-                  <Field label="Folio fiscal (UUID)">{input("uuid", { maxLength: 36, onChange: (e: ChangeEvent<HTMLInputElement>) => set("uuid")(e.target.value.toUpperCase()) })}</Field>
-                  <Field label="Subtotal">{input("subtotal", { inputMode: "decimal" })}</Field>
-                  <Field label="IVA / impuestos">{input("tax", { inputMode: "decimal" })}</Field>
-                  <Field label="Total">{input("total", { inputMode: "decimal" })}</Field>
-                  <div className="fuel-span-3"><Field label="Notas">{input("notes", { maxLength: 500 })}</Field></div>
+                <div className="invoice-values">
+                  <Value label="Folio del sistema">{invoice.folio}</Value>
+                  <Value label="Folio en el PDF">{invoice.pdf_folio}</Value>
+                  <Value label="Fecha de la factura">{formatDay(invoice.invoice_date)}</Value>
+                  <Value label="Vencimiento (PDF)">{invoice.due_date ? formatDay(invoice.due_date) : null}</Value>
+                  <Value label="Folio fiscal (UUID)">{invoice.uuid}</Value>
+                  <Value label="Moneda">MXN · moneda nacional</Value>
+                  <Value label="Subtotal">{formatMoney(invoice.subtotal)}</Value>
+                  <Value label="IVA / impuestos">{formatMoney(invoice.tax)}</Value>
+                  <Value label="Total">{formatMoney(invoice.total)}</Value>
+                  <Value label="Cargada">{formatDateTime(invoice.created_at)} · {invoice.created_by_name ?? "—"}</Value>
                 </div>
-                <p className="field-hint">
-                  <span className="invoice-legend invoice-legend-dirty" /> sin guardar · <span className="invoice-legend invoice-legend-corrected" /> corregido antes ·
-                  Total guardado: {formatMoney(invoice.total, invoice.currency)} · Cargada el {formatDay(invoice.created_at)} por {invoice.created_by_name ?? "—"}
-                  {invoice.updated_by_name && invoice.updated_at !== invoice.created_at ? ` · Último cambio: ${invoice.updated_by_name}, ${formatDateTime(invoice.updated_at)}` : ""}
-                </p>
+                <h3 className="invoice-subtitle">Contrarecibo y cierre</h3>
+                <div className="invoice-values">
+                  <Value label="Contrarecibo">{invoice.receipt_name ? `${invoice.receipt_name} · ${invoice.receipt_by_name ?? "—"}` : "Pendiente"}</Value>
+                  <Value label="Fecha posible de cobro">{invoice.payment_date ? formatDay(invoice.payment_date) : null}</Value>
+                  <Value label="Complemento de pago">{invoice.complement_name ? `${invoice.complement_name} · ${invoice.complement_by_name ?? "—"}` : "Pendiente"}</Value>
+                  <Value label="Verificación">
+                    {!invoice.complement_path
+                      ? null
+                      : invoice.complement_verified === true
+                        ? "El complemento menciona el UUID de la factura"
+                        : invoice.complement_verified === false
+                          ? "El complemento NO menciona el UUID: revisar"
+                          : "No se pudo verificar (sin UUID o sin texto)"}
+                  </Value>
+                </div>
+                {invoice.status === "incidente" && invoice.incident_description && (
+                  <p className="inline-error"><strong>Incidente (registro anterior):</strong> {invoice.incident_description}</p>
+                )}
               </>
             )}
 
@@ -262,7 +212,7 @@ export function InvoiceModal({
               <div className="invoice-text">
                 <div className="epp-actions">
                   <button type="button" className="button button-outline" onClick={() => void copyText()} disabled={!text}><Copy size={14} /> Copiar</button>
-                  <button type="button" className="button button-outline" onClick={() => downloadText(`Factura_${fileSafe(invoice.folio ?? String(invoice.id))}.txt`, text ?? "")} disabled={!text}>
+                  <button type="button" className="button button-outline" onClick={() => downloadText(`Factura_${fileSafe(invoice.folio)}.txt`, text ?? "")} disabled={!text}>
                     <Download size={14} /> Descargar .txt
                   </button>
                 </div>
@@ -278,44 +228,42 @@ export function InvoiceModal({
               </div>
             )}
 
-            {tab === "edits" && (
+            {tab === "history" && (
               fullError ? (
                 <p className="inline-error" role="alert">{fullError}</p>
               ) : !full ? (
-                <LoadingState label="Cargando correcciones…" rows={2} compact />
-              ) : edits.length === 0 ? (
-                <p className="epp-empty">Nadie ha corregido esta factura: los datos son los que se detectaron al cargarla.</p>
+                <LoadingState label="Cargando historial…" rows={2} compact />
+              ) : events.length === 0 ? (
+                <p className="epp-empty">Sin pasos registrados.</p>
               ) : (
                 <ol className="invoice-edits">
-                  {edits.map((edit) => (
-                    <li key={edit.id}>
-                      <p><strong>{edit.edited_by_name}</strong> <small className="epp-muted">· {formatDateTime(edit.edited_at)}</small></p>
-                      <ul>
-                        {Object.entries(edit.changes).map(([key, change]) => (
-                          <li key={key}>
-                            {INVOICE_FIELD_LABELS[key] ?? key}: <del>{showValue(key, change.from)}</del> → <strong>{showValue(key, change.to)}</strong>
-                          </li>
-                        ))}
-                      </ul>
+                  {events.map((event) => (
+                    <li key={event.id}>
+                      <p><strong>{INVOICE_EVENT_LABELS[event.event]}</strong> <small className="epp-muted">· {formatDateTime(event.at)}{event.by_name ? ` · ${event.by_name}` : ""}</small></p>
+                      {eventDetail(event) && <small className="epp-muted">{eventDetail(event)}</small>}
                     </li>
                   ))}
                 </ol>
               )
             )}
 
-            {error && <p className="inline-error" role="alert">{error}</p>}
-            <div className="modal-actions">
-              {canEdit && tab === "data" && dirty.length > 0 && (
-                <button type="button" className="button button-neutral" onClick={() => { setForm(saved); setError(""); }} disabled={busy}><Undo2 size={15} /> Deshacer cambios</button>
-              )}
-              <button type="button" className="button button-neutral" onClick={onClose} disabled={busy}>Cerrar</button>
-              {canEdit && tab === "data" && (
-                <button type="submit" className="button button-gold" disabled={busy || dirty.length === 0}>
-                  <Save size={17} /> {busy ? <BusyLabel>Guardando…</BusyLabel> : dirty.length ? `Guardar corrección (${dirty.length})` : "Sin cambios"}
+            {onSave ? (
+              <div className="modal-actions">
+                {onDiscard && (
+                  <button type="button" className="button button-neutral" onClick={onDiscard} title="Si el PDF no es el correcto, elimínala y vuelve a cargarla">
+                    <Trash2 size={15} /> Descartar y volver a cargar
+                  </button>
+                )}
+                <button type="button" className="button button-gold" onClick={onSave}>
+                  <Save size={16} /> Guardar factura
                 </button>
-              )}
-            </div>
-          </form>
+              </div>
+            ) : (
+              <div className="modal-actions">
+                <button type="button" className="button button-neutral" onClick={onClose}>Cerrar</button>
+              </div>
+            )}
+          </div>
         </div>
       </section>
     </div>

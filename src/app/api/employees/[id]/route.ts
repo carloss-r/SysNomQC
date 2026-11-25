@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { recordAudit } from "@/lib/audit";
+import { EMPLOYEE_DETAIL_SELECT } from "@/lib/employees";
 import { z } from "zod";
 import { reportServerIncident } from "@/lib/incidents";
 import { BadJsonError, databaseErrorResponse, getAuthenticatedClient, readJson } from "../_server";
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const { data, error } = await auth.client.from("employees").select("*").eq("id", id).maybeSingle();
+    const { data, error } = await auth.client.from("employees").select(EMPLOYEE_DETAIL_SELECT).eq("id", id).maybeSingle();
     if (error) return databaseErrorResponse(error);
     if (!data) return NextResponse.json({ error: "No se encontró el empleado." }, { status: 404 });
     await recordAudit(request, auth.access, "employee.view", id, { code: data.employee_code });
@@ -49,7 +50,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       .from("employees")
       .update(input.data)
       .eq("id", id)
-      .select("*")
+      .select(EMPLOYEE_DETAIL_SELECT)
       .single();
 
     if (error) return databaseErrorResponse(error);

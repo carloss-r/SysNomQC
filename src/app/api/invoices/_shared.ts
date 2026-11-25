@@ -2,60 +2,32 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { reportServerIncident } from "@/lib/incidents";
-import { INVOICE_STAGE_LABELS, MAX_INCIDENT_LENGTH, nextInvoiceStage, type Invoice, type InvoiceStage } from "@/lib/invoices";
+import { type Invoice } from "@/lib/invoices";
+import { InvalidPdfError, pdfToText } from "./_extract";
 
 export const INVOICE_BUCKET = "invoices";
 export const MAX_INVOICE_BYTES = 10 * 1024 * 1024;
 
-/** Columnas de la lista (sin el texto completo, que solo se pide al abrir una factura). */
+/** Columnas de la lista (sin los textos completos, que solo se piden al abrir una factura). */
 export const LIST_COLUMNS =
-  "id,file_path,file_name,file_size,invoice_date,due_date,folio,uuid,supplier_name,supplier_rfc,subtotal,tax,total,currency,notes,status,incident_description,incident_on,incident_by_name,stage,signed_at,signed_by_name,loaded_at,loaded_by_name,text_pages,has_text,created_at,created_by_name,updated_at,updated_by_name";
+  "id,folio,pdf_folio,file_path,file_name,file_size,invoice_date,due_date,uuid,subtotal,tax,total,currency,status,incident_description,stage,signed_at,signed_by_name,loaded_at,loaded_by_name,receipt_path,receipt_name,payment_date,receipt_at,receipt_by_name,complement_path,complement_name,complement_at,complement_by_name,complement_verified,text_pages,has_text,created_at,created_by_name,updated_at,updated_by_name";
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida.");
-const optionalText = (max: number) => z.string().trim().max(max).nullable().optional().transform((value) => value || null);
-const amount = z.number().min(0).max(1_000_000_000).nullable().optional().transform((value) => value ?? null);
+// PDF ya subido por el navegador al bucket privado: factura (uuid.pdf), contrarecibo (cr-uuid.pdf) o complemento (cp-uuid.pdf).
+const filePath = (prefix: string) => z.string().regex(new RegExp(`^${prefix}[\\w-]+\\.pdf$`));
+const fileName = z.string().trim().min(1).max(200);
 
-export const uploadSchema = z.object({
-  // Ruta dentro del bucket privado (la sube el navegador antes de registrar la factura).
-  file_path: z.string().regex(/^[\w-]+\.pdf$/),
-  file_name: z.string().trim().min(1).max(200),
-});
+export const uploadSchema = z.object({ file_path: filePath(""), file_name: fileName }).strict();
 
-export const editSchema = z.object({
-  action: z.literal("edit"),
-  invoice_date: day,
-  due_date: day.nullable().optional().transform((value) => value ?? null),
-  folio: optionalText(60),
-  uuid: optionalText(36),
-  supplier_name: optionalText(160),
-  supplier_rfc: z.string().trim().toUpperCase().max(13).nullable().optional().transform((value) => value || null),
-  subtotal: amount,
-  tax: amount,
-  total: amount,
-  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, "Moneda no válida."),
-  notes: optionalText(500),
-});
-
-// Solo se sale de "pendiente": el incidente cierra la factura.
-export const statusSchema = z.object({
-  action: z.literal("status"),
-  status: z.literal("incidente"),
-  // Obligatoria al marcar incidente; se escribe a mano.
-  incident_description: z.string().trim().max(MAX_INCIDENT_LENGTH).nullable().optional().transform((value) => value || null),
-});
-
-// Estado del documento: solo avanza (enviada → firmada → cargada).
-export const stageSchema = z.object({
-  action: z.literal("stage"),
-  stage: z.enum(["firmada", "cargada"]),
-});
-
-/** Datos que el usuario puede corregir (y que se registran en la bitácora de correcciones). */
-export const EDITABLE_FIELDS = [
-  "invoice_date", "due_date", "folio", "uuid", "supplier_name", "supplier_rfc", "subtotal", "tax", "total", "currency", "notes",
-] as const;
-
-export const patchSchema = z.discriminatedUnion("action", [editSchema, statusSchema, stageSchema]);
+/** Pasos del flujo. Ningún dato de la factura se modifica: solo se avanza. */
+export const patchSchema = z.discriminatedUnion("action", [
+  // Los cuadritos 2 y 3: firmada / autorizada y cargada al sistema.
+  z.object({ action: z.literal("stage"), stage: z.enum(["firmada", "cargada"]) }).strict(),
+  // Contrarecibo con la fecha posible de cobro (ya cargada al sistema); después falta el complemento.
+  z.object({ action: z.literal("receipt"), file_path: filePath("cr-"), file_name: fileName, payment_date: day }).strict(),
+  // Complemento de pago: la factura queda cerrada.
+  z.object({ action: z.literal("complement"), file_path: filePath("cp-"), file_name: fileName }).strict(),
+]);
 
 export const parseId = (raw: string) => {
   const id = Number(raw);
@@ -69,52 +41,62 @@ export function toInvoice(row: Record<string, unknown>): Invoice {
   return copy as unknown as Invoice;
 }
 
-/**
- * Si la factura ya está cerrada (con incidente o cargada), la respuesta de error; si no, null.
- * Con allowSuperAdmin (solo al eliminar) el Super administrador sí puede continuar.
- * Con nextStage (avanzar el estado del documento) una factura con incidente sí puede avanzar,
- * pero solo al siguiente estado y nunca si ya está cargada.
- */
-export async function closedInvoiceResponse(
-  client: SupabaseClient,
-  id: number,
-  options: { allowSuperAdmin?: boolean; nextStage?: InvoiceStage } = {},
-) {
-  const { data, error } = await client.from("invoices").select("status,stage").eq("id", id).maybeSingle();
-  if (error) return invoiceDatabaseError(error, "leer estatus");
-  if (!data) return NextResponse.json({ error: "La factura no existe." }, { status: 404 });
-  const { status, stage } = data as { status: string; stage: InvoiceStage };
-  if (options.allowSuperAdmin) return null;
-  const closedMessage = (label: string) =>
-    NextResponse.json({ error: `La factura ya está cerrada (${label}) y no se puede modificar. Solo el Super administrador puede eliminarla.` }, { status: 409 });
-  if (stage === "cargada") return closedMessage("cargada");
-  if (options.nextStage) {
-    if (nextInvoiceStage(stage) !== options.nextStage) {
-      return NextResponse.json({ error: `La factura está ${INVOICE_STAGE_LABELS[stage].toLowerCase()}; el estado solo avanza: enviada → firmada → cargada.` }, { status: 409 });
-    }
-    return null;
-  }
-  if (status === "incidente") return closedMessage("con incidente");
-  return null;
-}
-
 export function actorName(access: { full_name: string | null; email: string }) {
   return access.full_name || access.email || "Usuario";
 }
 
+export const removeFile = (client: SupabaseClient, path: string) =>
+  client.storage.from(INVOICE_BUCKET).remove([path]).then(() => undefined, () => undefined);
+
+/**
+ * Descarga del bucket un PDF que acaba de subir el navegador y saca su texto.
+ * Si no es válido lo borra y devuelve la respuesta de error.
+ */
+export async function readUploadedPdf(
+  client: SupabaseClient,
+  path: string,
+): Promise<{ bytes: number; text: string; plain: string; pages: number } | { response: NextResponse }> {
+  const download = await client.storage.from(INVOICE_BUCKET).download(path);
+  if (download.error || !download.data) {
+    return { response: NextResponse.json({ error: "No se encontró el PDF subido. Vuelve a intentarlo." }, { status: 404 }) };
+  }
+  if (download.data.size > MAX_INVOICE_BYTES) {
+    await removeFile(client, path);
+    return { response: NextResponse.json({ error: "El PDF pesa más de 10 MB." }, { status: 400 }) };
+  }
+  const bytes = new Uint8Array(await download.data.arrayBuffer());
+  try {
+    return { bytes: bytes.length, ...(await pdfToText(bytes)) };
+  } catch (error) {
+    if (error instanceof InvalidPdfError) {
+      await removeFile(client, path);
+      return { response: NextResponse.json({ error: error.message }, { status: 400 }) };
+    }
+    throw error;
+  }
+}
+
 export function invoiceDatabaseError(error: { code?: string; message: string }, context: string) {
   if (error.code === "23505") return NextResponse.json({ error: "Ese archivo ya está registrado." }, { status: 409 });
-  if (error.code === "23514") return NextResponse.json({ error: "Los datos de la factura no son válidos." }, { status: 409 });
-  // Bloqueo de la base (migración 202611120002): la factura se cerró mientras tanto.
-  if (error.code === "42501" && error.message.includes("cerrada")) return NextResponse.json({ error: error.message }, { status: 409 });
+  if (error.code === "23514") {
+    // Reglas de la base: el estado solo avanza; contrarecibo solo ya cargada al sistema; complemento solo con contrarecibo.
+    const message = error.message.includes("solo avanza") ? error.message : "Ese paso no corresponde al estado actual de la factura.";
+    return NextResponse.json({ error: message }, { status: 409 });
+  }
+  // Candado de la base: los datos no se modifican, cada paso se marca una sola vez, con complemento = cerrada.
+  if (error.code === "42501" && /factura|paso/i.test(error.message)) return NextResponse.json({ error: error.message }, { status: 409 });
   if (error.code === "42501") return NextResponse.json({ error: "Tu rol no tiene permiso para realizar esta acción." }, { status: 403 });
   if (["42P01", "PGRST205", "42703", "PGRST204"].includes(error.code ?? "")) {
     return NextResponse.json(
-      { error: "Faltan migraciones de facturas en Supabase (202611110002_facturas.sql, 202611120001_facturas_incidente.sql, 202611190001_facturas_etapas.sql y 202611190002_facturas_sin_pagada.sql)." },
+      { error: "Faltan migraciones de facturas en Supabase (hasta 202611250002_facturas_cierre_y_roles.sql)." },
       { status: 503 },
     );
   }
+  // .single() sin fila: la factura no se pudo leer después de guardarla (normalmente, permisos de lectura).
+  if (error.code === "PGRST116") return NextResponse.json({ error: "La factura no existe o tu rol no puede verla." }, { status: 404 });
   console.error(`Error de facturas (${context}):`, error);
   reportServerIncident(`api · facturas · ${context}`, error);
-  return NextResponse.json({ error: "No se pudo completar la operación." }, { status: 500 });
+  // El código y el mensaje de la base ayudan a diagnosticar (solo lo ven usuarios con sesión y permiso de facturas).
+  const detail = [error.code, error.message?.slice(0, 160)].filter(Boolean).join(": ");
+  return NextResponse.json({ error: `No se pudo completar la operación (${context}${detail ? ` · ${detail}` : ""}).` }, { status: 500 });
 }

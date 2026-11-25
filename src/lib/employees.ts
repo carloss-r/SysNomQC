@@ -1,16 +1,5 @@
 export const SITES = ["Campeche", "Lagunas", "Cruz Azul", "El Carmen"] as const;
 
-// Solo son sugerencias para autocompletar; el campo acepta cualquier texto.
-export const POSITIONS = [
-  "Operaciones - Operador Especializado",
-  "Mantenimiento - Técnico Mecánico",
-  "Logística - Coordinador de Transportes",
-  "Seguridad Industrial - Supervisor EHS",
-  "Administración - Contador General",
-  "Recursos Humanos - Generalista",
-  "Calidad - Analista de Procesos",
-] as const;
-
 export const CONTRACT_TYPES = [
   "Indeterminado (Planta)",
   "Determinado (Eventual)",
@@ -33,8 +22,15 @@ export type Employee = {
   full_name: string;
   site: string;
   hire_date: string;
+  /** Área global (Campeche: CYM o CAL); null en sedes sin áreas. */
+  area_id: number | null;
+  /** Llega en el expediente completo (detalle, alta, edición y baja). */
+  area?: EmployeeArea | null;
+  position_id: number;
+  /** Nombre del puesto (copia que mantiene la base a partir del catálogo). */
   position: string;
-  /** Asignación (texto libre); null = sin capturar. */
+  assignment_id: number | null;
+  /** Nombre de la asignación (copia del catálogo); null = sin asignación. */
   assignment: string | null;
   contract_type: string;
   /** Salario base (MXN). */
@@ -73,11 +69,58 @@ export type Employee = {
 // La tabla principal solo necesita estas columnas: la lista viaja ligera y el expediente
 // completo (salario, CURP, NSS, etc.) se pide únicamente al abrir un empleado.
 export const EMPLOYEE_LIST_COLUMNS =
-  "id,employee_code,full_name,site,position,contract_type,active,email";
+  "id,employee_code,full_name,site,area_id,position_id,position,assignment_id,assignment,contract_type,active,email,termination_date,termination_reason";
+
+/** Expediente completo con su área global (para mostrar "CYM" / "CAL"). */
+export const EMPLOYEE_DETAIL_SELECT = "*,area:employee_areas(id,site,code,name,responsible)";
+
+/** Área global de una sede (Campeche: CYM y CAL). */
+export type EmployeeArea = { id: number; site: string; code: string; name: string; responsible: string | null };
+
+/** Puesto o asignación del catálogo (por sede y área). */
+export type CatalogItem = { id: number; site: string; area_id: number | null; name: string };
+
+/** Trabajadores por sede / área / puesto / asignación / estatus (para los números de los filtros). */
+export type EmployeeGroupCount = {
+  site: string;
+  area_id: number | null;
+  position_id: number;
+  assignment_id: number | null;
+  active: boolean;
+  total: number;
+};
+
+export type EmployeeCatalog = {
+  areas: EmployeeArea[];
+  positions: CatalogItem[];
+  assignments: CatalogItem[];
+  counts: EmployeeGroupCount[];
+};
+
+export const EMPTY_CATALOG: EmployeeCatalog = { areas: [], positions: [], assignments: [], counts: [] };
+
+/** Puestos / asignaciones que corresponden a una sede y área (área null = sede sin áreas). */
+export const catalogFor = (items: CatalogItem[], site: string, areaId: number | null) =>
+  items
+    .filter((item) => item.site === site && item.area_id === areaId)
+    .sort((a, b) => a.name.localeCompare(b.name, "es-MX"));
 
 export type EmployeeSummary = Pick<
   Employee,
-  "id" | "employee_code" | "full_name" | "site" | "position" | "contract_type" | "active" | "email"
+  | "id"
+  | "employee_code"
+  | "full_name"
+  | "site"
+  | "area_id"
+  | "position_id"
+  | "position"
+  | "assignment_id"
+  | "assignment"
+  | "contract_type"
+  | "active"
+  | "email"
+  | "termination_date"
+  | "termination_reason"
 > &
   // Solo llegan en la pestaña de seguimiento de expedientes.
   Partial<Pick<Employee, "observations" | "observations_updated_at" | "observations_updated_by_name">>;
@@ -90,10 +133,16 @@ export const toEmployeeSummary = (employee: Employee): EmployeeSummary => ({
   employee_code: employee.employee_code,
   full_name: employee.full_name,
   site: employee.site,
+  area_id: employee.area_id,
+  position_id: employee.position_id,
   position: employee.position,
+  assignment_id: employee.assignment_id,
+  assignment: employee.assignment,
   contract_type: employee.contract_type,
   active: employee.active,
   email: employee.email,
+  termination_date: employee.termination_date,
+  termination_reason: employee.termination_reason,
 });
 
 export const sortEmployees = (list: EmployeeSummary[]) =>
@@ -103,6 +152,9 @@ export const sortEmployees = (list: EmployeeSummary[]) =>
 export type EmployeeInput = Omit<
   Employee,
   | "id"
+  | "area"
+  | "position_id"
+  | "assignment_id"
   | "created_at"
   | "updated_at"
   | "termination_date"
@@ -118,6 +170,8 @@ export type EmployeeFormValues = {
   full_name: string;
   site: string;
   hire_date: string;
+  /** Id del área global como texto ("" = sin área). */
+  area_id: string;
   position: string;
   assignment: string;
   contract_type: string;
@@ -144,6 +198,7 @@ export const EMPTY_EMPLOYEE_FORM: EmployeeFormValues = {
   full_name: "",
   site: SITES[0],
   hire_date: "",
+  area_id: "",
   position: "",
   assignment: "",
   contract_type: CONTRACT_TYPES[0],
@@ -176,8 +231,9 @@ export function formToEmployeeInput(
     full_name: form.full_name.trim(),
     site: form.site,
     hire_date: form.hire_date,
-    position: form.position.trim(),
-    assignment: optionalValue(form.assignment),
+    area_id: form.area_id ? Number(form.area_id) : null,
+    position: form.position.trim().replace(/\s+/g, " ").toUpperCase(),
+    assignment: optionalValue(form.assignment.replace(/\s+/g, " ").toUpperCase()),
     contract_type: form.contract_type,
     salary: Number(form.salary) || 0,
     contribution_salary: form.contribution_salary.trim() === "" ? null : Number(form.contribution_salary) || 0,
@@ -205,6 +261,7 @@ export function employeeToForm(employee: Employee): EmployeeFormValues {
     full_name: employee.full_name,
     site: employee.site,
     hire_date: employee.hire_date,
+    area_id: employee.area_id === null || employee.area_id === undefined ? "" : String(employee.area_id),
     position: employee.position,
     assignment: employee.assignment ?? "",
     contract_type: employee.contract_type,

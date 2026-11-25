@@ -8,15 +8,19 @@ const newId = () =>
   typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
 export function invoiceFileProblem(file: File): string | null {
-  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) return "La factura debe ser un archivo PDF.";
+  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) return "El archivo debe ser un PDF.";
   if (file.size > MAX_INVOICE_BYTES) return "El PDF pesa más de 10 MB.";
   if (file.size === 0) return "El archivo está vacío.";
   return null;
 }
 
+/** Qué PDF se sube: la factura, su contrarecibo o su complemento de pago (cada uno con su prefijo). */
+export type InvoiceFileKind = "invoice" | "receipt" | "complement";
+const PREFIX: Record<InvoiceFileKind, string> = { invoice: "", receipt: "cr-", complement: "cp-" };
+
 /** Sube el PDF y devuelve su ruta dentro del bucket. */
-export async function uploadInvoiceFile(file: File): Promise<string> {
-  const path = `${newId()}.pdf`;
+export async function uploadInvoiceFile(file: File, kind: InvoiceFileKind = "invoice"): Promise<string> {
+  const path = `${PREFIX[kind]}${newId()}.pdf`;
   const { error } = await supabase.storage.from(INVOICE_BUCKET).upload(path, file, { contentType: "application/pdf", upsert: false });
   if (error) throw error;
   return path;
@@ -36,11 +40,11 @@ export async function openInvoiceFile(path: string): Promise<boolean> {
   return true;
 }
 
-/** Descarga el PDF y devuelve una URL local (blob:) para mostrarlo dentro de la pantalla. Revocarla al cerrar. */
-export async function loadInvoicePreview(path: string): Promise<string> {
+/** Descarga el PDF del bucket privado (sus bytes) para dibujarlo dentro de la pantalla. */
+export async function loadInvoiceBytes(path: string): Promise<Uint8Array> {
   const { data, error } = await supabase.storage.from(INVOICE_BUCKET).download(path);
   if (error || !data) throw error ?? new Error("Sin archivo");
-  return URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
+  return new Uint8Array(await data.arrayBuffer());
 }
 
 /** Descarga el texto digitalizado como .txt. */

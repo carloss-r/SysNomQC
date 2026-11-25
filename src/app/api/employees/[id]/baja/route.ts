@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { recordAudit } from "@/lib/audit";
+import { EMPLOYEE_DETAIL_SELECT } from "@/lib/employees";
 import { reportServerIncident } from "@/lib/incidents";
 import { BadJsonError, databaseErrorResponse, getAuthenticatedClient, readJson } from "../../_server";
 import { terminationSchema } from "../../validation";
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         termination_reason: input.data.termination_reason || null,
       })
       .eq("id", id)
-      .select("*")
+      .select(EMPLOYEE_DETAIL_SELECT)
       .single();
     if (error) return databaseErrorResponse(error);
     await recordAudit(request, auth.access, "employee.terminate", id, {
@@ -69,7 +70,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       .from("employees")
       .update({ active: true, termination_date: null, termination_reason: null })
       .eq("id", id)
-      .select("*")
+      .select(EMPLOYEE_DETAIL_SELECT)
       .single();
     if (error) return databaseErrorResponse(error);
     await recordAudit(request, auth.access, "employee.reactivate", id, { code: data.employee_code });

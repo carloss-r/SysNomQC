@@ -16,7 +16,7 @@ export const PERMISSIONS = [
   { key: "fuels.commercial", label: "Tarifas y reportes contables de combustibles (M4)" },
   { key: "fuels.ecology", label: "Capturar consumo de coque y reporte SEMARNAT (M5)" },
   { key: "invoices.view", label: "Ver facturas, su PDF y los resúmenes" },
-  { key: "invoices.manage", label: "Cargar facturas, corregir sus datos y cambiar su estado o marcar incidentes" },
+  { key: "invoices.manage", label: "Cargar facturas, marcarlas firmadas y cargadas al sistema, y subir contrarecibos y complementos de pago" },
   { key: "users.manage", label: "Administrar usuarios y roles" },
 ] as const;
 
