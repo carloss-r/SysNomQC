@@ -19,12 +19,41 @@ export type SearchState = "firmar" | "cargar" | "contrarecibo" | "complemento" |
 
 export type SearchPeriod = { kind: "day" | "week" | "month"; from: string; to: string; label: string };
 
+/** A qué fecha se aplica el periodo: el día en que se cargó al sistema o la fecha de la factura. */
+export type DateField = "upload" | "invoice";
+
 export type InvoiceQuery = {
   states: SearchState[];
   period: SearchPeriod | null;
+  /** Por omisión, el día de carga al sistema (así se mide cada semana). */
+  dateField?: DateField;
   amount: { op: "=" | ">" | "<"; value: number } | null;
+  /** Rango de total (filtros del menú). */
+  minAmount?: number | null;
+  maxAmount?: number | null;
   terms: string[];
 };
+
+export const EMPTY_QUERY: InvoiceQuery = { states: [], period: null, amount: null, terms: [] };
+
+/** Periodos rápidos del menú de filtros (mismas palabras que entiende el buscador). */
+export const QUICK_PERIODS = ["hoy", "ayer", "esta semana", "semana pasada", "este mes", "mes pasado"] as const;
+export type QuickPeriod = (typeof QUICK_PERIODS)[number];
+
+/** Rango de fechas elegido en el calendario (desde / hasta, cualquiera puede ir vacío). */
+export function rangePeriod(from: string, to: string): SearchPeriod | null {
+  if (!from && !to) return null;
+  const start = from || "2000-01-01";
+  const end = to || "2100-12-31";
+  const [a, b] = start <= end ? [start, end] : [end, start];
+  const label = from && to ? `del ${fmt(a)} al ${fmt(b)}` : from ? `desde el ${fmt(from)}` : `hasta el ${fmt(to)}`;
+  return { kind: "day", from: a, to: b, label };
+}
+
+/** Periodo de una palabra rápida ("esta semana", "mes pasado"…). */
+export function quickPeriod(word: QuickPeriod, today: string): SearchPeriod | null {
+  return parseInvoiceQuery(word, today).period;
+}
 
 export const STATE_LABELS: Record<SearchState, string> = {
   firmar: "Por firmar",
@@ -181,7 +210,7 @@ function matchesState(invoice: Invoice, state: SearchState) {
 export function matchesInvoiceQuery(invoice: Invoice, query: InvoiceQuery): boolean {
   if (query.states.length && !query.states.some((state) => matchesState(invoice, state))) return false;
   if (query.period) {
-    const day = uploadedOn(invoice);
+    const day = query.dateField === "invoice" ? invoice.invoice_date : uploadedOn(invoice);
     if (day < query.period.from || day > query.period.to) return false;
   }
   if (query.amount) {
@@ -190,6 +219,12 @@ export function matchesInvoiceQuery(invoice: Invoice, query: InvoiceQuery): bool
     if (query.amount.op === "=" && Math.abs(total - query.amount.value) > 0.005) return false;
     if (query.amount.op === ">" && !(total > query.amount.value)) return false;
     if (query.amount.op === "<" && !(total < query.amount.value)) return false;
+  }
+  if (query.minAmount != null || query.maxAmount != null) {
+    const total = invoice.total;
+    if (total === null) return false;
+    if (query.minAmount != null && total < query.minAmount) return false;
+    if (query.maxAmount != null && total > query.maxAmount) return false;
   }
   if (query.terms.length) {
     const haystack = normalize(
@@ -213,11 +248,15 @@ export function matchesInvoiceQuery(invoice: Invoice, query: InvoiceQuery): bool
 export function describeQuery(query: InvoiceQuery): string[] {
   const parts: string[] = [];
   if (query.states.length) parts.push(query.states.map((state) => STATE_LABELS[state]).join(" o "));
-  if (query.period) parts.push(`cargadas ${query.period.label}`);
+  if (query.period) parts.push(`${query.dateField === "invoice" ? "con fecha de factura" : "cargadas"} ${query.period.label}`);
   if (query.amount) {
     const value = query.amount.value.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
     parts.push(query.amount.op === "=" ? `total de ${value}` : `total ${query.amount.op === ">" ? "mayor" : "menor"} a ${value}`);
   }
+  const money = (value: number) => value.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
+  if (query.minAmount != null && query.maxAmount != null) parts.push(`total entre ${money(query.minAmount)} y ${money(query.maxAmount)}`);
+  else if (query.minAmount != null) parts.push(`total desde ${money(query.minAmount)}`);
+  else if (query.maxAmount != null) parts.push(`total hasta ${money(query.maxAmount)}`);
   if (query.terms.length) parts.push(`que contengan «${query.terms.join(" ")}»`);
   return parts;
 }

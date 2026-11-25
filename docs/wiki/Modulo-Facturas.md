@@ -46,7 +46,11 @@ Sin pestañas: una lista y un buscador (`src/lib/invoice-search.ts`) que entiend
 | `noviembre`, `nov 2026`, `2026-11`, `11/2026` · `24/11`, `24/11/2026` · `semana 24/11` | Un mes · un día · la semana (lunes a domingo) de ese día |
 | `$1,160`, `1160.00`, `>5000`, `<1000` | Total de la factura |
 
-Ejemplo: `falta complemento semana pasada`. Debajo de la caja se muestra lo que entendió y, si la búsqueda tiene un periodo, cómo va su **cierre** (cargadas, cerradas, cuántas faltan o *periodo cerrado*). Los atajos (esta semana, falta complemento, cerradas…) escriben la búsqueda. Arriba: en proceso, falta contrarecibo, falta complemento y cerradas esta semana.
+Ejemplo: `falta complemento semana pasada`.
+
+Junto al buscador, el botón **Filtros** abre un menú desplegable (`filters-dropdown.tsx`) con: **estado**, **periodo rápido** (hoy, ayer, esta semana, semana pasada, este mes, mes pasado; llena el calendario), **rango de fechas con calendario** (desde / hasta), **a qué fecha aplica** (carga al sistema o fecha de la factura) y **rango de total** (mínimo / máximo). El botón muestra cuántos filtros hay activos; lo del menú y lo escrito en el buscador se combinan.
+
+Debajo de la caja se muestra lo que se está filtrando (con *Quitar todo*) y, si hay un periodo de carga, cómo va su **cierre** (cargadas, cerradas, cuántas faltan o *periodo cerrado*). Arriba: en proceso, falta contrarecibo, falta complemento y cerradas esta semana.
 
 La descarga (PDF / Excel) lleva las facturas de la búsqueda y su cierre por semana.
 
