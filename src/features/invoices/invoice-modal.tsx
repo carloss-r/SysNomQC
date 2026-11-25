@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Download, ExternalLink, History, Lock, Receipt, ScanText, X } from "lucide-react";
+import { Copy, Download, ExternalLink, History, Lock, Receipt, Save, ScanText, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { describeError, requestApi } from "@/lib/api-client";
 import { formatMoney, INVOICE_EVENT_LABELS, type Invoice, type InvoiceEvent } from "@/lib/invoices";
@@ -9,7 +9,8 @@ import { formatDateTime, formatDay } from "@/features/fuels/format";
 import { fileSafe } from "@/shared/reports/report-export";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { LoadingState } from "@/shared/ui/loading";
-import { downloadText, loadInvoicePreview, openInvoiceFile } from "./files";
+import { downloadText, openInvoiceFile } from "./files";
+import { PdfPages } from "./pdf-pages";
 import { PaymentBadge, StageSquares } from "./stage-badge";
 import type { Detected } from "./upload-modal";
 
@@ -44,10 +45,17 @@ export function InvoiceModal({
   invoice,
   detected,
   onClose,
+  onSave,
+  onDiscard,
 }: {
   invoice: Invoice;
+  /** Solo al acabar de cargarla: qué datos se encontraron en el PDF. */
   detected?: Detected;
   onClose: () => void;
+  /** Recién cargada: confirma que se guarda tal como se leyó del PDF. */
+  onSave?: () => void;
+  /** Recién cargada: la elimina para volver a cargar el PDF correcto (pide confirmación). */
+  onDiscard?: () => void;
 }) {
   const { session } = useAuth();
   const notify = useNotify();
@@ -55,28 +63,9 @@ export function InvoiceModal({
   const [fullError, setFullError] = useState("");
   const [tab, setTab] = useState<"data" | "text" | "history">("data");
   const [doc, setDoc] = useState<Doc>("invoice");
-  const [preview, setPreview] = useState<string | null>(null);
-  const [previewError, setPreviewError] = useState(false);
 
   const paths: Record<Doc, string | null> = { invoice: invoice.file_path, receipt: invoice.receipt_path, complement: invoice.complement_path };
   const docPath = paths[doc];
-
-  // PDF para la vista previa (se descarga del bucket privado; la URL local se libera al cambiar o cerrar).
-  useEffect(() => {
-    if (!docPath) return;
-    let url: string | null = null;
-    let cancelled = false;
-    loadInvoicePreview(docPath)
-      .then((value) => {
-        if (cancelled) URL.revokeObjectURL(value);
-        else setPreview((url = value));
-      })
-      .catch(() => { if (!cancelled) setPreviewError(true); });
-    return () => {
-      cancelled = true;
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [docPath]);
 
   // Texto digitalizado e historial.
   const loadFull = useCallback(async () => {
@@ -95,10 +84,7 @@ export function InvoiceModal({
   }, [loadFull]);
 
   function showDoc(next: Doc) {
-    if (next === doc) return;
-    setPreview(null);
-    setPreviewError(false);
-    setDoc(next);
+    if (next !== doc) setDoc(next);
   }
 
   const text = full?.text_content ?? null;
@@ -124,11 +110,14 @@ export function InvoiceModal({
         <div className="modal-header">
           <div className="modal-heading-icon"><Receipt size={19} /></div>
           <div>
-            <h2 id="invoice-title">Factura {invoice.folio}</h2>
+            <h2 id="invoice-title">{onSave ? `Revisa y guarda la factura ${invoice.folio}` : `Factura ${invoice.folio}`}</h2>
             <p>
               <StageSquares invoice={invoice} /> · <PaymentBadge invoice={invoice} />
               <br />
-              <Lock size={12} /> Solo consulta: lo cargado del PDF no se modifica.
+              <Lock size={12} />{" "}
+              {onSave
+                ? "Compara el PDF con los datos leídos. Al guardarla queda como enviada y ya no se modifica."
+                : "Solo consulta: lo cargado del PDF no se modifica."}
             </p>
           </div>
           <button className="icon-button close-modal" onClick={onClose} aria-label="Cerrar"><X size={20} /></button>
@@ -155,12 +144,10 @@ export function InvoiceModal({
               </div>
               <button type="button" className="text-button" onClick={() => void openTab()} disabled={!docPath}><ExternalLink size={13} /> Abrir en otra pestaña</button>
             </div>
-            {preview ? (
-              <iframe src={preview} title={`${DOC_LABELS[doc]} de la factura ${invoice.folio}`} />
-            ) : previewError ? (
-              <p className="epp-empty">No se pudo mostrar el PDF aquí. Ábrelo en otra pestaña.</p>
+            {docPath ? (
+              <PdfPages key={docPath} path={docPath} title={`${DOC_LABELS[doc]} de la factura ${invoice.folio}`} />
             ) : (
-              <LoadingState label="Cargando PDF…" />
+              <p className="epp-empty">Aún no se carga este documento.</p>
             )}
           </div>
 
@@ -260,9 +247,22 @@ export function InvoiceModal({
               )
             )}
 
-            <div className="modal-actions">
-              <button type="button" className="button button-neutral" onClick={onClose}>Cerrar</button>
-            </div>
+            {onSave ? (
+              <div className="modal-actions">
+                {onDiscard && (
+                  <button type="button" className="button button-neutral" onClick={onDiscard} title="Si el PDF no es el correcto, elimínala y vuelve a cargarla">
+                    <Trash2 size={15} /> Descartar y volver a cargar
+                  </button>
+                )}
+                <button type="button" className="button button-gold" onClick={onSave}>
+                  <Save size={16} /> Guardar factura
+                </button>
+              </div>
+            ) : (
+              <div className="modal-actions">
+                <button type="button" className="button button-neutral" onClick={onClose}>Cerrar</button>
+              </div>
+            )}
           </div>
         </div>
       </section>

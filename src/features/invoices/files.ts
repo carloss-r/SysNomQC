@@ -40,11 +40,11 @@ export async function openInvoiceFile(path: string): Promise<boolean> {
   return true;
 }
 
-/** Descarga el PDF y devuelve una URL local (blob:) para mostrarlo dentro de la pantalla. Revocarla al cerrar. */
-export async function loadInvoicePreview(path: string): Promise<string> {
+/** Descarga el PDF del bucket privado (sus bytes) para dibujarlo dentro de la pantalla. */
+export async function loadInvoiceBytes(path: string): Promise<Uint8Array> {
   const { data, error } = await supabase.storage.from(INVOICE_BUCKET).download(path);
   if (error || !data) throw error ?? new Error("Sin archivo");
-  return URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
+  return new Uint8Array(await data.arrayBuffer());
 }
 
 /** Descarga el texto digitalizado como .txt. */

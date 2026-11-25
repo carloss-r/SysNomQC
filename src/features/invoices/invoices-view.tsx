@@ -162,22 +162,25 @@ function InvoicesScreen() {
     }
   }
 
-  async function remove(invoice: Invoice) {
-    if (!session) return;
+  /** Elimina la factura (pide confirmación). Devuelve true si se eliminó. */
+  async function remove(invoice: Invoice): Promise<boolean> {
+    if (!session) return false;
     const ok = await systemDialog.confirm({
       title: "Eliminar factura",
       message: `¿Eliminar la factura ${invoice.folio} (${invoice.file_name})? Se borran sus PDF y no se puede deshacer; en el historial queda registrado que se eliminó.`,
       confirmLabel: "Eliminar",
       tone: "danger",
     });
-    if (!ok) return;
+    if (!ok) return false;
     setBusyId(invoice.id);
     try {
       await requestApi(session, `/api/invoices/${invoice.id}`, { method: "DELETE" });
       notify("success", "Factura eliminada");
       await load();
+      return true;
     } catch (err) {
       notify("error", "No se pudo eliminar la factura", describeError(err, "Inténtalo de nuevo."));
+      return false;
     } finally {
       setBusyId(null);
     }
@@ -367,14 +370,27 @@ function InvoicesScreen() {
         <UploadModal
           onClose={() => setDialog(null)}
           onUploaded={(invoice, detected) => {
-            notify("success", `Factura ${invoice.folio} cargada`, "Quedó como enviada. Revisa los datos leídos del PDF.");
+            // Ya quedó registrada; en la revisión se confirma con «Guardar factura» o se descarta.
             setDialog({ type: "detail", invoice, detected });
             void load();
           }}
         />
       )}
       {dialog?.type === "detail" && (
-        <InvoiceModal invoice={dialog.invoice} detected={dialog.detected} onClose={() => setDialog(null)} />
+        <InvoiceModal
+          invoice={dialog.invoice}
+          detected={dialog.detected}
+          onClose={() => setDialog(null)}
+          onSave={dialog.detected ? () => {
+            notify("success", `Factura ${dialog.invoice.folio} guardada`, "Quedó como enviada (cuadro 1 en verde). El siguiente paso es marcarla firmada.");
+            setDialog(null);
+          } : undefined}
+          onDiscard={dialog.detected && canDeleteInvoice(dialog.invoice, isSuperAdmin) ? () => {
+            void remove(dialog.invoice).then((removed) => {
+              if (removed) setDialog({ type: "upload" });
+            });
+          } : undefined}
+        />
       )}
       {dialog?.type === "step" && (
         <StepModal
