@@ -10,8 +10,7 @@ export const MAX_INVOICE_BYTES = 10 * 1024 * 1024;
 
 /** Columnas de la lista (sin los textos completos, que solo se piden al abrir una factura). */
 export const LIST_COLUMNS =
-  "id,folio,pdf_folio,file_path,file_name,file_size,invoice_date,due_date,uuid,subtotal,tax,total,currency,status,incident_description,stage,signed_at,signed_by_name,loaded_at,loaded_by_name,receipt_path,receipt_name,payment_date,receipt_at,receipt_by_name,complement_path,complement_name,complement_at,complement_by_name,complement_verified,";
-  "text_pages,has_text,created_at,created_by_name,updated_at,updated_by_name";
+  "id,folio,pdf_folio,file_path,file_name,file_size,invoice_date,due_date,uuid,subtotal,tax,total,currency,status,incident_description,stage,signed_at,signed_by_name,loaded_at,loaded_by_name,receipt_path,receipt_name,payment_date,receipt_at,receipt_by_name,complement_path,complement_name,complement_at,complement_by_name,complement_verified,text_pages,has_text,created_at,created_by_name,updated_at,updated_by_name";
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida.");
 // PDF ya subido por el navegador al bucket privado: factura (uuid.pdf), contrarecibo (cr-uuid.pdf) o complemento (cp-uuid.pdf).
