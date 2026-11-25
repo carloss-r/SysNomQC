@@ -15,19 +15,19 @@ export type StepKind = "receipt" | "complement";
 const COPY: Record<StepKind, { title: string; intro: string; button: string; busy: string }> = {
   receipt: {
     title: "Cargar contrarecibo",
-    intro: "Sube el PDF del contrarecibo y captura la fecha posible de cobro. La factura pasa a «Por cobrar» y ya no se puede cambiar.",
+    intro: "Sube el PDF del contrarecibo y captura la fecha posible de cobro. Después se pedirá el complemento de pago para cerrar la factura. Ya no se puede cambiar.",
     button: "Guardar contrarecibo",
     busy: "Guardando contrarecibo…",
   },
   complement: {
     title: "Cargar complemento de pago",
-    intro: "Sube el PDF del complemento de pago. Se revisa que mencione el UUID de la factura y la factura queda cobrada y cerrada.",
-    button: "Guardar complemento y cerrar",
+    intro: "Sube el PDF del complemento de pago. Se revisa que mencione el UUID de la factura y la factura queda cerrada.",
+    button: "Guardar complemento y cerrar factura",
     busy: "Verificando complemento…",
   },
 };
 
-/** Contrarecibo (pasa a por cobrar) o complemento de pago (cobrada y cerrada). */
+/** Contrarecibo (falta el complemento) o complemento de pago (cierra la factura). */
 export function StepModal({
   kind,
   invoice,

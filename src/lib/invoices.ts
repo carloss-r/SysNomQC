@@ -5,9 +5,9 @@
 //   1. Enviada (al cargar el PDF; la base le pone el folio FAC-00001)
 //   2. Firmada / autorizada
 //   3. Cargada al sistema
-//   → Contrarecibo (PDF) con la fecha posible de cobro: la factura pasa a "por cobrar"
-//   → Complemento de pago (PDF): se verifica contra el UUID y la factura queda cobrada y cerrada.
-// Las facturas son nuestras: nosotros las cobramos (nos depositan).
+//   → Contrarecibo (PDF) con la fecha posible de cobro: queda pendiente el complemento
+//   → Complemento de pago (PDF): se verifica contra el UUID y la factura queda CERRADA.
+// Las facturas son nuestras: nosotros las cobramos. Cada semana se cierran las facturas que se cargaron en ella.
 
 /** Estatus heredado: "incidente" solo existe en facturas anteriores al flujo nuevo. */
 export type InvoiceStatus = "pendiente" | "incidente";
@@ -90,14 +90,14 @@ export const INVOICE_EVENT_LABELS: Record<InvoiceEventKind, string> = {
   firmada: "Firmada / autorizada",
   cargada: "Cargada al sistema",
   contrarecibo: "Contrarecibo cargado",
-  complemento: "Complemento de pago · cobrada y cerrada",
+  complemento: "Complemento de pago · factura cerrada",
   eliminada: "Factura eliminada",
 };
 
-/** Cobrada y cerrada: ya tiene complemento de pago. */
+/** Cerrada: ya tiene complemento de pago. */
 export const isInvoicePaid = (invoice: Pick<Invoice, "complement_path">) => invoice.complement_path !== null;
 
-/** Cerrada: cobrada o con incidente (heredado). Ya no admite ningún paso. */
+/** Cerrada: con complemento de pago o con incidente (heredado). Ya no admite ningún paso. */
 export const isInvoiceClosed = (invoice: Pick<Invoice, "complement_path" | "status">) =>
   isInvoicePaid(invoice) || invoice.status === "incidente";
 
@@ -111,18 +111,18 @@ export function invoiceStep(invoice: Pick<Invoice, "stage" | "receipt_path" | "c
   return invoice.receipt_path === null ? "contrarecibo" : "complemento";
 }
 
-/** Cobro: sin contrarecibo aún, por cobrar (ya tiene contrarecibo) o cobrada (con complemento). */
-export type PaymentState = "sin_contrarecibo" | "por_cobrar" | "cobrada";
+/** Cierre: sin contrarecibo aún, falta el complemento (ya con contrarecibo) o cerrada (con complemento). */
+export type PaymentState = "sin_contrarecibo" | "falta_complemento" | "cerrada";
 
 export const PAYMENT_STATE_LABELS: Record<PaymentState, string> = {
   sin_contrarecibo: "Sin contrarecibo",
-  por_cobrar: "Por cobrar",
-  cobrada: "Cobrada",
+  falta_complemento: "Falta complemento",
+  cerrada: "Cerrada",
 };
 
 export function paymentState(invoice: Pick<Invoice, "receipt_path" | "complement_path">): PaymentState {
-  if (invoice.complement_path !== null) return "cobrada";
-  return invoice.receipt_path === null ? "sin_contrarecibo" : "por_cobrar";
+  if (invoice.complement_path !== null) return "cerrada";
+  return invoice.receipt_path === null ? "sin_contrarecibo" : "falta_complemento";
 }
 
 /** Solo se elimina mientras está enviada (para volver a cargarla); después solo el Super administrador. */
@@ -290,29 +290,33 @@ export function weekStart(day: string): string {
   return value.toISOString().slice(0, 10);
 }
 
-/** Lo de un periodo (semana o mes): facturas cargadas en él y su avance hasta cobrarse. */
+/** Lo de un periodo (semana o mes): las facturas que se cargaron en él y cuántas ya se cerraron. */
 export type InvoiceSummary = {
   key: string;
   /** Facturas cargadas al sistema en el periodo (por fecha de carga). */
   count: number;
   total: number;
-  /** De esas: cuántas ya se firmaron, se cargaron al sistema, tienen contrarecibo y están cobradas. */
+  /** De esas: cuántas ya se firmaron, se cargaron al sistema y tienen contrarecibo. */
   signed: number;
   loaded: number;
   receipts: number;
-  collected: number;
-  /** Por cobrar: con contrarecibo y sin complemento (cuántas y monto). */
-  toCollectCount: number;
-  toCollect: number;
-  /** Monto ya cobrado (con complemento). */
-  collectedAmount: number;
+  /** Con contrarecibo y sin complemento todavía. */
+  missingComplement: number;
+  /** Cerradas (con complemento de pago) y su monto. */
+  closed: number;
+  closedAmount: number;
+  /** Con incidente (heredado): ya no se cierran por el flujo. */
+  incidents: number;
 };
 
 const round = (value: number) => Math.round(value * 100) / 100;
 
 const emptySummary = (key: string): InvoiceSummary => ({
-  key, count: 0, total: 0, signed: 0, loaded: 0, receipts: 0, collected: 0, toCollectCount: 0, toCollect: 0, collectedAmount: 0,
+  key, count: 0, total: 0, signed: 0, loaded: 0, receipts: 0, missingComplement: 0, closed: 0, closedAmount: 0, incidents: 0,
 });
+
+/** Periodo cerrado: todas sus facturas tienen complemento (o están cerradas por incidente). */
+export const isPeriodClosed = (summary: InvoiceSummary) => summary.count > 0 && summary.closed + summary.incidents === summary.count;
 
 /** Agrupa por el periodo en que se cargó cada factura. Devuelve los periodos del más reciente al más antiguo. */
 export function groupSummaries(invoices: Invoice[], period: (day: string) => string): InvoiceSummary[] {
@@ -327,12 +331,13 @@ export function groupSummaries(invoices: Invoice[], period: (day: string) => str
     if (invoice.stage === "cargada") item.loaded += 1;
     if (invoice.receipt_path) item.receipts += 1;
     const state = paymentState(invoice);
-    if (state === "cobrada") {
-      item.collected += 1;
-      item.collectedAmount = round(item.collectedAmount + amount);
-    } else if (state === "por_cobrar" && invoice.status !== "incidente") {
-      item.toCollectCount += 1;
-      item.toCollect = round(item.toCollect + amount);
+    if (state === "cerrada") {
+      item.closed += 1;
+      item.closedAmount = round(item.closedAmount + amount);
+    } else if (invoice.status === "incidente") {
+      item.incidents += 1;
+    } else if (state === "falta_complemento") {
+      item.missingComplement += 1;
     }
   }
   return Array.from(groups.values()).sort((a, b) => b.key.localeCompare(a.key));

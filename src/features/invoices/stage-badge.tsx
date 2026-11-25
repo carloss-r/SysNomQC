@@ -30,24 +30,18 @@ export function StageSquares({ invoice, showLabel = true }: { invoice: Invoice; 
   );
 }
 
-/** Cobro: en trámite · falta contrarecibo · por cobrar (con contrarecibo) · cobrada (con complemento). */
+/** Cierre: en trámite · falta contrarecibo · falta complemento · cerrada (con complemento de pago). */
 export function PaymentBadge({ invoice }: { invoice: Invoice }) {
   if (invoice.status === "incidente") return <span className="fuel-status fuel-status-bad">Incidente</span>;
   const state = paymentState(invoice);
-  if (state === "cobrada") {
+  if (state === "cerrada") {
     return (
       <span className="fuel-status fuel-status-ok" title={invoice.complement_verified === false ? "El complemento no menciona el UUID de la factura" : undefined}>
-        Cobrada{invoice.complement_verified === false ? " · revisar" : ""}
+        Cerrada{invoice.complement_verified === false ? " · revisar" : ""}
       </span>
     );
   }
-  if (state === "por_cobrar") {
-    return (
-      <span className="fuel-status fuel-status-info" title={invoice.payment_date ? `Fecha posible de cobro: ${formatDay(invoice.payment_date)}` : undefined}>
-        Por cobrar
-      </span>
-    );
-  }
+  if (state === "falta_complemento") return <span className="fuel-status fuel-status-warn">Falta complemento</span>;
   return invoice.stage === "cargada"
     ? <span className="fuel-status fuel-status-warn">Falta contrarecibo</span>
     : <span className="fuel-status fuel-status-neutral">En trámite</span>;

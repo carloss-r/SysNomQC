@@ -37,7 +37,7 @@ export async function GET(request: NextRequest, context: Context) {
 const STEP_LABEL = { firmar: "firmarla", cargar: "cargarla al sistema", contrarecibo: "cargar su contrarecibo", complemento: "cargar su complemento de pago" };
 
 /**
- * Avanza la factura un paso: firmada → cargada al sistema → contrarecibo (por cobrar) → complemento (cobrada y cerrada).
+ * Avanza la factura un paso: firmada → cargada al sistema → contrarecibo → complemento de pago (cerrada).
  * Los datos de la factura no se modifican; la base rechaza cualquier otro cambio.
  */
 export async function PATCH(request: NextRequest, context: Context) {
@@ -61,7 +61,7 @@ export async function PATCH(request: NextRequest, context: Context) {
     const wanted = input.data.action === "stage" ? (input.data.stage === "firmada" ? "firmar" : "cargar") : input.data.action === "receipt" ? "contrarecibo" : "complemento";
     if (step !== wanted) {
       if (uploaded) await removeFile(auth.client, uploaded);
-      const message = step === "cerrada" ? "La factura ya está cobrada y cerrada." : `A esta factura le toca ${STEP_LABEL[step]}.`;
+      const message = step === "cerrada" ? "La factura ya está cerrada (tiene su complemento de pago)." : `A esta factura le toca ${STEP_LABEL[step]}.`;
       return NextResponse.json({ error: message }, { status: 409 });
     }
 

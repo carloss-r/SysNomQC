@@ -200,7 +200,7 @@ export function InvoiceModal({
                   <Value label="Total">{formatMoney(invoice.total)}</Value>
                   <Value label="Cargada">{formatDateTime(invoice.created_at)} · {invoice.created_by_name ?? "—"}</Value>
                 </div>
-                <h3 className="invoice-subtitle">Cobro</h3>
+                <h3 className="invoice-subtitle">Contrarecibo y cierre</h3>
                 <div className="invoice-values">
                   <Value label="Contrarecibo">{invoice.receipt_name ? `${invoice.receipt_name} · ${invoice.receipt_by_name ?? "—"}` : "Pendiente"}</Value>
                   <Value label="Fecha posible de cobro">{invoice.payment_date ? formatDay(invoice.payment_date) : null}</Value>

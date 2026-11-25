@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  BadgeCheck, CalendarClock, CalendarDays, CalendarRange, CheckCircle2, Clock, FileCheck2, FileText, FileUp, Lock, PenLine,
-  Receipt, Search, Trash2, X,
-} from "lucide-react";
+import { BadgeCheck, CalendarClock, CheckCircle2, Clock, FileCheck2, FileText, FileUp, Lock, PenLine, Receipt, Search, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { describeError, requestApi } from "@/lib/api-client";
 import { plantToday } from "@/lib/fuels";
@@ -13,6 +10,7 @@ import {
   groupSummaries,
   INVOICE_STAGE_LABELS,
   invoiceStep,
+  isPeriodClosed,
   PAYMENT_STATE_LABELS,
   paymentState,
   summarize,
@@ -20,10 +18,10 @@ import {
   weekStart,
   type Invoice,
   type InvoiceStep,
-  type InvoiceSummary,
 } from "@/lib/invoices";
+import { describeQuery, matchesInvoiceQuery, parseInvoiceQuery } from "@/lib/invoice-search";
 import { useAuth } from "@/features/auth/auth-provider";
-import { addDays, formatDay, monthLabel } from "@/features/fuels/format";
+import { addDays, formatDay } from "@/features/fuels/format";
 import { RequirePermission } from "@/shared/layout/require-permission";
 import { ExportButtons } from "@/shared/reports/export-buttons";
 import type { Report } from "@/shared/reports/report-export";
@@ -41,23 +39,14 @@ import { UploadModal, type Detected } from "./upload-modal";
 const SUBTITLE = "Finanzas · Facturas";
 
 type Data = { today: string; invoices: Invoice[] };
-type Tab = "list" | "weekly" | "monthly";
-/** Filtro de la lista: por lo que le toca a cada factura. */
-type Filter = "all" | "firmar" | "cargar" | "contrarecibo" | "por_cobrar" | "cobrada";
 type Dialog =
   | { type: "upload" }
   | { type: "detail"; invoice: Invoice; detected?: Detected }
   | { type: "step"; kind: StepKind; invoice: Invoice }
   | null;
 
-const FILTERS: [Filter, string][] = [
-  ["all", "Todas"],
-  ["firmar", "Por firmar"],
-  ["cargar", "Por cargar al sistema"],
-  ["contrarecibo", "Falta contrarecibo"],
-  ["por_cobrar", "Por cobrar"],
-  ["cobrada", "Cobradas"],
-];
+/** Atajos debajo del buscador: escriben la búsqueda por ti (no son pestañas). */
+const SHORTCUTS = ["esta semana", "semana pasada", "este mes", "por firmar", "por cargar", "falta contrarecibo", "falta complemento", "abiertas", "cerradas"];
 
 const STEP_TEXT: Record<InvoiceStep, string> = {
   firmar: "Por firmar",
@@ -77,12 +66,6 @@ export function InvoicesView() {
 
 const weekLabel = (monday: string) => `${formatDay(monday)} al ${formatDay(addDays(monday, 6))}`;
 
-function matchesFilter(invoice: Invoice, filter: Filter) {
-  if (filter === "all") return true;
-  if (filter === "firmar" || filter === "cargar" || filter === "contrarecibo") return invoiceStep(invoice) === filter;
-  return invoice.status !== "incidente" && paymentState(invoice) === filter;
-}
-
 function InvoicesScreen() {
   const { session, can, access } = useAuth();
   const notify = useNotify();
@@ -93,10 +76,6 @@ function InvoicesScreen() {
 
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<Tab>("list");
-  const [filter, setFilter] = useState<Filter>("all");
-  const [month, setMonth] = useState("");
-  const [week, setWeek] = useState("");
   const [query, setQuery] = useState("");
   const [dialog, setDialog] = useState<Dialog>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -122,45 +101,37 @@ function InvoicesScreen() {
   }, [load]);
 
   const today = data?.today ?? plantToday();
-  const currentMonth = today.slice(0, 7);
   const currentWeek = weekStart(today);
   const invoices = useMemo(() => data?.invoices ?? [], [data]);
 
   const stats = useMemo(() => {
     const open = invoices.filter((row) => invoiceStep(row) !== "cerrada");
-    const toCollect = open.filter((row) => paymentState(row) === "por_cobrar");
-    const thisWeek = summarize(currentWeek, invoices.filter((row) => weekStart(uploadedOn(row)) === currentWeek));
     return {
       open: open.length,
       missingReceipt: open.filter((row) => invoiceStep(row) === "contrarecibo").length,
-      toCollect: toCollect.length,
-      toCollectAmount: toCollect.reduce((sum, row) => sum + (row.total ?? 0), 0),
-      collectedThisMonth: invoices.filter((row) => row.complement_at && row.complement_at.slice(0, 7) === currentMonth).length,
-      thisWeek,
+      missingComplement: open.filter((row) => invoiceStep(row) === "complemento").length,
+      thisWeek: summarize(currentWeek, invoices.filter((row) => weekStart(uploadedOn(row)) === currentWeek)),
     };
-  }, [invoices, currentWeek, currentMonth]);
+  }, [invoices, currentWeek]);
 
-  const months = useMemo(() => Array.from(new Set(invoices.map((row) => uploadedOn(row).slice(0, 7)))).sort().reverse(), [invoices]);
+  // Lo que entendió el buscador y las facturas que cumplen todo.
+  const parsed = useMemo(() => parseInvoiceQuery(query, today), [query, today]);
+  const understood = useMemo(() => describeQuery(parsed), [parsed]);
+  const rows = useMemo(() => invoices.filter((row) => matchesInvoiceQuery(row, parsed)), [invoices, parsed]);
+  const result = useMemo(() => summarize("resultado", rows), [rows]);
+  // Con un periodo en la búsqueda: cómo va el cierre de ese periodo (todas sus facturas, sin los demás filtros).
+  const periodSummary = useMemo(() => {
+    if (!parsed.period) return null;
+    const { from, to } = parsed.period;
+    return summarize("periodo", invoices.filter((row) => uploadedOn(row) >= from && uploadedOn(row) <= to));
+  }, [invoices, parsed.period]);
 
-  const rows = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    return invoices.filter((row) => {
-      const day = uploadedOn(row);
-      if (month && !day.startsWith(month)) return false;
-      if (week && weekStart(day) !== week) return false;
-      if (!matchesFilter(row, filter)) return false;
-      if (!term) return true;
-      return [row.folio, row.pdf_folio, row.uuid, row.file_name, row.receipt_name, row.complement_name].join(" ").toLowerCase().includes(term);
+  function applyShortcut(text: string) {
+    setQuery((current) => {
+      const words = current.trim();
+      return words.toLowerCase().includes(text) ? words : `${words} ${text}`.trim();
     });
-  }, [invoices, query, month, week, filter]);
-
-  const filterCounts = useMemo(
-    () => Object.fromEntries(FILTERS.map(([key]) => [key, invoices.filter((row) => matchesFilter(row, key)).length])) as Record<Filter, number>,
-    [invoices],
-  );
-
-  const weekly = useMemo(() => groupSummaries(invoices, weekStart), [invoices]);
-  const monthly = useMemo(() => groupSummaries(invoices, (day) => day.slice(0, 7)), [invoices]);
+  }
 
   // Cuadritos 2 y 3: firmada / autorizada y cargada al sistema. No se pueden deshacer.
   async function advanceStage(invoice: Invoice) {
@@ -174,7 +145,7 @@ function InvoicesScreen() {
           <br />
           {stage === "firmada"
             ? "Se pone en verde el cuadro 2. Después ya no se podrá eliminar la factura."
-            : "Se pone en verde el cuadro 3. Después se pedirá el contrarecibo con la fecha posible de cobro."}
+            : "Se pone en verde el cuadro 3. Después se pedirá el contrarecibo y luego el complemento de pago para cerrarla."}
           <br />El paso queda registrado a tu nombre y no se puede deshacer.
         </>
       ),
@@ -228,86 +199,65 @@ function InvoicesScreen() {
     return null;
   }
 
-  const periodText = [month && monthLabel(month), week && `semana del ${weekLabel(week)}`].filter(Boolean).join(" · ") || "Todas";
-
   function listReport(generatedBy: string): Report {
-    const summary = summarize("lista", rows);
+    const weeks = groupSummaries(rows, weekStart);
     return {
       subtitle: SUBTITLE,
       title: "Relación de facturas",
-      info: [["Cargadas", periodText], ["Filtro", FILTERS.find(([key]) => key === filter)?.[1] ?? "Todas"], ["Moneda", "MXN · moneda nacional"]],
-      summary: [["Facturas", summary.count], ["Total", formatMoney(summary.total)], ["Por cobrar", formatMoney(summary.toCollect)], ["Cobradas", summary.collected]],
-      sections: [{
-        title: "Facturas",
-        columns: [
-          { header: "Folio", width: 12 }, { header: "Cargada", width: 12 }, { header: "Fecha factura", width: 12 }, { header: "UUID", width: 38 },
-          { header: "Total", width: 16, align: "right" }, { header: "Estado", width: 20 }, { header: "Cobro previsto", width: 13 },
-          { header: "Cobro", width: 18 },
-        ],
-        rows: rows.map((row) => [
-          row.folio, formatDay(uploadedOn(row)), formatDay(row.invoice_date), row.uuid ?? "—", formatMoney(row.total), INVOICE_STAGE_LABELS[row.stage],
-          row.payment_date ? formatDay(row.payment_date) : "—",
-          PAYMENT_STATE_LABELS[paymentState(row)],
-        ]),
-        empty: "Sin facturas.",
-      }],
+      info: [["Búsqueda", query.trim() ? `${query.trim()} (${understood.join(" · ")})` : "Todas"], ["Moneda", "MXN · moneda nacional"]],
+      summary: [["Facturas", result.count], ["Total", formatMoney(result.total)], ["Falta complemento", result.missingComplement], ["Cerradas", result.closed]],
+      sections: [
+        {
+          title: "Facturas",
+          columns: [
+            { header: "Folio", width: 12 }, { header: "Cargada", width: 12 }, { header: "Fecha factura", width: 12 }, { header: "UUID", width: 38 },
+            { header: "Total", width: 16, align: "right" }, { header: "Estado", width: 20 }, { header: "Cierre", width: 18 },
+          ],
+          rows: rows.map((row) => [
+            row.folio, formatDay(uploadedOn(row)), formatDay(row.invoice_date), row.uuid ?? "—", formatMoney(row.total), INVOICE_STAGE_LABELS[row.stage],
+            PAYMENT_STATE_LABELS[paymentState(row)],
+          ]),
+          empty: "Sin facturas.",
+        },
+        {
+          title: "Cierre por semana (de lunes a domingo, por día de carga)",
+          columns: [
+            { header: "Semana", width: 26 }, { header: "Cargadas", width: 10, align: "right" }, { header: "Total", width: 18, align: "right" },
+            { header: "Falta complemento", width: 12, align: "right" }, { header: "Cerradas", width: 10, align: "right" }, { header: "Cierre", width: 14 },
+          ],
+          rows: weeks.map((item) => [
+            weekLabel(item.key), item.count, formatMoney(item.total), item.missingComplement, item.closed,
+            isPeriodClosed(item) ? "Cerrada" : `Faltan ${item.count - item.closed - item.incidents}`,
+          ]),
+          empty: "Sin facturas.",
+        },
+      ],
       generatedBy,
-      fileName: `Facturas_${month || week || "todas"}`,
+      fileName: "Facturas",
     };
   }
 
-  function summaryReport(kind: "weekly" | "monthly", list: InvoiceSummary[], generatedBy: string): Report {
-    const label = (key: string) => (kind === "weekly" ? weekLabel(key) : monthLabel(key));
-    return {
-      subtitle: SUBTITLE,
-      title: kind === "weekly" ? "Facturas por semana" : "Facturas por mes",
-      info: [["Corte", formatDay(today)], ["Moneda", "MXN · moneda nacional"]],
-      sections: [{
-        title: kind === "weekly" ? "Por semana (lunes a domingo)" : "Por mes",
-        columns: [
-          { header: kind === "weekly" ? "Semana" : "Mes", width: 26 }, { header: "Cargadas", width: 10, align: "right" },
-          { header: "Total cargado", width: 18, align: "right" }, { header: "Firmadas", width: 10, align: "right" },
-          { header: "Al sistema", width: 10, align: "right" }, { header: "Contrarecibo", width: 12, align: "right" },
-          { header: "Por cobrar", width: 18, align: "right" }, { header: "Cobradas", width: 10, align: "right" },
-          { header: "Cobrado", width: 18, align: "right" },
-        ],
-        rows: list.map((item) => [
-          label(item.key), item.count, formatMoney(item.total), item.signed, item.loaded, item.receipts,
-          `${formatMoney(item.toCollect)} (${item.toCollectCount})`, item.collected, formatMoney(item.collectedAmount),
-        ]),
-        empty: "Sin facturas.",
-      }],
-      generatedBy,
-      fileName: kind === "weekly" ? "Facturas_por_semana" : "Facturas_por_mes",
-    };
-  }
-
-  const tabs: { key: Tab; label: string; icon: typeof Receipt }[] = [
-    { key: "list", label: `Facturas (${invoices.length})`, icon: Receipt },
-    { key: "weekly", label: "Por semana", icon: CalendarRange },
-    { key: "monthly", label: "Por mes", icon: CalendarDays },
-  ];
+  const pending = (summary: { count: number; closed: number; incidents: number }) => summary.count - summary.closed - summary.incidents;
 
   return (
     <main className="main-content">
       <PageHeader
         eyebrow="Finanzas"
         title="Facturas"
-        description="Carga la factura en PDF y síguela paso a paso: firmada, cargada al sistema, contrarecibo (pasa a por cobrar) y complemento de pago (cobrada). Lo cargado no se modifica y cada paso queda en el historial."
+        description="Carga la factura en PDF y síguela paso a paso: firmada, cargada al sistema, contrarecibo y complemento de pago, con el que se cierra. Lo cargado no se modifica y cada paso queda en el historial."
         actions={canManage ? <button className="button button-gold" onClick={() => setDialog({ type: "upload" })}><FileUp size={17} /> Cargar factura</button> : undefined}
       >
         <div className="stats-grid">
           <StatCard label="En proceso" count={stats.open} tone="gold" icon={<Clock size={16} />} />
           <StatCard label="Falta contrarecibo" count={stats.missingReceipt} tone={stats.missingReceipt ? "gold" : "green"} icon={<CalendarClock size={16} />} />
-          <StatCard label="Por cobrar" count={stats.toCollect} tone="blue" icon={<BadgeCheck size={16} />} />
-          <StatCard label={`Cobradas en ${monthLabel(currentMonth)}`} count={stats.collectedThisMonth} tone="green" icon={<CheckCircle2 size={16} />} />
+          <StatCard label="Falta complemento" count={stats.missingComplement} tone={stats.missingComplement ? "gold" : "green"} icon={<BadgeCheck size={16} />} />
+          <StatCard
+            label={isPeriodClosed(stats.thisWeek) ? "Semana actual cerrada" : "Cerradas esta semana"}
+            count={stats.thisWeek.closed}
+            tone={isPeriodClosed(stats.thisWeek) ? "green" : "blue"}
+            icon={<CheckCircle2 size={16} />}
+          />
         </div>
-        {data && (
-          <p className="epp-muted fuel-today">
-            Por cobrar: <strong>{formatMoney(stats.toCollectAmount)}</strong> ·
-            Cargadas esta semana: {stats.thisWeek.count} ({formatMoney(stats.thisWeek.total)}) · Moneda nacional (MXN)
-          </p>
-        )}
       </PageHeader>
 
       {error && (
@@ -318,59 +268,58 @@ function InvoicesScreen() {
       )}
 
       <section className="directory-card">
-        <div className="directory-toolbar">
-          <div className="site-tabs" role="tablist">
-            {tabs.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button key={item.key} role="tab" aria-selected={tab === item.key} className={`site-tab${tab === item.key ? " active" : ""}`} onClick={() => setTab(item.key)}>
-                  <Icon size={14} /> {item.label}
-                </button>
-              );
-            })}
+        <div className="invoice-search">
+          <div className="invoice-search-row">
+            <label className="search-box invoice-search-box">
+              <Search size={17} />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Busca lo que sea: FAC-00012, falta complemento, semana pasada, noviembre, 24/11, >5000…"
+                aria-label="Buscar facturas"
+                autoComplete="off"
+              />
+              {query && <button type="button" onClick={() => setQuery("")} aria-label="Limpiar búsqueda"><X size={15} /></button>}
+            </label>
+            <ExportButtons build={listReport} disabled={rows.length === 0} />
           </div>
-          <span className="invoice-legend-squares epp-muted">
+          <div className="invoice-shortcuts" aria-label="Atajos de búsqueda">
+            {SHORTCUTS.map((text) => (
+              <button key={text} type="button" className="invoice-shortcut" onClick={() => applyShortcut(text)}>{text}</button>
+            ))}
+          </div>
+          {data && (
+            <p className="invoice-understood">
+              {understood.length ? <>Mostrando: <strong>{understood.join(" · ")}</strong> — </> : "Todas las facturas — "}
+              {result.count} factura(s) · {formatMoney(result.total)} · {result.closed} cerrada(s){pending(result) ? ` · ${pending(result)} sin cerrar` : ""}
+            </p>
+          )}
+          {periodSummary && parsed.period && (
+            <div className={`invoice-period ${isPeriodClosed(periodSummary) ? "invoice-period-closed" : ""}`}>
+              {isPeriodClosed(periodSummary) ? <Lock size={15} /> : <CalendarClock size={15} />}
+              <span>
+                <strong>{parsed.period.label[0]!.toUpperCase() + parsed.period.label.slice(1)}</strong>: {periodSummary.count} cargada(s) ·{" "}
+                {periodSummary.closed} cerrada(s){periodSummary.missingComplement ? ` · ${periodSummary.missingComplement} falta complemento` : ""}
+                {" · "}
+                {periodSummary.count === 0 ? "sin facturas" : isPeriodClosed(periodSummary) ? <strong>periodo cerrado</strong> : <>faltan <strong>{pending(periodSummary)}</strong> por cerrar</>}
+              </span>
+            </div>
+          )}
+          <p className="invoice-legend-squares epp-muted">
             <span className="invoice-square invoice-square-done">✓</span> paso hecho · <span className="invoice-square invoice-square-todo">·</span> pendiente ·
             1 enviada · 2 firmada · 3 cargada al sistema
-          </span>
+          </p>
         </div>
 
         {!data ? (
           error ? <p className="epp-empty">No hay datos para mostrar.</p> : <LoadingState label="Cargando facturas…" rows={6} />
-        ) : tab === "list" ? (
-          <>
-            <div className="directory-toolbar invoice-filters">
-              <div className="site-tabs" role="tablist">
-                {FILTERS.map(([key, label]) => (
-                  <button key={key} role="tab" aria-selected={filter === key} className={`site-tab${filter === key ? " active" : ""}`} onClick={() => setFilter(key)}>
-                    {label}{key !== "all" && filterCounts[key] > 0 && <span className="site-count site-count-muted">{filterCounts[key]}</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="directory-toolbar">
-              <select className="invoice-month" value={month} onChange={(event) => { setMonth(event.target.value); setWeek(""); }} aria-label="Mes de carga">
-                <option value="">Todos los meses</option>
-                {months.map((key) => <option key={key} value={key}>{monthLabel(key)}</option>)}
-              </select>
-              {week && (
-                <button type="button" className="site-tab active" onClick={() => setWeek("")} title="Quitar filtro de semana">
-                  Semana del {weekLabel(week)} <X size={13} />
-                </button>
-              )}
-              <label className="search-box">
-                <Search size={15} />
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar folio, UUID o archivo" />
-                {query && <button type="button" onClick={() => setQuery("")} aria-label="Limpiar búsqueda"><X size={14} /></button>}
-              </label>
-              <ExportButtons build={listReport} disabled={rows.length === 0} />
-            </div>
-            <div className="table-scroll">
-              <table className="employee-table">
-                <thead>
-                  <tr><th>Folio</th><th className="hide-tablet">Fecha factura</th><th className="hide-phone">Total</th><th>Estado</th><th>Cobro</th><th>Acciones</th></tr>
-                </thead>
-                <tbody>
+        ) : (
+          <div className="table-scroll">
+            <table className="employee-table">
+              <thead>
+                <tr><th>Folio</th><th className="hide-tablet">Fecha factura</th><th className="hide-phone">Total</th><th>Estado</th><th>Cierre</th><th>Acciones</th></tr>
+              </thead>
+              <tbody>
                   {rows.map((row) => {
                     const step = invoiceStep(row);
                     return (
@@ -394,7 +343,7 @@ function InvoicesScreen() {
                             {canManage && step !== "cerrada" && <div className="invoice-actions-main">{stepButton(row)}</div>}
                             <div className="invoice-actions-tools">
                               {busyId === row.id && <RowBusy />}
-                              {step === "cerrada" && <span className="epp-muted invoice-lock" title="Cobrada y cerrada"><Lock size={14} /></span>}
+                              {step === "cerrada" && <span className="epp-muted invoice-lock" title="Cerrada (con complemento de pago)"><Lock size={14} /></span>}
                               <button className="icon-button" onClick={() => setDialog({ type: "detail", invoice: row })} aria-label="Ver factura" title="Ver factura, contrarecibo, complemento e historial"><Receipt size={16} /></button>
                               <button className="icon-button" onClick={() => void viewPdf(row)} aria-label="Abrir PDF" title="Abrir PDF de la factura"><FileText size={16} /></button>
                               {canManage && canDeleteInvoice(row, isSuperAdmin) && (
@@ -409,32 +358,17 @@ function InvoicesScreen() {
                     );
                   })}
                   {rows.length === 0 && (
-                    <tr><td colSpan={6} className="epp-empty">{invoices.length ? "Ninguna factura coincide con el filtro." : canManage ? "Aún no hay facturas. Carga la primera con «Cargar factura»." : "Aún no hay facturas."}</td></tr>
+                    <tr>
+                      <td colSpan={6} className="epp-empty">
+                        {invoices.length
+                          ? <>Ninguna factura coincide con «{query.trim()}». <button type="button" className="text-button" onClick={() => setQuery("")}>Ver todas</button></>
+                          : canManage ? "Aún no hay facturas. Carga la primera con «Cargar factura»." : "Aún no hay facturas."}
+                      </td>
+                    </tr>
                   )}
-                </tbody>
-              </table>
-            </div>
-          </>
-        ) : (
-          <SummaryTable
-            kind={tab}
-            list={tab === "weekly" ? weekly : monthly}
-            current={tab === "weekly" ? currentWeek : currentMonth}
-            label={(key) => (tab === "weekly" ? weekLabel(key) : monthLabel(key))}
-            exportButtons={<ExportButtons build={(by) => summaryReport(tab, tab === "weekly" ? weekly : monthly, by)} disabled={invoices.length === 0} />}
-            onOpen={(key) => {
-              // Abre la lista con las facturas cargadas en esa semana o ese mes.
-              if (tab === "weekly") {
-                setWeek(key);
-                setMonth("");
-              } else {
-                setMonth(key);
-                setWeek("");
-              }
-              setFilter("all");
-              setTab("list");
-            }}
-          />
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
@@ -459,76 +393,16 @@ function InvoicesScreen() {
           onSaved={(saved) => {
             setDialog(null);
             if (dialog.kind === "receipt") {
-              notify("success", `Factura ${saved.folio} por cobrar`, `Contrarecibo guardado · cobro previsto el ${formatDay(saved.payment_date)}.`);
+              notify("success", "Contrarecibo guardado", `Factura ${saved.folio}: ahora carga su complemento de pago para cerrarla.`);
             } else if (saved.complement_verified === false) {
-              notify("error", `Factura ${saved.folio} cobrada y cerrada`, "Ojo: el complemento no menciona el UUID de la factura. Revísalo.");
+              notify("error", `Factura ${saved.folio} cerrada`, "Ojo: el complemento no menciona el UUID de la factura. Revísalo.");
             } else {
-              notify("success", `Factura ${saved.folio} cobrada y cerrada`, saved.complement_verified ? "El complemento coincide con el UUID de la factura." : "No se pudo verificar el UUID (la factura o el complemento no lo traen).");
+              notify("success", `Factura ${saved.folio} cerrada`, saved.complement_verified ? "El complemento coincide con el UUID de la factura." : "No se pudo verificar el UUID (la factura o el complemento no lo traen).");
             }
             void load();
           }}
         />
       )}
     </main>
-  );
-}
-
-function SummaryTable({
-  kind,
-  list,
-  current,
-  label,
-  exportButtons,
-  onOpen,
-}: {
-  kind: "weekly" | "monthly";
-  list: InvoiceSummary[];
-  current: string;
-  label: (key: string) => string;
-  exportButtons: ReactNode;
-  onOpen: (key: string) => void;
-}) {
-  return (
-    <>
-      <div className="directory-toolbar">
-        <p className="epp-muted">
-          {kind === "weekly" ? "Semanas de lunes a domingo." : "Meses."} Cuenta las facturas por el día en que se cargaron al sistema y muestra
-          cuánto de ellas está por cobrar (ya con contrarecibo) y cuánto ya se cobró (con complemento).
-        </p>
-        {exportButtons}
-      </div>
-      <div className="table-scroll">
-        <table className="employee-table">
-          <thead>
-            <tr>
-              <th>{kind === "weekly" ? "Semana" : "Mes"}</th>
-              <th>Cargadas</th>
-              <th className="hide-tablet">Avance</th>
-              <th>Por cobrar</th>
-              <th className="hide-phone">Cobrado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((item) => (
-              <tr key={item.key} className={item.key === current ? "invoice-current" : undefined}>
-                <td>
-                  <button type="button" className="text-button" onClick={() => onOpen(item.key)} title="Ver las facturas cargadas en este periodo" disabled={item.count === 0}>{label(item.key)}</button>
-                  {item.key === current && <small className="epp-muted"> · {kind === "weekly" ? "semana actual" : "mes actual"}</small>}
-                </td>
-                <td><strong>{item.count}</strong><br /><small className="epp-muted">{formatMoney(item.total)}</small></td>
-                <td className="hide-tablet">
-                  <small className="invoice-progress">
-                    {item.signed} firmadas · {item.loaded} al sistema · {item.receipts} con contrarecibo · {item.collected} cobradas
-                  </small>
-                </td>
-                <td>{item.toCollectCount ? <>{formatMoney(item.toCollect)} <small className="epp-muted">({item.toCollectCount})</small></> : "—"}</td>
-                <td className="hide-phone">{item.collected ? <>{formatMoney(item.collectedAmount)} <small className="epp-muted">({item.collected})</small></> : "—"}</td>
-              </tr>
-            ))}
-            {list.length === 0 && <tr><td colSpan={5} className="epp-empty">Aún no hay facturas para resumir.</td></tr>}
-          </tbody>
-        </table>
-      </div>
-    </>
   );
 }

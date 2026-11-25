@@ -1068,3 +1068,19 @@ a.signed-user:hover, a.signed-user:focus-visible { background: rgb(255 255 255 /
   .invoice-values { grid-template-columns: 1fr; }
   .invoice-legend-squares { margin-left: 0; }
 }
+
+/* Facturas: una sola pantalla con buscador. */
+.invoice-search { display: flex; flex-direction: column; gap: 10px; padding: 16px 17px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.invoice-search-row { display: flex; align-items: center; gap: 12px; }
+.invoice-search-box { width: auto; height: 44px; flex: 1; margin-left: 0; }
+.invoice-search-box input { font-size: 14px; }
+.invoice-shortcuts { display: flex; flex-wrap: wrap; gap: 6px; }
+.invoice-shortcut { padding: 4px 10px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--ink-soft); background: var(--surface); font-size: 12px; font-weight: 600; }
+.invoice-shortcut:hover { color: var(--brand-text); border-color: var(--focus); }
+.invoice-understood { margin: 0; color: var(--muted); font-size: 12.5px; }
+.invoice-period { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--gold-line); border-radius: 8px; color: var(--gold-text); background: var(--gold-bg); font-size: 13px; }
+.invoice-period-closed { border-color: var(--green-line); color: var(--green-text); background: var(--green-bg); }
+.invoice-search .invoice-legend-squares { margin: 0; }
+@media (max-width: 760px) {
+  .invoice-search-row { flex-direction: column; align-items: stretch; }
+}
