@@ -5,8 +5,9 @@
 //   1. Enviada (al cargar el PDF; la base le pone el folio FAC-00001)
 //   2. Firmada / autorizada
 //   3. Cargada al sistema
-//   → Contrarecibo (PDF) con la fecha posible de pago
-//   → Complemento de pago (PDF): se verifica contra el UUID y la factura queda pagada y cerrada.
+//   → Contrarecibo (PDF) con la fecha posible de cobro: la factura pasa a "por cobrar"
+//   → Complemento de pago (PDF): se verifica contra el UUID y la factura queda cobrada y cerrada.
+// Las facturas son nuestras: nosotros las cobramos (nos depositan).
 
 /** Estatus heredado: "incidente" solo existe en facturas anteriores al flujo nuevo. */
 export type InvoiceStatus = "pendiente" | "incidente";
@@ -52,7 +53,7 @@ export type Invoice = {
   loaded_by_name: string | null;
   receipt_path: string | null;
   receipt_name: string | null;
-  /** Fecha posible de pago (del contrarecibo). */
+  /** Fecha posible de cobro (del contrarecibo). Solo informativa. */
   payment_date: string | null;
   receipt_at: string | null;
   receipt_by_name: string | null;
@@ -89,14 +90,14 @@ export const INVOICE_EVENT_LABELS: Record<InvoiceEventKind, string> = {
   firmada: "Firmada / autorizada",
   cargada: "Cargada al sistema",
   contrarecibo: "Contrarecibo cargado",
-  complemento: "Complemento de pago · pagada y cerrada",
+  complemento: "Complemento de pago · cobrada y cerrada",
   eliminada: "Factura eliminada",
 };
 
-/** Pagada y cerrada: ya tiene complemento de pago. */
+/** Cobrada y cerrada: ya tiene complemento de pago. */
 export const isInvoicePaid = (invoice: Pick<Invoice, "complement_path">) => invoice.complement_path !== null;
 
-/** Cerrada: pagada o con incidente (heredado). Ya no admite ningún paso. */
+/** Cerrada: cobrada o con incidente (heredado). Ya no admite ningún paso. */
 export const isInvoiceClosed = (invoice: Pick<Invoice, "complement_path" | "status">) =>
   isInvoicePaid(invoice) || invoice.status === "incidente";
 
@@ -110,13 +111,18 @@ export function invoiceStep(invoice: Pick<Invoice, "stage" | "receipt_path" | "c
   return invoice.receipt_path === null ? "contrarecibo" : "complemento";
 }
 
-/** Pago: sin contrarecibo aún, programado, atrasado (pasó la fecha sin complemento) o pagado. */
-export type PaymentState = "sin_contrarecibo" | "programado" | "atrasado" | "pagada";
+/** Cobro: sin contrarecibo aún, por cobrar (ya tiene contrarecibo) o cobrada (con complemento). */
+export type PaymentState = "sin_contrarecibo" | "por_cobrar" | "cobrada";
 
-export function paymentState(invoice: Pick<Invoice, "payment_date" | "complement_path">, today: string): PaymentState {
-  if (invoice.complement_path !== null) return "pagada";
-  if (!invoice.payment_date) return "sin_contrarecibo";
-  return invoice.payment_date < today ? "atrasado" : "programado";
+export const PAYMENT_STATE_LABELS: Record<PaymentState, string> = {
+  sin_contrarecibo: "Sin contrarecibo",
+  por_cobrar: "Por cobrar",
+  cobrada: "Cobrada",
+};
+
+export function paymentState(invoice: Pick<Invoice, "receipt_path" | "complement_path">): PaymentState {
+  if (invoice.complement_path !== null) return "cobrada";
+  return invoice.receipt_path === null ? "sin_contrarecibo" : "por_cobrar";
 }
 
 /** Solo se elimina mientras está enviada (para volver a cargarla); después solo el Super administrador. */
@@ -284,64 +290,56 @@ export function weekStart(day: string): string {
   return value.toISOString().slice(0, 10);
 }
 
-/** Lo de un periodo (semana o mes): facturas cargadas en él y pagos programados / pagados en él. */
+/** Lo de un periodo (semana o mes): facturas cargadas en él y su avance hasta cobrarse. */
 export type InvoiceSummary = {
   key: string;
   /** Facturas cargadas al sistema en el periodo (por fecha de carga). */
   count: number;
   total: number;
-  /** De esas: cuántas ya se firmaron, se cargaron al sistema, tienen contrarecibo y están pagadas. */
+  /** De esas: cuántas ya se firmaron, se cargaron al sistema, tienen contrarecibo y están cobradas. */
   signed: number;
   loaded: number;
   receipts: number;
-  paid: number;
-  /** Monto de esas facturas que aún no se paga. */
-  open: number;
-  /** Pagos programados en el periodo (fecha posible de pago del contrarecibo) y cuánto de eso ya se pagó. */
-  scheduledCount: number;
-  scheduled: number;
-  scheduledPaid: number;
-  /** Programados que ya pasaron su fecha sin complemento. */
-  overdueCount: number;
+  collected: number;
+  /** Por cobrar: con contrarecibo y sin complemento (cuántas y monto). */
+  toCollectCount: number;
+  toCollect: number;
+  /** Monto ya cobrado (con complemento). */
+  collectedAmount: number;
 };
 
 const round = (value: number) => Math.round(value * 100) / 100;
 
 const emptySummary = (key: string): InvoiceSummary => ({
-  key, count: 0, total: 0, signed: 0, loaded: 0, receipts: 0, paid: 0, open: 0, scheduledCount: 0, scheduled: 0, scheduledPaid: 0, overdueCount: 0,
+  key, count: 0, total: 0, signed: 0, loaded: 0, receipts: 0, collected: 0, toCollectCount: 0, toCollect: 0, collectedAmount: 0,
 });
 
-/**
- * Agrupa por periodo: cada factura cuenta en el periodo en que se cargó y, si tiene contrarecibo, su pago en el
- * periodo de su fecha posible de pago. Devuelve los periodos del más reciente al más antiguo.
- */
-export function groupSummaries(invoices: Invoice[], period: (day: string) => string, today: string): InvoiceSummary[] {
+/** Agrupa por el periodo en que se cargó cada factura. Devuelve los periodos del más reciente al más antiguo. */
+export function groupSummaries(invoices: Invoice[], period: (day: string) => string): InvoiceSummary[] {
   const groups = new Map<string, InvoiceSummary>();
-  const of = (key: string) => groups.get(key) ?? groups.set(key, emptySummary(key)).get(key)!;
   for (const invoice of invoices) {
+    const key = period(uploadedOn(invoice));
+    const item = groups.get(key) ?? groups.set(key, emptySummary(key)).get(key)!;
     const amount = invoice.total ?? 0;
-    const loadedIn = of(period(uploadedOn(invoice)));
-    loadedIn.count += 1;
-    loadedIn.total = round(loadedIn.total + amount);
-    if (invoice.stage !== "enviada") loadedIn.signed += 1;
-    if (invoice.stage === "cargada") loadedIn.loaded += 1;
-    if (invoice.receipt_path) loadedIn.receipts += 1;
-    if (isInvoicePaid(invoice)) loadedIn.paid += 1;
-    else if (invoice.status !== "incidente") loadedIn.open = round(loadedIn.open + amount);
-    if (invoice.payment_date) {
-      const paidIn = of(period(invoice.payment_date));
-      paidIn.scheduledCount += 1;
-      paidIn.scheduled = round(paidIn.scheduled + amount);
-      if (isInvoicePaid(invoice)) paidIn.scheduledPaid = round(paidIn.scheduledPaid + amount);
-      else if (invoice.payment_date < today) paidIn.overdueCount += 1;
+    item.count += 1;
+    item.total = round(item.total + amount);
+    if (invoice.stage !== "enviada") item.signed += 1;
+    if (invoice.stage === "cargada") item.loaded += 1;
+    if (invoice.receipt_path) item.receipts += 1;
+    const state = paymentState(invoice);
+    if (state === "cobrada") {
+      item.collected += 1;
+      item.collectedAmount = round(item.collectedAmount + amount);
+    } else if (state === "por_cobrar" && invoice.status !== "incidente") {
+      item.toCollectCount += 1;
+      item.toCollect = round(item.toCollect + amount);
     }
   }
   return Array.from(groups.values()).sort((a, b) => b.key.localeCompare(a.key));
 }
 
 /** Mismo resumen para una lista completa (una sola llave). */
-export const summarize = (key: string, invoices: Invoice[], today: string) =>
-  groupSummaries(invoices, () => key, today)[0] ?? emptySummary(key);
+export const summarize = (key: string, invoices: Invoice[]) => groupSummaries(invoices, () => key)[0] ?? emptySummary(key);
 
 /** Pesos mexicanos ("$1,234.50"). */
 export function formatMoney(value: number | null | undefined, currency = "MXN"): string {

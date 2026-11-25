@@ -23,9 +23,9 @@ export const uploadSchema = z.object({ file_path: filePath(""), file_name: fileN
 export const patchSchema = z.discriminatedUnion("action", [
   // Los cuadritos 2 y 3: firmada / autorizada y cargada al sistema.
   z.object({ action: z.literal("stage"), stage: z.enum(["firmada", "cargada"]) }).strict(),
-  // Contrarecibo con la fecha posible de pago (ya cargada al sistema).
+  // Contrarecibo con la fecha posible de cobro (ya cargada al sistema): pasa a "por cobrar".
   z.object({ action: z.literal("receipt"), file_path: filePath("cr-"), file_name: fileName, payment_date: day }).strict(),
-  // Complemento de pago: cierra la factura.
+  // Complemento de pago: la factura queda cobrada y cerrada.
   z.object({ action: z.literal("complement"), file_path: filePath("cp-"), file_name: fileName }).strict(),
 ]);
 
@@ -83,12 +83,12 @@ export function invoiceDatabaseError(error: { code?: string; message: string }, 
     const message = error.message.includes("solo avanza") ? error.message : "Ese paso no corresponde al estado actual de la factura.";
     return NextResponse.json({ error: message }, { status: 409 });
   }
-  // Candado de la base: los datos no se modifican, cada paso se marca una sola vez, pagada = cerrada.
+  // Candado de la base: los datos no se modifican, cada paso se marca una sola vez, cobrada = cerrada.
   if (error.code === "42501" && /factura|paso/i.test(error.message)) return NextResponse.json({ error: error.message }, { status: 409 });
   if (error.code === "42501") return NextResponse.json({ error: "Tu rol no tiene permiso para realizar esta acción." }, { status: 403 });
   if (["42P01", "PGRST205", "42703", "PGRST204"].includes(error.code ?? "")) {
     return NextResponse.json(
-      { error: "Faltan migraciones de facturas en Supabase (hasta 202611240002_facturas_flujo_pago.sql)." },
+      { error: "Faltan migraciones de facturas en Supabase (hasta 202611250001_facturas_por_cobrar.sql)." },
       { status: 503 },
     );
   }

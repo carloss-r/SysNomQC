@@ -37,7 +37,7 @@ export async function GET(request: NextRequest, context: Context) {
 const STEP_LABEL = { firmar: "firmarla", cargar: "cargarla al sistema", contrarecibo: "cargar su contrarecibo", complemento: "cargar su complemento de pago" };
 
 /**
- * Avanza la factura un paso: firmada → cargada al sistema → contrarecibo (fecha de pago) → complemento (pagada y cerrada).
+ * Avanza la factura un paso: firmada → cargada al sistema → contrarecibo (por cobrar) → complemento (cobrada y cerrada).
  * Los datos de la factura no se modifican; la base rechaza cualquier otro cambio.
  */
 export async function PATCH(request: NextRequest, context: Context) {
@@ -61,7 +61,7 @@ export async function PATCH(request: NextRequest, context: Context) {
     const wanted = input.data.action === "stage" ? (input.data.stage === "firmada" ? "firmar" : "cargar") : input.data.action === "receipt" ? "contrarecibo" : "complemento";
     if (step !== wanted) {
       if (uploaded) await removeFile(auth.client, uploaded);
-      const message = step === "cerrada" ? "La factura ya está pagada y cerrada." : `A esta factura le toca ${STEP_LABEL[step]}.`;
+      const message = step === "cerrada" ? "La factura ya está cobrada y cerrada." : `A esta factura le toca ${STEP_LABEL[step]}.`;
       return NextResponse.json({ error: message }, { status: 409 });
     }
 
@@ -81,7 +81,7 @@ export async function PATCH(request: NextRequest, context: Context) {
         const nextYear = `${Number(today.slice(0, 4)) + 1}${today.slice(4)}`;
         if (payment_date < invoice.invoice_date || payment_date > nextYear) {
           await removeFile(auth.client, input.data.file_path);
-          return NextResponse.json({ error: "La fecha de pago debe ser posterior a la fecha de la factura y dentro del próximo año." }, { status: 400 });
+          return NextResponse.json({ error: "La fecha de cobro debe ser posterior a la fecha de la factura y dentro del próximo año." }, { status: 400 });
         }
       }
       const pdf = await readUploadedPdf(auth.client, input.data.file_path);

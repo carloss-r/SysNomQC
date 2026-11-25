@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  AlarmClock, BadgeCheck, CalendarClock, CalendarDays, CalendarRange, CheckCircle2, Clock, FileCheck2, FileText, FileUp, Lock, PenLine,
+  BadgeCheck, CalendarClock, CalendarDays, CalendarRange, CheckCircle2, Clock, FileCheck2, FileText, FileUp, Lock, PenLine,
   Receipt, Search, Trash2, X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -13,6 +13,7 @@ import {
   groupSummaries,
   INVOICE_STAGE_LABELS,
   invoiceStep,
+  PAYMENT_STATE_LABELS,
   paymentState,
   summarize,
   uploadedOn,
@@ -42,7 +43,7 @@ const SUBTITLE = "Finanzas · Facturas";
 type Data = { today: string; invoices: Invoice[] };
 type Tab = "list" | "weekly" | "monthly";
 /** Filtro de la lista: por lo que le toca a cada factura. */
-type Filter = "all" | "firmar" | "cargar" | "contrarecibo" | "por_pagar" | "atrasado" | "pagada";
+type Filter = "all" | "firmar" | "cargar" | "contrarecibo" | "por_cobrar" | "cobrada";
 type Dialog =
   | { type: "upload" }
   | { type: "detail"; invoice: Invoice; detected?: Detected }
@@ -54,9 +55,8 @@ const FILTERS: [Filter, string][] = [
   ["firmar", "Por firmar"],
   ["cargar", "Por cargar al sistema"],
   ["contrarecibo", "Falta contrarecibo"],
-  ["por_pagar", "Pago programado"],
-  ["atrasado", "Pago atrasado"],
-  ["pagada", "Pagadas"],
+  ["por_cobrar", "Por cobrar"],
+  ["cobrada", "Cobradas"],
 ];
 
 const STEP_TEXT: Record<InvoiceStep, string> = {
@@ -77,14 +77,10 @@ export function InvoicesView() {
 
 const weekLabel = (monday: string) => `${formatDay(monday)} al ${formatDay(addDays(monday, 6))}`;
 
-function matchesFilter(invoice: Invoice, filter: Filter, today: string) {
+function matchesFilter(invoice: Invoice, filter: Filter) {
   if (filter === "all") return true;
-  const step = invoiceStep(invoice);
-  const payment = paymentState(invoice, today);
-  if (filter === "firmar" || filter === "cargar" || filter === "contrarecibo") return step === filter;
-  if (filter === "por_pagar") return payment === "programado";
-  if (filter === "atrasado") return payment === "atrasado";
-  return payment === "pagada";
+  if (filter === "firmar" || filter === "cargar" || filter === "contrarecibo") return invoiceStep(invoice) === filter;
+  return invoice.status !== "incidente" && paymentState(invoice) === filter;
 }
 
 function InvoicesScreen() {
@@ -132,19 +128,17 @@ function InvoicesScreen() {
 
   const stats = useMemo(() => {
     const open = invoices.filter((row) => invoiceStep(row) !== "cerrada");
-    const thisWeek = summarize(currentWeek, invoices.filter((row) => weekStart(uploadedOn(row)) === currentWeek), today);
-    const scheduledThisWeek = open.filter((row) => row.payment_date && weekStart(row.payment_date) === currentWeek);
+    const toCollect = open.filter((row) => paymentState(row) === "por_cobrar");
+    const thisWeek = summarize(currentWeek, invoices.filter((row) => weekStart(uploadedOn(row)) === currentWeek));
     return {
       open: open.length,
-      openAmount: open.reduce((sum, row) => sum + (row.total ?? 0), 0),
       missingReceipt: open.filter((row) => invoiceStep(row) === "contrarecibo").length,
-      overdue: open.filter((row) => paymentState(row, today) === "atrasado").length,
-      scheduledThisWeek: scheduledThisWeek.length,
-      scheduledThisWeekAmount: scheduledThisWeek.reduce((sum, row) => sum + (row.total ?? 0), 0),
-      paidThisMonth: invoices.filter((row) => row.complement_at && row.complement_at.slice(0, 7) === currentMonth).length,
+      toCollect: toCollect.length,
+      toCollectAmount: toCollect.reduce((sum, row) => sum + (row.total ?? 0), 0),
+      collectedThisMonth: invoices.filter((row) => row.complement_at && row.complement_at.slice(0, 7) === currentMonth).length,
       thisWeek,
     };
-  }, [invoices, currentWeek, currentMonth, today]);
+  }, [invoices, currentWeek, currentMonth]);
 
   const months = useMemo(() => Array.from(new Set(invoices.map((row) => uploadedOn(row).slice(0, 7)))).sort().reverse(), [invoices]);
 
@@ -154,19 +148,19 @@ function InvoicesScreen() {
       const day = uploadedOn(row);
       if (month && !day.startsWith(month)) return false;
       if (week && weekStart(day) !== week) return false;
-      if (!matchesFilter(row, filter, today)) return false;
+      if (!matchesFilter(row, filter)) return false;
       if (!term) return true;
       return [row.folio, row.pdf_folio, row.uuid, row.file_name, row.receipt_name, row.complement_name].join(" ").toLowerCase().includes(term);
     });
-  }, [invoices, query, month, week, filter, today]);
+  }, [invoices, query, month, week, filter]);
 
   const filterCounts = useMemo(
-    () => Object.fromEntries(FILTERS.map(([key]) => [key, invoices.filter((row) => matchesFilter(row, key, today)).length])) as Record<Filter, number>,
-    [invoices, today],
+    () => Object.fromEntries(FILTERS.map(([key]) => [key, invoices.filter((row) => matchesFilter(row, key)).length])) as Record<Filter, number>,
+    [invoices],
   );
 
-  const weekly = useMemo(() => groupSummaries(invoices, weekStart, today), [invoices, today]);
-  const monthly = useMemo(() => groupSummaries(invoices, (day) => day.slice(0, 7), today), [invoices, today]);
+  const weekly = useMemo(() => groupSummaries(invoices, weekStart), [invoices]);
+  const monthly = useMemo(() => groupSummaries(invoices, (day) => day.slice(0, 7)), [invoices]);
 
   // Cuadritos 2 y 3: firmada / autorizada y cargada al sistema. No se pueden deshacer.
   async function advanceStage(invoice: Invoice) {
@@ -180,7 +174,7 @@ function InvoicesScreen() {
           <br />
           {stage === "firmada"
             ? "Se pone en verde el cuadro 2. Después ya no se podrá eliminar la factura."
-            : "Se pone en verde el cuadro 3. Después se pedirá el contrarecibo con la fecha posible de pago."}
+            : "Se pone en verde el cuadro 3. Después se pedirá el contrarecibo con la fecha posible de cobro."}
           <br />El paso queda registrado a tu nombre y no se puede deshacer.
         </>
       ),
@@ -237,23 +231,23 @@ function InvoicesScreen() {
   const periodText = [month && monthLabel(month), week && `semana del ${weekLabel(week)}`].filter(Boolean).join(" · ") || "Todas";
 
   function listReport(generatedBy: string): Report {
-    const summary = summarize("lista", rows, today);
+    const summary = summarize("lista", rows);
     return {
       subtitle: SUBTITLE,
       title: "Relación de facturas",
       info: [["Cargadas", periodText], ["Filtro", FILTERS.find(([key]) => key === filter)?.[1] ?? "Todas"], ["Moneda", "MXN · moneda nacional"]],
-      summary: [["Facturas", summary.count], ["Total", formatMoney(summary.total)], ["Por pagar", formatMoney(summary.open)], ["Pagadas", summary.paid]],
+      summary: [["Facturas", summary.count], ["Total", formatMoney(summary.total)], ["Por cobrar", formatMoney(summary.toCollect)], ["Cobradas", summary.collected]],
       sections: [{
         title: "Facturas",
         columns: [
           { header: "Folio", width: 12 }, { header: "Cargada", width: 12 }, { header: "Fecha factura", width: 12 }, { header: "UUID", width: 38 },
-          { header: "Total", width: 16, align: "right" }, { header: "Estado", width: 20 }, { header: "Fecha de pago", width: 13 },
-          { header: "Pago", width: 20 },
+          { header: "Total", width: 16, align: "right" }, { header: "Estado", width: 20 }, { header: "Cobro previsto", width: 13 },
+          { header: "Cobro", width: 18 },
         ],
         rows: rows.map((row) => [
           row.folio, formatDay(uploadedOn(row)), formatDay(row.invoice_date), row.uuid ?? "—", formatMoney(row.total), INVOICE_STAGE_LABELS[row.stage],
           row.payment_date ? formatDay(row.payment_date) : "—",
-          { pagada: "Pagada", atrasado: "Pago atrasado", programado: "Programado", sin_contrarecibo: "Sin contrarecibo" }[paymentState(row, today)],
+          PAYMENT_STATE_LABELS[paymentState(row)],
         ]),
         empty: "Sin facturas.",
       }],
@@ -274,13 +268,12 @@ function InvoicesScreen() {
           { header: kind === "weekly" ? "Semana" : "Mes", width: 26 }, { header: "Cargadas", width: 10, align: "right" },
           { header: "Total cargado", width: 18, align: "right" }, { header: "Firmadas", width: 10, align: "right" },
           { header: "Al sistema", width: 10, align: "right" }, { header: "Contrarecibo", width: 12, align: "right" },
-          { header: "Pagadas", width: 10, align: "right" }, { header: "Por pagar", width: 18, align: "right" },
-          { header: "Pagos programados", width: 20, align: "right" }, { header: "Pagado", width: 18, align: "right" },
-          { header: "Atrasados", width: 10, align: "right" },
+          { header: "Por cobrar", width: 18, align: "right" }, { header: "Cobradas", width: 10, align: "right" },
+          { header: "Cobrado", width: 18, align: "right" },
         ],
         rows: list.map((item) => [
-          label(item.key), item.count, formatMoney(item.total), item.signed, item.loaded, item.receipts, item.paid, formatMoney(item.open),
-          `${formatMoney(item.scheduled)} (${item.scheduledCount})`, formatMoney(item.scheduledPaid), item.overdueCount,
+          label(item.key), item.count, formatMoney(item.total), item.signed, item.loaded, item.receipts,
+          `${formatMoney(item.toCollect)} (${item.toCollectCount})`, item.collected, formatMoney(item.collectedAmount),
         ]),
         empty: "Sin facturas.",
       }],
@@ -300,19 +293,18 @@ function InvoicesScreen() {
       <PageHeader
         eyebrow="Finanzas"
         title="Facturas"
-        description="Carga la factura en PDF y síguela paso a paso: firmada, cargada al sistema, contrarecibo con fecha de pago y complemento de pago. Lo cargado no se modifica y cada paso queda en el historial."
+        description="Carga la factura en PDF y síguela paso a paso: firmada, cargada al sistema, contrarecibo (pasa a por cobrar) y complemento de pago (cobrada). Lo cargado no se modifica y cada paso queda en el historial."
         actions={canManage ? <button className="button button-gold" onClick={() => setDialog({ type: "upload" })}><FileUp size={17} /> Cargar factura</button> : undefined}
       >
-        <div className="stats-grid stats-grid-5">
+        <div className="stats-grid">
           <StatCard label="En proceso" count={stats.open} tone="gold" icon={<Clock size={16} />} />
           <StatCard label="Falta contrarecibo" count={stats.missingReceipt} tone={stats.missingReceipt ? "gold" : "green"} icon={<CalendarClock size={16} />} />
-          <StatCard label="Pagos esta semana" count={stats.scheduledThisWeek} tone="blue" icon={<CalendarRange size={16} />} />
-          <StatCard label="Pagos atrasados" count={stats.overdue} tone={stats.overdue ? "red" : "green"} icon={<AlarmClock size={16} />} />
-          <StatCard label={`Pagadas en ${monthLabel(currentMonth)}`} count={stats.paidThisMonth} tone="green" icon={<CheckCircle2 size={16} />} />
+          <StatCard label="Por cobrar" count={stats.toCollect} tone="blue" icon={<BadgeCheck size={16} />} />
+          <StatCard label={`Cobradas en ${monthLabel(currentMonth)}`} count={stats.collectedThisMonth} tone="green" icon={<CheckCircle2 size={16} />} />
         </div>
         {data && (
           <p className="epp-muted fuel-today">
-            Por pagar: <strong>{formatMoney(stats.openAmount)}</strong> · Pagos programados esta semana: {formatMoney(stats.scheduledThisWeekAmount)} ·
+            Por cobrar: <strong>{formatMoney(stats.toCollectAmount)}</strong> ·
             Cargadas esta semana: {stats.thisWeek.count} ({formatMoney(stats.thisWeek.total)}) · Moneda nacional (MXN)
           </p>
         )}
@@ -351,7 +343,7 @@ function InvoicesScreen() {
               <div className="site-tabs" role="tablist">
                 {FILTERS.map(([key, label]) => (
                   <button key={key} role="tab" aria-selected={filter === key} className={`site-tab${filter === key ? " active" : ""}`} onClick={() => setFilter(key)}>
-                    {label}{key !== "all" && filterCounts[key] > 0 && <span className={`site-count${key === "atrasado" ? "" : " site-count-muted"}`}>{filterCounts[key]}</span>}
+                    {label}{key !== "all" && filterCounts[key] > 0 && <span className="site-count site-count-muted">{filterCounts[key]}</span>}
                   </button>
                 ))}
               </div>
@@ -376,7 +368,7 @@ function InvoicesScreen() {
             <div className="table-scroll">
               <table className="employee-table">
                 <thead>
-                  <tr><th>Folio</th><th className="hide-tablet">Fecha factura</th><th className="hide-phone">Total</th><th>Estado</th><th>Pago</th><th>Acciones</th></tr>
+                  <tr><th>Folio</th><th className="hide-tablet">Fecha factura</th><th className="hide-phone">Total</th><th>Estado</th><th>Cobro</th><th>Acciones</th></tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => {
@@ -393,7 +385,7 @@ function InvoicesScreen() {
                         <td><StageSquares invoice={row} /></td>
                         <td>
                           <div className="invoice-badges">
-                            <PaymentBadge invoice={row} today={today} />
+                            <PaymentBadge invoice={row} />
                             {step !== "cerrada" && <small className="epp-muted">{STEP_TEXT[step]}</small>}
                           </div>
                         </td>
@@ -402,7 +394,7 @@ function InvoicesScreen() {
                             {canManage && step !== "cerrada" && <div className="invoice-actions-main">{stepButton(row)}</div>}
                             <div className="invoice-actions-tools">
                               {busyId === row.id && <RowBusy />}
-                              {step === "cerrada" && <span className="epp-muted invoice-lock" title="Pagada y cerrada"><Lock size={14} /></span>}
+                              {step === "cerrada" && <span className="epp-muted invoice-lock" title="Cobrada y cerrada"><Lock size={14} /></span>}
                               <button className="icon-button" onClick={() => setDialog({ type: "detail", invoice: row })} aria-label="Ver factura" title="Ver factura, contrarecibo, complemento e historial"><Receipt size={16} /></button>
                               <button className="icon-button" onClick={() => void viewPdf(row)} aria-label="Abrir PDF" title="Abrir PDF de la factura"><FileText size={16} /></button>
                               {canManage && canDeleteInvoice(row, isSuperAdmin) && (
@@ -457,22 +449,21 @@ function InvoicesScreen() {
         />
       )}
       {dialog?.type === "detail" && (
-        <InvoiceModal invoice={dialog.invoice} detected={dialog.detected} today={today} onClose={() => setDialog(null)} />
+        <InvoiceModal invoice={dialog.invoice} detected={dialog.detected} onClose={() => setDialog(null)} />
       )}
       {dialog?.type === "step" && (
         <StepModal
           kind={dialog.kind}
           invoice={dialog.invoice}
-          today={today}
           onClose={() => setDialog(null)}
           onSaved={(saved) => {
             setDialog(null);
             if (dialog.kind === "receipt") {
-              notify("success", "Contrarecibo guardado", `Pago programado para el ${formatDay(saved.payment_date)}.`);
+              notify("success", `Factura ${saved.folio} por cobrar`, `Contrarecibo guardado · cobro previsto el ${formatDay(saved.payment_date)}.`);
             } else if (saved.complement_verified === false) {
-              notify("error", `Factura ${saved.folio} pagada y cerrada`, "Ojo: el complemento no menciona el UUID de la factura. Revísalo.");
+              notify("error", `Factura ${saved.folio} cobrada y cerrada`, "Ojo: el complemento no menciona el UUID de la factura. Revísalo.");
             } else {
-              notify("success", `Factura ${saved.folio} pagada y cerrada`, saved.complement_verified ? "El complemento coincide con el UUID de la factura." : "No se pudo verificar el UUID (la factura o el complemento no lo traen).");
+              notify("success", `Factura ${saved.folio} cobrada y cerrada`, saved.complement_verified ? "El complemento coincide con el UUID de la factura." : "No se pudo verificar el UUID (la factura o el complemento no lo traen).");
             }
             void load();
           }}
@@ -501,8 +492,8 @@ function SummaryTable({
     <>
       <div className="directory-toolbar">
         <p className="epp-muted">
-          {kind === "weekly" ? "Semanas de lunes a domingo." : "Meses."} «Cargadas» cuenta las facturas por el día en que se subieron al sistema;
-          «Pagos programados» suma las que tienen su fecha posible de pago (contrarecibo) en ese periodo.
+          {kind === "weekly" ? "Semanas de lunes a domingo." : "Meses."} Cuenta las facturas por el día en que se cargaron al sistema y muestra
+          cuánto de ellas está por cobrar (ya con contrarecibo) y cuánto ya se cobró (con complemento).
         </p>
         {exportButtons}
       </div>
@@ -513,9 +504,8 @@ function SummaryTable({
               <th>{kind === "weekly" ? "Semana" : "Mes"}</th>
               <th>Cargadas</th>
               <th className="hide-tablet">Avance</th>
-              <th>Por pagar</th>
-              <th className="hide-phone">Pagos programados</th>
-              <th className="hide-tablet">Atrasados</th>
+              <th>Por cobrar</th>
+              <th className="hide-phone">Cobrado</th>
             </tr>
           </thead>
           <tbody>
@@ -528,17 +518,14 @@ function SummaryTable({
                 <td><strong>{item.count}</strong><br /><small className="epp-muted">{formatMoney(item.total)}</small></td>
                 <td className="hide-tablet">
                   <small className="invoice-progress">
-                    {item.signed} firmadas · {item.loaded} al sistema · {item.receipts} con contrarecibo · {item.paid} pagadas
+                    {item.signed} firmadas · {item.loaded} al sistema · {item.receipts} con contrarecibo · {item.collected} cobradas
                   </small>
                 </td>
-                <td>{formatMoney(item.open)}</td>
-                <td className="hide-phone">
-                  {item.scheduledCount ? <>{formatMoney(item.scheduled)} <small className="epp-muted">({item.scheduledCount})</small><br /><small className="epp-muted">pagado {formatMoney(item.scheduledPaid)}</small></> : "—"}
-                </td>
-                <td className="hide-tablet">{item.overdueCount ? <span className="fuel-status fuel-status-bad">{item.overdueCount}</span> : "—"}</td>
+                <td>{item.toCollectCount ? <>{formatMoney(item.toCollect)} <small className="epp-muted">({item.toCollectCount})</small></> : "—"}</td>
+                <td className="hide-phone">{item.collected ? <>{formatMoney(item.collectedAmount)} <small className="epp-muted">({item.collected})</small></> : "—"}</td>
               </tr>
             ))}
-            {list.length === 0 && <tr><td colSpan={6} className="epp-empty">Aún no hay facturas para resumir.</td></tr>}
+            {list.length === 0 && <tr><td colSpan={5} className="epp-empty">Aún no hay facturas para resumir.</td></tr>}
           </tbody>
         </table>
       </div>

@@ -1,6 +1,6 @@
 # Módulo Facturas
 
-Pantalla `/facturas` (menú **Finanzas → Facturas**). Requiere las migraciones de facturas hasta `202611240002_facturas_flujo_pago.sql`. No carga datos de prueba.
+Pantalla `/facturas` (menú **Finanzas → Facturas**). Requiere las migraciones de facturas hasta `202611250001_facturas_por_cobrar.sql`. Las facturas son nuestras: **nosotros las cobramos** (nos depositan). No carga datos de prueba.
 
 ## Permisos y rol
 
@@ -25,19 +25,19 @@ La factura se carga del PDF y **así se queda**: no hay edición de datos. La ba
    1. **Enviada**: al cargarla.
    2. **Firmada / autorizada**: botón *Firmada*.
    3. **Cargada al sistema**: botón *Cargada al sistema*.
-3. **Contrarecibo** (ya cargada al sistema): se sube el PDF y se captura la **fecha posible de pago**.
-4. **Complemento de pago** (con contrarecibo): se sube el PDF; se verifica que mencione el **UUID** de la factura (`complement_verified`: sí / no / no se pudo revisar) y la factura queda **pagada y cerrada**.
+3. **Contrarecibo** (ya cargada al sistema): se sube el PDF y se captura la **fecha posible de cobro** (informativa). La factura pasa automáticamente a **Por cobrar**.
+4. **Complemento de pago** (con contrarecibo): se sube el PDF; se verifica que mencione el **UUID** de la factura (`complement_verified`: sí / no / no se pudo revisar) y la factura queda **cobrada y cerrada**.
 
-Estado del pago en la lista: *En trámite* → *Falta contrarecibo* → *Pago dd/mm/aaaa* (o *Pago atrasado* si ya pasó la fecha sin complemento) → *Pagada*.
+Estado del cobro en la lista: *En trámite* → *Falta contrarecibo* → *Por cobrar* → *Cobrada*. No hay estados de pago programado ni atrasado.
 
 ## Historial
 
-`invoice_events` guarda cada paso con quién y cuándo: cargada, firmada, cargada al sistema, contrarecibo (archivo y fecha de pago), complemento (verificado o no) y, si ocurre, que se eliminó. Lo escribe la base (trigger `invoices_log_event`), nadie lo puede modificar y se conserva aunque se elimine la factura. Se ve en la pestaña **Historial** de cada factura.
+`invoice_events` guarda cada paso con quién y cuándo: cargada, firmada, cargada al sistema, contrarecibo (archivo y fecha posible de cobro), complemento (verificado o no) y, si ocurre, que se eliminó. Lo escribe la base (trigger `invoices_log_event`), nadie lo puede modificar y se conserva aunque se elimine la factura. Se ve en la pestaña **Historial** de cada factura.
 
 ## Resúmenes
 
-- **Encabezado**: en proceso, falta contrarecibo, pagos programados esta semana, pagos atrasados y pagadas en el mes, más el monto por pagar.
-- **Por semana** (lunes a domingo) y **Por mes**: facturas **cargadas** en el periodo (por día de carga) con su avance (firmadas, al sistema, con contrarecibo, pagadas) y lo que falta por pagar, y los **pagos programados** del periodo (por fecha posible de pago) con cuánto ya se pagó y cuántos están atrasados. Al hacer clic en un periodo se abre la lista de esas facturas.
+- **Encabezado**: en proceso, falta contrarecibo, por cobrar y cobradas en el mes, más el monto por cobrar.
+- **Por semana** (lunes a domingo) y **Por mes**: facturas **cargadas** en el periodo (por día de carga) con su avance (firmadas, al sistema, con contrarecibo, cobradas), cuánto está **por cobrar** y cuánto ya se **cobró**. Al hacer clic en un periodo se abre la lista de esas facturas.
 - La lista y los resúmenes se descargan en PDF o Excel.
 
 Las facturas anteriores al flujo nuevo conservan sus datos (incluido un incidente, si lo tenían, que las deja cerradas).
@@ -46,7 +46,7 @@ Las facturas anteriores al flujo nuevo conservan sus datos (incluido un incident
 
 | Método | Ruta | Permiso | Uso |
 | --- | --- | --- | --- |
-| GET | `/api/invoices` | `invoices.view` | Lista (sin textos); `?from=YYYY-MM-DD` por fecha de carga; las que no están pagadas siempre se incluyen |
+| GET | `/api/invoices` | `invoices.view` | Lista (sin textos); `?from=YYYY-MM-DD` por fecha de carga; las que no están cobradas siempre se incluyen |
 | POST | `/api/invoices` | `invoices.manage` | Registra un PDF ya subido: `{ file_path, file_name }` |
 | GET | `/api/invoices/:id` | `invoices.view` | Factura con `text_content` y `events` (historial) |
 | PATCH | `/api/invoices/:id` | `invoices.manage` | `{ action: "stage", stage: "firmada" \| "cargada" }`, `{ action: "receipt", file_path: "cr-….pdf", file_name, payment_date }` o `{ action: "complement", file_path: "cp-….pdf", file_name }` |

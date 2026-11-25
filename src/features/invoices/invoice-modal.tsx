@@ -30,7 +30,7 @@ function eventDetail(event: InvoiceEvent): string {
   const detail = event.detail ?? {};
   const parts: string[] = [];
   if (typeof detail.archivo === "string") parts.push(detail.archivo);
-  if (typeof detail.fecha_pago === "string") parts.push(`pago ${formatDay(detail.fecha_pago)}`);
+  if (typeof detail.fecha_pago === "string") parts.push(`cobro previsto ${formatDay(detail.fecha_pago)}`);
   if (detail.verificado === true) parts.push("UUID verificado");
   if (detail.verificado === false) parts.push("no menciona el UUID de la factura");
   return parts.join(" · ");
@@ -43,12 +43,10 @@ function eventDetail(event: InvoiceEvent): string {
 export function InvoiceModal({
   invoice,
   detected,
-  today,
   onClose,
 }: {
   invoice: Invoice;
   detected?: Detected;
-  today: string;
   onClose: () => void;
 }) {
   const { session } = useAuth();
@@ -128,7 +126,7 @@ export function InvoiceModal({
           <div>
             <h2 id="invoice-title">Factura {invoice.folio}</h2>
             <p>
-              <StageSquares invoice={invoice} /> · <PaymentBadge invoice={invoice} today={today} />
+              <StageSquares invoice={invoice} /> · <PaymentBadge invoice={invoice} />
               <br />
               <Lock size={12} /> Solo consulta: lo cargado del PDF no se modifica.
             </p>
@@ -202,10 +200,10 @@ export function InvoiceModal({
                   <Value label="Total">{formatMoney(invoice.total)}</Value>
                   <Value label="Cargada">{formatDateTime(invoice.created_at)} · {invoice.created_by_name ?? "—"}</Value>
                 </div>
-                <h3 className="invoice-subtitle">Pago</h3>
+                <h3 className="invoice-subtitle">Cobro</h3>
                 <div className="invoice-values">
                   <Value label="Contrarecibo">{invoice.receipt_name ? `${invoice.receipt_name} · ${invoice.receipt_by_name ?? "—"}` : "Pendiente"}</Value>
-                  <Value label="Fecha posible de pago">{invoice.payment_date ? formatDay(invoice.payment_date) : null}</Value>
+                  <Value label="Fecha posible de cobro">{invoice.payment_date ? formatDay(invoice.payment_date) : null}</Value>
                   <Value label="Complemento de pago">{invoice.complement_name ? `${invoice.complement_name} · ${invoice.complement_by_name ?? "—"}` : "Pendiente"}</Value>
                   <Value label="Verificación">
                     {!invoice.complement_path

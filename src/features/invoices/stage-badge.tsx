@@ -30,23 +30,25 @@ export function StageSquares({ invoice, showLabel = true }: { invoice: Invoice; 
   );
 }
 
-/** Pago: falta contrarecibo · pago programado · pago atrasado · pagada (con complemento). */
-export function PaymentBadge({ invoice, today }: { invoice: Invoice; today: string }) {
+/** Cobro: en trámite · falta contrarecibo · por cobrar (con contrarecibo) · cobrada (con complemento). */
+export function PaymentBadge({ invoice }: { invoice: Invoice }) {
   if (invoice.status === "incidente") return <span className="fuel-status fuel-status-bad">Incidente</span>;
-  const state = paymentState(invoice, today);
-  if (state === "pagada") {
+  const state = paymentState(invoice);
+  if (state === "cobrada") {
     return (
       <span className="fuel-status fuel-status-ok" title={invoice.complement_verified === false ? "El complemento no menciona el UUID de la factura" : undefined}>
-        Pagada{invoice.complement_verified === false ? " · revisar" : ""}
+        Cobrada{invoice.complement_verified === false ? " · revisar" : ""}
       </span>
     );
   }
-  if (state === "sin_contrarecibo") {
-    return invoice.stage === "cargada"
-      ? <span className="fuel-status fuel-status-warn">Falta contrarecibo</span>
-      : <span className="fuel-status fuel-status-neutral">En trámite</span>;
+  if (state === "por_cobrar") {
+    return (
+      <span className="fuel-status fuel-status-info" title={invoice.payment_date ? `Fecha posible de cobro: ${formatDay(invoice.payment_date)}` : undefined}>
+        Por cobrar
+      </span>
+    );
   }
-  return state === "atrasado"
-    ? <span className="fuel-status fuel-status-bad">Pago atrasado · {formatDay(invoice.payment_date)}</span>
-    : <span className="fuel-status fuel-status-info">Pago {formatDay(invoice.payment_date)}</span>;
+  return invoice.stage === "cargada"
+    ? <span className="fuel-status fuel-status-warn">Falta contrarecibo</span>
+    : <span className="fuel-status fuel-status-neutral">En trámite</span>;
 }

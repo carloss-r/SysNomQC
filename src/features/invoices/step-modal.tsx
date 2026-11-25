@@ -15,29 +15,27 @@ export type StepKind = "receipt" | "complement";
 const COPY: Record<StepKind, { title: string; intro: string; button: string; busy: string }> = {
   receipt: {
     title: "Cargar contrarecibo",
-    intro: "Sube el PDF del contrarecibo y captura la fecha posible de pago. Después ya no se puede cambiar.",
+    intro: "Sube el PDF del contrarecibo y captura la fecha posible de cobro. La factura pasa a «Por cobrar» y ya no se puede cambiar.",
     button: "Guardar contrarecibo",
     busy: "Guardando contrarecibo…",
   },
   complement: {
     title: "Cargar complemento de pago",
-    intro: "Sube el PDF del complemento de pago. Se revisa que mencione el UUID de la factura y la factura queda pagada y cerrada.",
+    intro: "Sube el PDF del complemento de pago. Se revisa que mencione el UUID de la factura y la factura queda cobrada y cerrada.",
     button: "Guardar complemento y cerrar",
     busy: "Verificando complemento…",
   },
 };
 
-/** Contrarecibo (con fecha posible de pago) o complemento de pago (cierra la factura). */
+/** Contrarecibo (pasa a por cobrar) o complemento de pago (cobrada y cerrada). */
 export function StepModal({
   kind,
   invoice,
-  today,
   onClose,
   onSaved,
 }: {
   kind: StepKind;
   invoice: Invoice;
-  today: string;
   onClose: () => void;
   onSaved: (invoice: Invoice) => void;
 }) {
@@ -59,8 +57,8 @@ export function StepModal({
     event.preventDefault();
     if (!session || busy) return;
     if (!file) return setError(`Selecciona el PDF del ${kind === "receipt" ? "contrarecibo" : "complemento de pago"}.`);
-    if (kind === "receipt" && !paymentDate) return setError("Captura la fecha posible de pago.");
-    if (kind === "receipt" && paymentDate < invoice.invoice_date) return setError("La fecha de pago no puede ser anterior a la fecha de la factura.");
+    if (kind === "receipt" && !paymentDate) return setError("Captura la fecha posible de cobro.");
+    if (kind === "receipt" && paymentDate < invoice.invoice_date) return setError("La fecha de cobro no puede ser anterior a la fecha de la factura.");
     setBusy(true);
     setError("");
     try {
@@ -90,7 +88,7 @@ export function StepModal({
             <h2 id="invoice-step-title">{copy.title}</h2>
             <p>
               Factura <strong>{invoice.folio}</strong> · {formatDay(invoice.invoice_date)} · {formatMoney(invoice.total)}
-              {kind === "complement" && invoice.payment_date && <> · pago programado {formatDay(invoice.payment_date)}</>}
+              {kind === "complement" && invoice.payment_date && <> · cobro previsto {formatDay(invoice.payment_date)}</>}
               <br />{copy.intro}
             </p>
           </div>
@@ -105,9 +103,8 @@ export function StepModal({
             <span className="field-hint">{file ? `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB` : "PDF de hasta 10 MB"}</span>
           </div>
           {kind === "receipt" && (
-            <Field label="Fecha posible de pago" required>
+            <Field label="Fecha posible de cobro" required>
               <input type="date" value={paymentDate} min={invoice.invoice_date} onChange={(event) => setPaymentDate(event.target.value)} disabled={busy} required />
-              {paymentDate && paymentDate < today && <span className="field-hint">Esa fecha ya pasó: el pago aparecerá como atrasado hasta cargar el complemento.</span>}
             </Field>
           )}
           {kind === "complement" && !invoice.uuid && (

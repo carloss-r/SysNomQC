@@ -9,7 +9,7 @@ import { actorName, invoiceDatabaseError, LIST_COLUMNS, readUploadedPdf, removeF
 
 export const runtime = "nodejs";
 
-/** Lista de facturas (sin los textos). ?from=YYYY-MM-DD acota por fecha de carga; las que no están pagadas van siempre. */
+/** Lista de facturas (sin los textos). ?from=YYYY-MM-DD acota por fecha de carga; las que no están cobradas van siempre. */
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedClient(request, "invoices.view");
   if ("response" in auth) return auth.response;
