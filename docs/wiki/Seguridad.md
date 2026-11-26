@@ -38,11 +38,10 @@
 
 ## Google (buscadores)
 
-`/` es la **página pública** de la cooperativa (`src/app/page.tsx`, `src/features/landing/`): quiénes somos, lo que hacemos, valores y contacto, con un botón *Acceso al personal*. Los textos se editan en `src/features/landing/content.ts`; los datos de contacto vacíos no se muestran. El sistema interno empieza en `/personal` y pide sesión en cualquier pantalla.
-
-Solo la portada aparece en Google, con el nombre, el logo y los datos de la organización (JSON-LD). Todo lo demás lleva `X-Robots-Tag: noindex` y `<meta name="robots" content="noindex">`, y `robots.txt` solo permite `/`, `/_next/static/` y el logo, sin nombrar las rutas internas.
+Solo la **portada** (`/`, que sin sesión muestra el inicio de sesión) aparece en Google, con el nombre *Cooperativa Quinta Generación*, el logo y los datos de la organización (JSON-LD). Todo lo demás lleva `X-Robots-Tag: noindex` y `<meta name="robots" content="noindex">`, y `robots.txt` solo permite `/`, `/_next/static/` y el logo, sin nombrar las rutas internas.
 
 - `src/app/sitemap.ts` → `/sitemap.xml` (solo la portada).
 - `src/app/robots.ts` → `/robots.txt` (con la dirección del sitemap).
 - Dominio: variable `NEXT_PUBLIC_SITE_URL=https://tu-dominio.com` en Vercel (si falta, usa el dominio de producción de Vercel).
 - Alta en **Google Search Console** (verificación por registro DNS TXT) y envío de `https://tu-dominio.com/sitemap.xml`.
+- Página pública de la cooperativa: lista en `src/features/landing/` (textos en `content.ts`) pero **desactivada**. Para usarla: `src/app/page.tsx` que muestre `<LandingPage />` y mover la pantalla de empleados a otra ruta (p. ej. `/personal`).

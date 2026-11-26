@@ -13,4 +13,4 @@ export function siteUrl(): string {
 
 export const SITE_NAME = "Cooperativa Quinta Generación";
 export const SITE_DESCRIPTION =
-  "Cooperativa Quinta Generación: sociedad cooperativa de trabajo. Conoce quiénes somos, lo que hacemos y cómo contactarnos.";
+  "Sistema interno de la Cooperativa Quinta Generación. Acceso solo para personal autorizado.";

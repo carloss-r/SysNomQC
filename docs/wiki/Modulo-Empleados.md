@@ -1,6 +1,6 @@
 # Módulo Empleados
 
-Pantalla principal (`/personal`, menú **Personal → Empleados**). Código en `src/features/employees/` y API en `/api/employees`.
+Pantalla principal (`/`, menú **Personal → Empleados**). Código en `src/features/employees/` y API en `/api/employees`.
 
 ## Funciones
 
