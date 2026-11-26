@@ -8,7 +8,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/$", "/sitemap.xml", "/_next/static/", "/icon.png", "/logo-cooperativa.jpg"],
+        allow: ["/$", "/sitemap.xml", "/_next/static/", "/favicon.ico", "/icon.png", "/apple-icon.png", "/logo-cooperativa.jpg"],
         disallow: "/",
       },
     ],

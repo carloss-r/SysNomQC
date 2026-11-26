@@ -31,14 +31,41 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false, nocache: true },
 };
 
-// Datos de la organización para Google (nombre, logo, dirección del sitio).
+// Datos para Google: la organización (nombre, logo para la ficha lateral) y el nombre del sitio en los resultados.
+// Si la cooperativa tiene Facebook, LinkedIn, etc., agrega sus enlaces en `sameAs`: ayudan a que Google arme la ficha.
+const SAME_AS: string[] = [];
 const ORGANIZATION_JSON_LD = JSON.stringify({
   "@context": "https://schema.org",
-  "@type": "Organization",
-  name: SITE_NAME,
-  alternateName: ["Quinta Generación", "Cooperativa Quinta Generacion"],
-  url: siteUrl(),
-  logo: `${siteUrl()}/logo-cooperativa.jpg`,
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${siteUrl()}/#organizacion`,
+      name: SITE_NAME,
+      legalName: "Cooperativa Quinta Generación, S.C. de R.L. de C.V.",
+      alternateName: ["Quinta Generación", "Cooperativa Quinta Generacion", "Quinta Generacion"],
+      url: `${siteUrl()}/`,
+      logo: {
+        "@type": "ImageObject",
+        "@id": `${siteUrl()}/#logo`,
+        url: `${siteUrl()}/logo-cooperativa.jpg`,
+        contentUrl: `${siteUrl()}/logo-cooperativa.jpg`,
+        width: 447,
+        height: 447,
+        caption: SITE_NAME,
+      },
+      image: { "@id": `${siteUrl()}/#logo` },
+      ...(SAME_AS.length ? { sameAs: SAME_AS } : {}),
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${siteUrl()}/#sitio`,
+      name: SITE_NAME,
+      alternateName: ["Quinta Generación", "Quinta Generacion"],
+      url: `${siteUrl()}/`,
+      inLanguage: "es-MX",
+      publisher: { "@id": `${siteUrl()}/#organizacion` },
+    },
+  ],
 }).replace(/</g, "\\u003c");
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

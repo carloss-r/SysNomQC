@@ -63,7 +63,7 @@ const securityHeaders = [
 ];
 
 // Todo menos la portada, robots.txt, sitemap.xml y el logo queda fuera de Google.
-const NOINDEX_SOURCE = "/:path((?!robots\\.txt$|sitemap\\.xml$|icon\\.png$|logo-cooperativa\\.jpg$).+)";
+const NOINDEX_SOURCE = "/:path((?!robots\\.txt$|sitemap\\.xml$|favicon\\.ico$|icon\\.png$|apple-icon\\.png$|logo-cooperativa\\.jpg$).+)";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
