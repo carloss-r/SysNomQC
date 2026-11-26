@@ -96,7 +96,6 @@ export function invoiceDatabaseError(error: { code?: string; message: string }, 
   if (error.code === "PGRST116") return NextResponse.json({ error: "La factura no existe o tu rol no puede verla." }, { status: 404 });
   console.error(`Error de facturas (${context}):`, error);
   reportServerIncident(`api · facturas · ${context}`, error);
-  // El código y el mensaje de la base ayudan a diagnosticar (solo lo ven usuarios con sesión y permiso de facturas).
-  const detail = [error.code, error.message?.slice(0, 160)].filter(Boolean).join(": ");
-  return NextResponse.json({ error: `No se pudo completar la operación (${context}${detail ? ` · ${detail}` : ""}).` }, { status: 500 });
+  // Solo el código (para diagnosticar); el detalle interno de la base va al correo de incidencias, no a la pantalla.
+  return NextResponse.json({ error: `No se pudo completar la operación (${context}${error.code ? ` · código ${error.code}` : ""}).` }, { status: 500 });
 }

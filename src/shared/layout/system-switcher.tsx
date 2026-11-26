@@ -36,7 +36,7 @@ export function SystemSwitcher({ buttonClassName = "" }: { buttonClassName?: str
   if (!can("fuels.view")) return null;
 
   const systems = [
-    { href: "/", label: "Gestión de Personal", hint: "Empleados, EPP, facturas y administración", icon: UsersRound, current: !inSca, show: true },
+    { href: "/personal", label: "Gestión de Personal", hint: "Empleados, EPP, facturas y administración", icon: UsersRound, current: !inSca, show: true },
     { href: SCA_HOME, label: "Combustibles Alternos · SCA", hint: "Báscula, agenda, proveedores y semáforo SEMARNAT", icon: Flame, current: inSca, show: can("fuels.view") },
   ].filter((item) => item.show);
 

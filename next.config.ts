@@ -27,28 +27,43 @@ const contentSecurityPolicy = [
   `img-src 'self' data: blob: ${supabase}${toolbar("https://vercel.live https://vercel.com")}`.trim(),
   `font-src 'self' data:${toolbar("https://vercel.live https://assets.vercel.com")}`,
   `connect-src 'self' ${supabase}${isDev ? " ws: wss:" : ""}${toolbar("https://vercel.live wss://ws-us3.pusher.com")}`.trim(),
-  // Vista previa de facturas: el PDF se descarga del bucket privado y se muestra como blob: local.
-  `frame-src 'self' blob:${toolbar("https://vercel.live")}`,
+  // Sin iframes: el PDF de las facturas se dibuja en <canvas> con pdf.js (ya no hay visor embebido).
+  `frame-src ${vercelPreview ? "https://vercel.live" : "'none'"}`,
+  "worker-src 'self' blob:",
+  "manifest-src 'self'",
+  "media-src 'self'",
+  // Ningún atributo onclick="…" en el HTML (React no los usa): bloquea inyecciones en atributos.
+  "script-src-attr 'none'",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
+  // En producción todo lo que se cargue por http:// se pide por https://.
+  ...(isDev ? [] : ["upgrade-insecure-requests"]),
 ].join("; ");
 
 const securityHeaders = [
   { key: "Content-Security-Policy", value: contentSecurityPolicy },
-  { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+  // Dos años de HTTPS obligatorio en el dominio y sus subdominios.
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
+    value:
+      "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=(), " +
+      "magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), browsing-topics=(), interest-cohort=()",
   },
+  { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
+  { key: "X-DNS-Prefetch-Control", value: "off" },
+  { key: "Origin-Agent-Cluster", value: "?1" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
   { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
-  { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
 ];
+
+// Todo menos la portada, robots.txt, sitemap.xml y el logo queda fuera de Google.
+const NOINDEX_SOURCE = "/:path((?!robots\\.txt$|sitemap\\.xml$|icon\\.png$|logo-cooperativa\\.jpg$).+)";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
@@ -58,6 +73,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },
+      { source: NOINDEX_SOURCE, headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }] },
       // Datos personales: nunca deben quedar en cachés del navegador ni de intermediarios.
       { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "no-store, max-age=0" }] },
     ];
