@@ -47,7 +47,7 @@ const sumCounts = (rows: EmployeeGroupCount[], match: (row: EmployeeGroupCount) 
 type FormState = { editing: Employee | null } | null;
 
 // Dashboard de empleados: directorio general, alta/edición, expediente y descarga.
-// "/personal" es la entrada de todos; quien no ve expedientes lo redirige RequirePermission a su pantalla.
+// "/" es la entrada de todos; quien no ve expedientes lo redirige RequirePermission a su pantalla.
 export function EmployeesView() {
   return (
     <RequirePermission permission="employees.view">

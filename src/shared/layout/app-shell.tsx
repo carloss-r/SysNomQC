@@ -92,7 +92,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <Menu size={22} />
             </button>
-            <Link className="brand" href="/personal" aria-label="Cooperativa Quinta Generación, inicio">
+            <Link className="brand" href="/" aria-label="Cooperativa Quinta Generación, inicio">
               <Image src="/logo-cooperativa.jpg" alt="" width={52} height={52} priority />
               <span className="brand-copy">
                 <strong>COOPERATIVA QUINTA GENERACIÓN</strong>

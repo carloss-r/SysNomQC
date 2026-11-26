@@ -22,7 +22,7 @@ export type NavSection = { title: string; items: NavItem[] };
 export const NAVIGATION: NavSection[] = [
   {
     title: "Personal",
-    items: [{ href: "/personal", label: "Empleados", icon: UsersRound, permission: "employees.view", exact: true }],
+    items: [{ href: "/", label: "Empleados", icon: UsersRound, permission: "employees.view", exact: true }],
   },
   {
     title: "Seguridad e higiene",
