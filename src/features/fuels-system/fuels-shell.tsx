@@ -60,7 +60,7 @@ export function FuelsShell({ children }: { children: ReactNode }) {
         <h1>Sin acceso al SCA</h1>
         <p>Tu rol no tiene permiso para el sistema de combustibles alternos.</p>
         <div className="shell-actions">
-          <Link className="button button-gold" href="/">Ir al sistema principal</Link>
+          <Link className="button button-gold" href="/personal">Ir al sistema principal</Link>
           <button type="button" className="button button-neutral" onClick={() => void signOut()}>Cerrar sesión</button>
         </div>
       </ScaCenter>
@@ -144,7 +144,7 @@ function ScaFrame({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="sca-side-foot">
-          <Link href="/" className="sca-nav-link sca-back">
+          <Link href="/personal" className="sca-nav-link sca-back">
             <ArrowLeftRight size={17} />
             <span>Sistema principal</span>
           </Link>

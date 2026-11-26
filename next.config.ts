@@ -60,8 +60,10 @@ const securityHeaders = [
   { key: "Origin-Agent-Cluster", value: "?1" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
   { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
-  { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
 ];
+
+// Todo menos la portada, robots.txt, sitemap.xml y el logo queda fuera de Google.
+const NOINDEX_SOURCE = "/:path((?!robots\\.txt$|sitemap\\.xml$|icon\\.png$|logo-cooperativa\\.jpg$).+)";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
@@ -71,6 +73,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },
+      { source: NOINDEX_SOURCE, headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }] },
       // Datos personales: nunca deben quedar en cachés del navegador ni de intermediarios.
       { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "no-store, max-age=0" }] },
     ];

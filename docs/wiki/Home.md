@@ -6,7 +6,8 @@ Sistema de gestión de personal de la cooperativa. Aplicación **Next.js + React
 
 | Módulo | Ruta | Permiso de acceso | Página |
 | --- | --- | --- | --- |
-| Empleados (pantalla principal) | `/` | `employees.view` | [Módulo Empleados](Modulo-Empleados) |
+| Página pública (portada, sin sesión) | `/` | ninguno | [Seguridad](Seguridad#google-buscadores) |
+| Empleados (pantalla principal del sistema) | `/personal` | `employees.view` | [Módulo Empleados](Modulo-Empleados) |
 | EPP (Seguridad e higiene) | `/epp` | `epp.view` | [Módulo EPP](Modulo-EPP) |
 | Combustibles alternos · SCA (sistema aparte) | `/sca` | `fuels.view` | [Módulo Combustibles alternos](Modulo-Combustibles-Alternos) |
 | Facturas (Finanzas) | `/facturas` | `invoices.view` | [Módulo Facturas](Modulo-Facturas) |
