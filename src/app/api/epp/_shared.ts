@@ -28,8 +28,8 @@ export const movementSchema = z.object({
   kind: z.enum(["ingreso", "entrega", "ajuste"]),
   items: itemsSchema,
   employee_id: z.uuid().nullable().optional(),
-  // La fecha la pone el servidor (hoy); se acepta el campo solo por compatibilidad y se ignora.
-  moved_on: z.string().optional(),
+  // Fecha del movimiento (editable en el formulario). Si no viene, la base usa hoy (hora de Campeche).
+  moved_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   notes: z.string().trim().max(500).optional(),
 });
 

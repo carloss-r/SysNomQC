@@ -71,8 +71,8 @@ export async function POST(request: NextRequest) {
       p_kind: body.kind,
       p_items: body.items,
       p_employee: body.employee_id ?? null,
-      // La fecha la fija la base de datos (hoy, hora de Campeche); no se toma la del navegador.
-      p_date: null,
+      // Fecha elegida en el formulario; la base valida que no sea futura y usa hoy si viene vacía.
+      p_date: body.moved_on ?? null,
       p_notes: body.notes ?? null,
     });
     if (error) return eppDatabaseError(error, "registrar movimiento");

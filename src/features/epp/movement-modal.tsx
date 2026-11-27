@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Check, ClipboardCheck, PackagePlus, Plus, Scale, Search, Trash2, X } from "lucide-react";
+import { Check, ClipboardCheck, PackagePlus, Plus, Scale, Search, Trash2, X } from "lucide-react";
 import { useCallback, useDeferredValue, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import { eppArticleLabel, eppKey, type EppArticle, type EppEmployee, type EppLedgerPage } from "@/lib/permissions";
 import { describeError, requestApi } from "@/lib/api-client";
@@ -70,8 +70,9 @@ export function MovementModal({
   const [lines, setLines] = useState<Line[]>(() => [newLine(presetArticleId ? String(presetArticleId) : "")]);
   const [employee, setEmployee] = useState<EppEmployee | null>(presetEmployee ?? null);
   const [query, setQuery] = useState("");
-  // La fecha no se puede elegir: el servidor registra el día de hoy.
+  // Por defecto hoy, pero quien registra la entrega puede cambiarla (no se permiten fechas futuras).
   const today = todayLocal();
+  const [movedOn, setMovedOn] = useState(today);
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -164,12 +165,14 @@ export function MovementModal({
       if (short) return setError(`Solo hay ${byId.get(short.article_id)?.stock ?? 0} de ${eppArticleLabel(byId.get(short.article_id)?.name, byId.get(short.article_id)?.size)}.`);
     }
     if (kind === "ajuste" && !notes.trim()) return setError("Explica el motivo del ajuste.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(movedOn)) return setError("Elige una fecha válida.");
+    if (movedOn > today) return setError("La fecha no puede ser futura.");
 
     setBusy(true);
     try {
       await requestApi(session, "/api/epp/movements", {
         method: "POST",
-        body: JSON.stringify({ site, kind, items, employee_id: employee?.id ?? null, notes: notes.trim() || undefined }),
+        body: JSON.stringify({ site, kind, items, employee_id: employee?.id ?? null, moved_on: movedOn, notes: notes.trim() || undefined }),
       });
       const units = items.reduce((sum, item) => sum + Math.abs(item.quantity), 0);
       const names = items.map((item) => byId.get(item.article_id)?.name).filter(Boolean).join(", ");
@@ -266,9 +269,7 @@ export function MovementModal({
 
           <div className="form-grid epp-meta">
             <Field label={kind === "entrega" ? "Fecha de entrega" : "Fecha"}>
-              <div className="epp-fixed-date" title="La fecha la registra el sistema y no se puede cambiar.">
-                <CalendarDays size={15} /> {formatDay(today)} <small>(hoy, del sistema)</small>
-              </div>
+              <input type="date" value={movedOn} max={today} onChange={(e) => setMovedOn(e.target.value)} required />
             </Field>
             <Field label={kind === "ajuste" ? "Motivo del ajuste" : "Observaciones (opcional)"} required={kind === "ajuste"}>
               <input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} placeholder={kind === "ajuste" ? "Conteo físico, merma, corrección…" : kind === "ingreso" ? "Proveedor, factura…" : "Motivo de reposición, cambio por desgaste…"} />
