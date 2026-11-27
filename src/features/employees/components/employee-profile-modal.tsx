@@ -9,7 +9,7 @@ import { useDialog } from "@/shared/ui/dialog-provider";
 import { useNotify } from "@/shared/ui/notice-provider";
 import { Avatar, StatusBadge } from "@/shared/ui/badges";
 import { usePhotoUrl } from "../hooks/use-photo-url";
-import { ExpedienteSheet } from "./expediente-sheet";
+import { downloadExpedientePdf } from "../expediente-pdf";
 import { TerminationModal } from "./termination-modal";
 import { BusyLabel } from "@/shared/ui/loading";
 
@@ -19,19 +19,6 @@ function ProfileSection({ title, icon, children }: { title: string; icon: ReactN
 
 function ProfileValue({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
   return <div className={`profile-value${wide ? " profile-value-wide" : ""}`}><span>{label}</span><strong>{children}</strong></div>;
-}
-
-// "Descargar expediente": abre la impresión con la hoja del expediente (logo como membrete);
-// desde ahí se imprime o se guarda como PDF.
-function printExpediente(employee: Employee) {
-  const previousTitle = document.title;
-  document.title = `Expediente ${employee.employee_code} - ${employee.full_name}`;
-  const restoreTitle = () => {
-    document.title = previousTitle;
-    window.removeEventListener("afterprint", restoreTitle);
-  };
-  window.addEventListener("afterprint", restoreTitle);
-  window.print();
 }
 
 export function EmployeeProfileModal({
@@ -54,6 +41,18 @@ export function EmployeeProfileModal({
   const photoUrl = usePhotoUrl(employee.photo_path);
   const [terminating, setTerminating] = useState(false);
   const [reactivating, setReactivating] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadExpediente() {
+    setDownloading(true);
+    try {
+      await downloadExpedientePdf(employee, photoUrl);
+    } catch (err) {
+      notify("error", "No se pudo generar el expediente", describeError(err, "Inténtalo de nuevo."));
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function reactivate() {
     if (!session) return;
@@ -146,7 +145,7 @@ export function EmployeeProfileModal({
               <button className="button button-outline" onClick={() => void reactivate()} disabled={reactivating}><UserCheck size={16} /> {reactivating ? <BusyLabel>Reactivando…</BusyLabel> : "Reactivar"}</button>
             )}
             <span className="actions-spacer" />
-            {can("employees.download") && <button className="button button-outline" onClick={() => printExpediente(employee)}><Download size={16} /> Descargar expediente</button>}
+            {can("employees.download") && <button className="button button-outline" onClick={() => void downloadExpediente()} disabled={downloading}><Download size={16} /> {downloading ? <BusyLabel>Generando…</BusyLabel> : "Descargar expediente"}</button>}
             <button className="button button-neutral" onClick={onClose}>Cerrar</button>
             {can("employees.edit") && <button className="button button-gold" onClick={() => onEdit(employee)}><Pencil size={16} /> Editar expediente</button>}
           </div>
@@ -162,7 +161,6 @@ export function EmployeeProfileModal({
           }}
         />
       )}
-      {can("employees.download") && <ExpedienteSheet employee={employee} photoUrl={photoUrl} />}
     </>
   );
 }
